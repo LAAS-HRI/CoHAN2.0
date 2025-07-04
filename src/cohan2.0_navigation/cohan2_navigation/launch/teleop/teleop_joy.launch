@@ -5,6 +5,6 @@
      <param name="deadzone" value="0.22" />
    </node>
 
-   <node pkg="cohan_navigation" type="teleop_humans_joy.py" name="teleop_humans_node" output="screen"/>
+   <node pkg="cohan2_navigation" type="teleop_humans_joy.py" name="teleop_humans_node" output="screen"/>
 
 </launch>

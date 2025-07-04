@@ -21,11 +21,11 @@ class TeleopHumans(object):
 
   def JoyCB(self, msg):
     velocity = Twist()
-    velocity.linear.x = 2.0*msg.axes[self.linear_x]
-    velocity.linear.y = 2.0*msg.axes[self.linear_y]
-    velocity.angular.z = 2.0*msg.axes[self.angular_]
+    velocity.linear.x = 0.2*msg.axes[self.linear_x]
+    velocity.linear.y = 0.2*msg.axes[self.linear_y]
+    velocity.angular.z = 0.2*msg.axes[self.angular_]
     self.vel_pub.publish(velocity)
 
 
 if __name__ == '__main__':
-  teleop_joy = TeleopHumans(1)
+  teleop_joy = TeleopHumans(2)

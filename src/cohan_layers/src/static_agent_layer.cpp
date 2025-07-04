@@ -85,7 +85,7 @@ void StaticAgentLayer::updateCosts(costmap_2d::Costmap2D& /*master_grid*/, int m
     auto type = transformed_agents_[i].type;
 
     // Check the condition to switch the radius
-    bool is_human_still = states_.empty() ? (type == 1) : ((state < 2) && (type == 1));
+    bool is_human_still = states_.empty() ? (type == 1) : ((state !=2) && (type == 1));
 
     unsigned int width = std::max(1, static_cast<int>((2 * radius_) / res));
     unsigned int height = std::max(1, static_cast<int>((2 * radius_) / res));
@@ -141,14 +141,13 @@ void StaticAgentLayer::updateCosts(costmap_2d::Costmap2D& /*master_grid*/, int m
       bx = ox + (res / 2);
       by = oy + (res / 2);
       var = radius_;
+      if (state > 2){
+        rad = agent_radius_;
+      }
     }
 
     else {
-      if (type == 1) {
-        rad = agent_radius_;
-      } else {
         rad = robot_radius_;
-      }
     }
 
     for (int i = start_x; i < end_x; i++) {
@@ -158,7 +157,7 @@ void StaticAgentLayer::updateCosts(costmap_2d::Costmap2D& /*master_grid*/, int m
           continue;
         }
 
-        if (is_human_still) {
+        if (is_human_still && state < 2) {
           double x = bx + (i * res);
           double y = by + (j * res);
           double val;
@@ -171,7 +170,7 @@ void StaticAgentLayer::updateCosts(costmap_2d::Costmap2D& /*master_grid*/, int m
           auto cvalue = static_cast<unsigned char>(val);
           costmap->setCost(i + mx, j + my, std::max(cvalue, old_cost));
 
-        } else {
+        } else if (is_human_still && state > 2) {
           double x;
           double y;
           costmap->mapToWorld(i + mx, j + my, x, y);
