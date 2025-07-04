@@ -73,7 +73,7 @@ void MapScanner::initialize() {
   ros::spin();
 }
 
-void MapScanner::loadRosParamFromNodeHandle(const ros::NodeHandle& private_nh) {
+void MapScanner::loadRosParamFromNodeHandle(const ros::NodeHandle &private_nh) {
   // Name space param
   private_nh.param("ns", ns_, std::string(""));
   // Laser scan parameters (can be set using ros parameter server)
@@ -88,7 +88,7 @@ void MapScanner::loadRosParamFromNodeHandle(const ros::NodeHandle& private_nh) {
   private_nh.param("human_radius", human_radius_, 0.31);
 }
 
-void MapScanner::mapCB(const nav_msgs::OccupancyGrid& grid) {
+void MapScanner::mapCB(const nav_msgs::OccupancyGrid &grid) {
   // Get map data
   map_ = grid;
   origin_x_ = map_.info.origin.position.x;
@@ -98,7 +98,7 @@ void MapScanner::mapCB(const nav_msgs::OccupancyGrid& grid) {
   size_y_ = map_.info.height;
 }
 
-void MapScanner::publishInvisibleHumans(const geometry_msgs::PoseArray& corners, const geometry_msgs::PoseArray& poses, std::vector<std::vector<double>>& inv_humans) {
+void MapScanner::publishInvisibleHumans(const geometry_msgs::PoseArray &corners, const geometry_msgs::PoseArray &poses, std::vector<std::vector<double>> &inv_humans) {
   // Publish Poses
   pub_invis_humans_pos_.publish(poses);
 
@@ -109,7 +109,7 @@ void MapScanner::publishInvisibleHumans(const geometry_msgs::PoseArray& corners,
   obstacle_msg.header.stamp = ros::Time::now();
   obstacle_msg.header.frame_id = MAP_FRAME;  // CHANGE HERE : odom / map
   int id = 0;
-  for (const auto& human : inv_humans) {
+  for (const auto &human : inv_humans) {
     double yaw = atan2(human[3], human[2]);
     tf2::Quaternion quaternion_tf2;
     quaternion_tf2.setRPY(0, 0, yaw);
@@ -134,7 +134,7 @@ void MapScanner::publishInvisibleHumans(const geometry_msgs::PoseArray& corners,
   pub_invis_human_.publish(obstacle_msg);
 }
 
-void MapScanner::detectOccludedCorners(const ros::TimerEvent& event) {
+void MapScanner::detectOccludedCorners(const ros::TimerEvent &event) {
   // Get Robot Pose
   geometry_msgs::TransformStamped footprint_transform;
   try {
@@ -145,7 +145,7 @@ void MapScanner::detectOccludedCorners(const ros::TimerEvent& event) {
     scan_msg_.header.frame_id = base_frame;
     footprint_transform = tf_.lookupTransform(MAP_FRAME, base_frame, ros::Time(0), ros::Duration(1.0));
 
-  } catch (tf2::TransformException& ex) {
+  } catch (tf2::TransformException &ex) {
     ROS_WARN("%s", ex.what());
   }
   robot_pose_.header = footprint_transform.header;
@@ -159,7 +159,7 @@ void MapScanner::detectOccludedCorners(const ros::TimerEvent& event) {
   double angle_increment = (angle_max_ - angle_min_) / samples_;
   double increment = range_max_ / scan_resolution_;
 
-  Eigen::Vector2d robot_vec{cos(theta), sin(theta)};
+  robot_vec_ << cos(theta), sin(theta);
   ranges_.resize(samples_, 0.0);
 
   // Scan the map using a fake laser at robot's position
@@ -168,7 +168,7 @@ void MapScanner::detectOccludedCorners(const ros::TimerEvent& event) {
       continue;
     }
     double ray = range_min_;
-    Eigen::Vector2d r_dir{(robot_vec.x() * cos(ang)) - (robot_vec.y() * sin(ang)), (+robot_vec.x() * sin(ang)) + (robot_vec.y() * cos(ang))};
+    Eigen::Vector2d r_dir{(robot_vec_.x() * cos(ang)) - (robot_vec_.y() * sin(ang)), (+robot_vec_.x() * sin(ang)) + (robot_vec_.y() * cos(ang))};
 
     ranges_[i] = range_max_;
 
@@ -239,7 +239,7 @@ void MapScanner::detectOccludedCorners(const ros::TimerEvent& event) {
   locateInvHumans(corner_set1, corner_set2, dir, footprint_transform);
 }
 
-bool MapScanner::locateInvHumans(Coordinates c1, Coordinates c2, std::vector<char> direction, geometry_msgs::TransformStamped& footprint_transform) {
+bool MapScanner::locateInvHumans(Coordinates c1, Coordinates c2, std::vector<char> direction, geometry_msgs::TransformStamped &footprint_transform) {
   assert(c1.size() == c2.size());
   int n_corners = c1.size();
 
@@ -482,7 +482,7 @@ void MapScanner::detectPassages(geometry_msgs::PoseArray detections) {
     double mid_scan = ranges_[ranges_.size() / 2];
     int i = 0;
     // Get the distances and indices of the inv humans from the robot
-    for (auto& pose : detections.poses) {
+    for (auto &pose : detections.poses) {
       dist = std::hypot(pose.position.x - robot_pose_.pose.position.x, pose.position.y - robot_pose_.pose.position.y);
       dists[dist] = i;
       i++;
@@ -494,19 +494,29 @@ void MapScanner::detectPassages(geometry_msgs::PoseArray detections) {
       auto inv2 = std::next(dists.begin(), 1);
       double seperation_dist =
           std::hypot(detections.poses[inv1->second].position.x - detections.poses[inv2->second].position.x, detections.poses[inv1->second].position.y - detections.poses[inv2->second].position.y);
-      // Condition for door
-      if (inv1->first < 2.0 && abs(inv1->first - inv2->first) < 0.1 && seperation_dist < 3.0) {
-        if (mid_scan > 1.33) {
-          ROS_DEBUG("It's a door");
-          psg_type.type = cohan_msgs::PassageType::DOOR;
 
-        } else  // If there is not enough space to enter, it might be a pillar
-        {
-          ROS_DEBUG("It is a pillar");
-          psg_type.type = cohan_msgs::PassageType::PILLAR;
+      Eigen::Vector2d mid_point((detections.poses[inv1->second].position.x + detections.poses[inv2->second].position.x) / 2,
+                                (detections.poses[inv1->second].position.y + detections.poses[inv2->second].position.y) / 2);
+
+      Eigen::Vector2d robot_point(robot_pose_.pose.position.x, robot_pose_.pose.position.y);
+
+      auto dectection_robot_dir = ((robot_point - mid_point).dot(robot_vec_)) / (robot_point - mid_point).norm();
+
+      if (dectection_robot_dir < -0.9) {
+        // Condition for door
+        if (inv1->first < 2.0 && abs(inv1->first - inv2->first) < 0.1 && seperation_dist < 3.0 && seperation_dist > 0.6) {
+          if (mid_scan > 1.33) {
+            ROS_DEBUG("It's a door");
+            psg_type.type = cohan_msgs::PassageType::DOOR;
+
+          } else  // If there is not enough space to enter, it might be a pillar
+          {
+            ROS_DEBUG("It is a pillar");
+            psg_type.type = cohan_msgs::PassageType::PILLAR;
+          }
+          // Neither, a possible passage (No need to switch to PASS THROUGH here)
+          ROS_DEBUG("Possibility of door or narrow junction pass");
         }
-        // Neither, a possible passage (No need to switch to PASS THROUGH here)
-        ROS_DEBUG("Possibility of door or narrow junction pass");
       }
     }
     // Condition for a wall
@@ -525,7 +535,7 @@ void MapScanner::detectPassages(geometry_msgs::PoseArray detections) {
 
 #if !defined(DOXYGEN_SHOULD_SKIP_THIS)
 // ROS node for invisible humans detection
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
   ros::init(argc, argv, "map_scanner_node");
   invisible_humans_detection::MapScanner mp_scanner;
   return 0;

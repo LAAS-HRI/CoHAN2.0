@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>cohan_sim</name>
+  <version>0.0.1</version>
+  <description>configuration and launch files for cohan_sim</description>
+
+  <maintainer email="ptsingaman@laas.fr">Phani Teja Singamaneni</maintainer>
+  <author email="ptsingaman@laas.fr">Phani Teja Singamaneni</author>
+  <license>BSD</license>
+
+  <build_depend>ros_environment</build_depend>
+
+  <buildtool_depend condition="$ROS_VERSION == 1">catkin</buildtool_depend>
+  <depend condition="$ROS_VERSION == 1">roslib</depend>
+
+  <buildtool_depend condition="$ROS_VERSION == 2">ament_cmake</buildtool_depend>
+  <depend condition="$ROS_VERSION == 2">rclcpp</depend>
+  <depend condition="$ROS_VERSION == 2">ament_index_cpp</depend>
+
+  <!-- ROS 1 dependencies -->
+  <depend condition="$ROS_VERSION == 1">rospy</depend>
+  <depend condition="$ROS_VERSION == 1">nav_msgs</depend>
+  <depend condition="$ROS_VERSION == 1">geometry_msgs</depend>
+  <depend condition="$ROS_VERSION == 1">sensor_msgs</depend>
+  <depend condition="$ROS_VERSION == 1">tf2_ros</depend>
+
+  <!-- ROS 2 dependencies -->
+  <!-- <depend condition="$ROS_VERSION == 2">rclpy</depend> -->
+  <depend condition="$ROS_VERSION == 2">nav_msgs</depend>
+  <depend condition="$ROS_VERSION == 2">geometry_msgs</depend>
+  <depend condition="$ROS_VERSION == 2">sensor_msgs</depend>
+  <depend condition="$ROS_VERSION == 2">tf2_ros</depend>
+
+  <test_depend condition="$ROS_VERSION == 2">ament_cmake_gtest</test_depend>
+
+  <exec_depend>python3</exec_depend>
+
+  <export>
+      <build_type condition="$ROS_VERSION == 1">catkin</build_type>
+      <build_type condition="$ROS_VERSION == 2">ament_cmake</build_type>
+  </export>
+
+</package>

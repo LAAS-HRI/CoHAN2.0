@@ -75,7 +75,6 @@ void Agents::trackedAgentsCB(const cohan_msgs::TrackedAgents &tracked_agents) {
   agents_info.robot_pose = robot_pose;
 
   agent_vels_.clear();
-  agent_nominal_vels_.clear();
   visible_agent_ids_.clear();
   agent_still_.clear();
 
@@ -318,6 +317,7 @@ std::vector<int> Agents::filterVisibleAgents(std::map<int, geometry_msgs::Pose> 
 void Agents::resetAgents() {
   // Reset the variables
   agents_states_.clear();
+  agent_nominal_vels_.clear();
   stuck_agent_id_ = -1;
   stuck_ = false;
 }

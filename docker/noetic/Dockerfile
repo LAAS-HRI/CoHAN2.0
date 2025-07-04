@@ -77,7 +77,8 @@ RUN apt-get install ros-noetic-navigation -y \
     ros-noetic-teleop-twist-keyboard \
     ros-noetic-pr2-simulator \
     ros-noetic-pr2-gazebo \
-    ros-noetic-teb-local-planner
+    ros-noetic-teb-local-planner \
+    libsdl2-dev
 
 # Add Webots repository and install Webots
 RUN wget https://github.com/cyberbotics/webots/releases/download/R2023a/webots-R2023a-x86-64.tar.bz2 && \

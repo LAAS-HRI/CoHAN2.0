@@ -5,12 +5,11 @@
   <arg name="mode" value="-f" if="$(arg fast_mode)"/>
   <arg name="graphics" default="-g" unless="$(arg gui)"/>
   <arg name="graphics" value="" if="$(arg gui)"/>
-  <arg name="world_file" default="$(find stage_ros)/worlds/laas_adream.world"/>
+  <arg name="world_file" default="laas"/>
 
   <master auto="start"/>
-  <param name="/use_sim_time" value="true"/>
-
-  <node pkg="stage_ros" type="stageros" name="stageros" args="$arg -u $(arg graphics) $(arg mode) $(arg world_file)" respawn="false">
+  
+  <node pkg="stage_ros" type="stageros" name="stageros" args="$arg -u $(arg graphics) $(arg mode) $(find stage_ros)/worlds/$(arg world_file).world" respawn="false">
     <param name="base_watchdog_timeout" value="0.2"/>
   </node>
 

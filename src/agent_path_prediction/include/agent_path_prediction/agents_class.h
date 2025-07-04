@@ -135,6 +135,13 @@ class Agents {
    */
   std::map<int, geometry_msgs::Pose> getAgents() { return agents_; }
 
+  /** 
+   * @brief Get the state of the agent
+   * @param id The index of agent whose state is required
+   * @return State of the given agent
+   */
+  AgentState agentState(int id){return agents_states_[id];}
+
   /**
    * @brief Get nominal velocities of all agents based on a moving average filter
    * @return Map of agent IDs to their nominal velocities

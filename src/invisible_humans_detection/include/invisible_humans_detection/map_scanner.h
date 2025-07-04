@@ -229,6 +229,7 @@ class MapScanner {
   bool publish_scan_;                       //!< Flag to indicate whether to publish scan data
   double human_radius_;                     //!< Radius of a human for detection
   std::string ns_;                          //!< Namespace of the node
+  Eigen::Vector2d robot_vec_;               //!< Unit vector in the direction of the robot
 };
 
 }  // namespace invisible_humans_detection

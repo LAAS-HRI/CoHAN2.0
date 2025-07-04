@@ -1,0 +1,15 @@
+{
+    "clang-format.fallbackStyle": "Mozilla",
+    "editor.formatOnSave": true,
+    "editor.inlayHints.enabled": "offUnlessPressed",
+    "cmake.cmakePath": "/usr/bin/cmake",
+    "clangd.arguments": [
+        "--compile-commands-dir=${workspaceFolder}/build/",
+        "--completion-style=detailed",
+        "--clang-tidy",
+        "--clang-tidy-checks=-*,modernize*",
+        "--header-insertion=never"
+    ],
+    "C_Cpp.intelliSenseEngine": "disabled",
+    "cmake.configureOnOpen": false,
+}

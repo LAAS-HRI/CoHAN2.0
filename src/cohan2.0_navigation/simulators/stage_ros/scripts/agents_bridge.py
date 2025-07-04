@@ -74,6 +74,9 @@ class StageAgents(object):
         Args:
             *msg: Synchronized odometry messages for human agents.
         """
+        if len(msg) != self.num_hum:
+            return
+        
         tracked_agents = TrackedAgents()
         for agent_id in range(1,self.num_hum+1):
             if self.ns == "human"+str(agent_id):

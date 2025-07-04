@@ -49,6 +49,6 @@
 3. Now you are set to run use it. You can run some examples as:
 
     ```
-    roslaunch cohan_navigation stage_pr2_only.launch
+    roslaunch cohan_stage_navigation stage_pr2_only.launch
     ``` 
     If everything is installed correctly, you should see rviz opening and you can move the robot by giving it a goal (using 2D Nav Goal tool). 

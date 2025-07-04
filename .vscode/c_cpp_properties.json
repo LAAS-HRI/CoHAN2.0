@@ -1,0 +1,26 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "${workspaceFolder}/devel/include/**",
+        "${workspaceFolder}/src/agent_path_prediction/include/**",
+        "${workspaceFolder}/src/BehaviorTree.CPP/include/**",
+        "${workspaceFolder}/src/cohan_layers/include/**",
+        "${workspaceFolder}/src/hateb_local_planner/include/**",
+        "${workspaceFolder}/src/invisible_humans_detection/include/**",
+        "${workspaceFolder}/src/map_server/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/clang",
+      "cStandard": "gnu17",
+      "cppStandard": "gnu++17"
+    }
+  ],
+  "version": 4
+}

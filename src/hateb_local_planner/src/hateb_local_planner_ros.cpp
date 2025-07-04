@@ -765,7 +765,7 @@ bool HATebLocalPlannerROS::tickTreeAndUpdatePlans(const geometry_msgs::PoseStamp
       PlanStartVelGoalVel plan_start_vel_goal_vel;
       plan_start_vel_goal_vel.plan = agent_plan_combined.plan_to_optimize;
       plan_start_vel_goal_vel.start_vel = transformed_vel.twist;
-      plan_start_vel_goal_vel.nominal_vel = std::max(0.3, agents_ptr_->getNominalVels()[predicted_agents_poses.id - 1]);  // update this
+      plan_start_vel_goal_vel.nominal_vel = std::max(0.3, agents_ptr_->getNominalVels()[predicted_agents_poses.id]);  // update this
       plan_start_vel_goal_vel.isMode = isMode_;
       if (agent_plan_combined.plan_after.size() > 0) {
         plan_start_vel_goal_vel.goal_vel = transformed_vel.twist;
@@ -1556,7 +1556,7 @@ void HATebLocalPlannerROS::updateAgentViaPointsContainers(const AgentPlanVelMap 
     const auto &initial_agent_plan = transformed_agent_plan_vel_kv.second.plan;
     if (initial_agent_plan.size() == 1) {
       if (initial_agent_plan[0].header.frame_id == "static") {
-        return;
+        continue; // Skip this static agent but continue processing others
       }
     }
 
@@ -1570,7 +1570,7 @@ void HATebLocalPlannerROS::updateAgentViaPointsContainers(const AgentPlanVelMap 
   // remove agent via-points for vanished agents
   auto itr = agents_via_points_map_.begin();
   while (itr != agents_via_points_map_.end()) {
-    if (transformed_agent_plan_vel_map.count(itr->first) == 0) {
+    if (transformed_agent_plan_vel_map.count(itr->first) == 0 || agents_ptr_->agentState(itr->first) == agents::AgentState::STOPPED) {
       itr = agents_via_points_map_.erase(itr);
     } else {
       ++itr;
@@ -1807,7 +1807,7 @@ bool HATebLocalPlannerROS::optimizeStandalone(cohan_msgs::Optimize::Request &req
       PlanStartVelGoalVel plan_start_vel_goal_vel;
       plan_start_vel_goal_vel.plan = agent_plan_combined.plan_to_optimize;
       plan_start_vel_goal_vel.start_vel = transformed_vel.twist;
-      plan_start_vel_goal_vel.nominal_vel = std::max(0.3, agents_ptr_->getNominalVels()[agent_plan_combined.id - 1]);  // update this
+      plan_start_vel_goal_vel.nominal_vel = std::max(0.3, agents_ptr_->getNominalVels()[agent_plan_combined.id]);  // update this
       if (agent_plan_combined.plan_after.size() > 0) {
         plan_start_vel_goal_vel.goal_vel = transformed_vel.twist;
       }
@@ -1841,7 +1841,7 @@ bool HATebLocalPlannerROS::optimizeStandalone(cohan_msgs::Optimize::Request &req
         PlanStartVelGoalVel plan_start_vel_goal_vel;
         plan_start_vel_goal_vel.plan = agent_plan_combined.plan_to_optimize;
         plan_start_vel_goal_vel.start_vel = transformed_vel.twist;
-        plan_start_vel_goal_vel.nominal_vel = std::max(0.3, agents_ptr_->getNominalVels()[agent_plan_combined.id - 1]);  // update this
+        plan_start_vel_goal_vel.nominal_vel = std::max(0.3, agents_ptr_->getNominalVels()[agent_plan_combined.id]);  // update this
         if (agent_plan_combined.plan_after.size() > 0) {
           plan_start_vel_goal_vel.goal_vel = transformed_vel.twist;
         }

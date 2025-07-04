@@ -76,7 +76,8 @@ RUN apt-get install ros-melodic-navigation -y \
     ros-melodic-pr2-tuckarm \
     libboost-all-dev \
     ros-melodic-mbf-msgs \
-    ros-melodic-teleop-twist-keyboard 
+    ros-melodic-teleop-twist-keyboard \
+    libsdl2-dev
 
 ## Add a non-root user and set proper permission
 RUN addgroup --gid $GID $USER_NAME && \

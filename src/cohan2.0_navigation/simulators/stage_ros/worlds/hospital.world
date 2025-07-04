@@ -354,6 +354,7 @@ define floorplan model
 
   gui_nose 0
   gui_grid 0
+  gui_move 0
 
   gui_outline 1
   gripper_return 0
@@ -387,7 +388,7 @@ floorplan
 pr2( pose [ 10.5 2.0 0 90.0 ] name "pr2" color "gray")
 human( pose [ 2.5 3.0 0 90.0 ] name "human1" color "red")
 human( pose [ 2.0 12.0 0 90.0 ] name "human2" color "red")
-human( pose [ 5.0 25.0 0 -90.0 ] name "human3" color "red")
-human( pose [ 18.0 2.0 0 90.0 ] name "human4" color "blue")
-human( pose [ 9.5 6.0 0 90.0 ] name "human5" color "blue")
-human( pose [ 9.5.0 13.0 0 -90.0 ] name "human6" color "blue")
+#human( pose [ 5.0 25.0 0 -90.0 ] name "human3" color "red")
+#human( pose [ 18.0 2.0 0 90.0 ] name "human4" color "blue")
+#human( pose [ 9.5 6.0 0 90.0 ] name "human5" color "blue")
+#human( pose [ 9.5.0 13.0 0 -90.0 ] name "human6" color "blue")

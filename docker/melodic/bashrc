@@ -126,3 +126,6 @@ if ! shopt -oq posix; then
     . /etc/bash_completion
   fi
 fi
+
+export DISABLE_ROS1_EOL_WARNINGS=1
+source /opt/ros/melodic/setup.bash
