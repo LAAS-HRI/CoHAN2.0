@@ -24,11 +24,11 @@
  * Author: Phani Teja Singamaneni
  *********************************************************************************/
 
-#ifndef AGENTS_HH_
-#define AGENTS_HH_
+#ifndef AGENTS_HPP_
+#define AGENTS_HPP_
 
-// ROS
-#include <ros/ros.h>
+// ROS 2
+#include <rclcpp/rclcpp.hpp>
 
 // TF2
 #include <tf2/convert.h>
@@ -37,20 +37,25 @@
 #include <tf2_ros/transform_listener.h>
 
 // COSTMAP
-#include <costmap_2d/costmap_2d_ros.h>
+#include <nav2_costmap_2d/costmap_2d_ros.hpp>
 
 // MSGS
-#include <agent_path_prediction/AgentsInfo.h>
-#include <cohan_msgs/AgentPathArray.h>
-#include <cohan_msgs/AgentTrajectory.h>
-#include <cohan_msgs/AgentTrajectoryArray.h>
-#include <cohan_msgs/StateArray.h>
-#include <cohan_msgs/TrackedAgents.h>
-#include <cohan_msgs/TrackedSegmentType.h>
+#include <agent_path_prediction/msg/agents_info.hpp>
+#include <cohan_msgs/msg/agent_path_array.hpp>
+#include <cohan_msgs/msg/agent_trajectory.hpp>
+#include <cohan_msgs/msg/agent_trajectory_array.hpp>
+#include <cohan_msgs/msg/state_array.hpp>
+#include <cohan_msgs/msg/tracked_agents.hpp>
+#include <cohan_msgs/msg/tracked_segment_type.hpp>
+#include <geometry_msgs/msg/pose.hpp>
+#include <geometry_msgs/msg/pose2_d.hpp>
 
 // OTHERS
 #include <Eigen/Core>
+#include <map>
+#include <memory>
 #include <string>
+#include <vector>
 
 // Constants
 #define CALC_EPS 0.0001
@@ -82,7 +87,7 @@ class Agents {
    * @param tf Pointer to tf buffer
    * @param costmap_ros Pointer to costmap
    */
-  Agents(tf2_ros::Buffer *tf, costmap_2d::Costmap2DROS *costmap_ros);
+  Agents(std::shared_ptr<tf2_ros::Buffer> tf, std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros);
 
   /**
    * @brief Destructor of the class
@@ -122,7 +127,7 @@ class Agents {
    * @brief Get the poses of all agents
    * @return Map of agent IDs to their poses
    */
-  std::map<int, geometry_msgs::Pose> getAgents() { return agents_; }
+  std::map<int, geometry_msgs::msg::Pose> getAgents() { return agents_; }
 
   /**
    * @brief Get the state of the agent
@@ -143,7 +148,7 @@ class Agents {
    * @brief Callback for tracked agents updates
    * @param tracked_agents The tracked agents message containing agent states
    */
-  void trackedAgentsCB(const cohan_msgs::TrackedAgents &tracked_agents);
+  void trackedAgentsCB(const cohan_msgs::msg::TrackedAgents &tracked_agents);
 
   // Methods
   /**
@@ -154,17 +159,17 @@ class Agents {
    * @param robot_pose Current robot pose
    * @return Vector of visible agent IDs in the FOV of the robot
    */
-  std::vector<int> filterVisibleAgents(std::map<int, geometry_msgs::Pose> tr_agents, std::vector<int> sorted_ids, std::map<int, double> agents_radii, geometry_msgs::Pose2D robot_pose);
+  std::vector<int> filterVisibleAgents(std::map<int, geometry_msgs::msg::Pose> tr_agents, std::vector<int> sorted_ids, std::map<int, double> agents_radii, geometry_msgs::msg::Pose2D robot_pose);
 
   /**
-   * @brief Loads parameters from ROS parameter server
-   * @param private_nh Private node handle containing parameters
+   * @brief Loads parameters from ROS2 node
+   * @param node Shared pointer to ROS2 node for parameter access
    */
-  void loadRosParamFromNodeHandle(const ros::NodeHandle &private_nh);
+  void loadRosParamFromNode(std::shared_ptr<rclcpp::Node> node);
 
   // Agent State Variables
-  cohan_msgs::TrackedAgents tracked_agents_;                      //!< Latest tracked agents message
-  std::map<int, geometry_msgs::Pose> agents_, prev_agents_;       //!< Current and previous agent poses
+  cohan_msgs::msg::TrackedAgents tracked_agents_;                 //!< Latest tracked agents message
+  std::map<int, geometry_msgs::msg::Pose> agents_, prev_agents_;  //!< Current and previous agent poses
   std::map<int, bool> agent_still_;                               //!< Map tracking if agents are stationary
   std::map<int, std::vector<double>> agent_vels_;                 //!< List of agent velocities over time
   std::map<int, double> agent_nominal_vels_;                      //!< Nominal velocities based on moving average
@@ -189,13 +194,13 @@ class Agents {
   std::string odom_frame_;       //!< Odometry frame ID
   bool use_simulated_fov_;       //!< Flag for using simulated field of view
 
-  // ROS
-  ros::Publisher agents_info_pub_;         //!< Publisher for agent information
-  ros::Subscriber tracked_agents_sub_;     //!< Subscriber for tracked agents
-  tf2_ros::Buffer *tf_;                    //!< Pointer to tf buffer
-  costmap_2d::Costmap2DROS *costmap_ros_;  //!< Pointer to the costmap ros wrapper
-  costmap_2d::Costmap2D *costmap_;         //!< Pointer to the 2d costmap
-  double inflation_radius_;                //!< Inflation radius for costmap
+  // ROS 2
+  rclcpp::Publisher<agent_path_prediction::msg::AgentsInfo>::SharedPtr agents_info_pub_;  //!< Publisher for agent information
+  rclcpp::Subscription<cohan_msgs::msg::TrackedAgents>::SharedPtr tracked_agents_sub_;    //!< Subscriber for tracked agents
+  std::shared_ptr<tf2_ros::Buffer> tf_;                                                   //!< Shared pointer to tf buffer
+  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;                            //!< Shared pointer to the costmap ros wrapper
+  nav2_costmap_2d::Costmap2D *costmap_;                                                   //!< Pointer to the 2d costmap
+  double inflation_radius_;                                                               //!< Inflation radius for costmap
 };
 }  // namespace agents
-#endif
+#endif  // AGENTS_HPP_

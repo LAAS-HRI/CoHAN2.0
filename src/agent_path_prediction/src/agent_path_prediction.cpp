@@ -31,9 +31,6 @@
 
 namespace agents {
 void AgentPathPrediction::initialize() {
-  // Load params
-  loadParameters();
-
   // Initialize Publishers
   predicted_agents_pub_ = node_->create_publisher<visualization_msgs::msg::MarkerArray>("predicted_agent_poses", 1);
   front_pose_pub_ = node_->create_publisher<geometry_msgs::msg::PoseStamped>("front_pose", 1);
@@ -104,11 +101,11 @@ void AgentPathPrediction::predictAgents(const std::shared_ptr<agent_path_predict
             predicted_agent_marker.color.r = 0.0;
             predicted_agent_marker.color.g = 0.0;
             predicted_agent_marker.color.b = 1.0;
-            predicted_agent_marker.lifetime = ros::Duration(MIN_MARKER_LIFETIME) + (predicted_agent_pose.header.stamp - first_pose_time);
+            predicted_agent_marker.lifetime = rclcpp::Duration::from_seconds(MIN_MARKER_LIFETIME) + (predicted_agent_pose.header.stamp - first_pose_time);
             predicted_agent_marker.pose.position.x = predicted_agent_pose.pose.pose.position.x;
             predicted_agent_marker.pose.position.y = predicted_agent_pose.pose.pose.position.y;
             // time on z axis
-            predicted_agent_marker.pose.position.z = (predicted_agent_pose.header.stamp - first_pose_time).toSec();
+            predicted_agent_marker.pose.position.z = (predicted_agent_pose.header.stamp - first_pose_time).seconds();
             predicted_agents_markers_.markers.push_back(predicted_agent_marker);
           }
 
@@ -978,19 +975,6 @@ void resetPredictionSrvs(const std::shared_ptr<std_srvs::Empty::Request> req, st
   return true;
 }
 
-void AgentPathPrediction::loadParameters() {
-  publish_markers_ = node_->declare_parameter<bool>("publish_markers", true);
-  robot_frame_id_ = node_->declare_parameter<std::string>("robot_frame_id", ROBOT_FRAME_ID);
-  map_frame_id_ = node_->declare_parameter<std::string>("map_frame_id", MAP_FRAME_ID);
-  agent_dist_behind_robot_ = node_->declare_parameter<double>("agent_dist_behind_robot", AGENT_DIST_BEHIND_ROBOT);
-  agent_angle_behind_robot_ = node_->declare_parameter<double>("agent_angle_behind_robot", AGENT_ANGLE_BEHIND_ROBOT);
-  tracked_agents_sub_topic_ = node_->declare_parameter<std::string>("tracked_agents_sub_topic", AGENTS_SUB_TOPIC);
-  external_paths_sub_topic_ = node_->declare_parameter<std::string>("external_paths_sub_topic", EXTERNAL_PATHS_SUB_TOPIC);
-  predicted_goal_topic_ = node_->declare_parameter<std::string>("predicted_goal_topic", PREDICTED_GOAL_SUB_TOPIC);
-  get_plan_srv_name_ = node_->declare_parameter<std::string>("get_plan_srv_name", GET_PLAN_SRV_NAME);
-  default_agent_part_ = node_->declare_parameter<int>("default_agent_part", DEFAULT_AGENT_PART);
-}
-
 void AgentPathPrediction::trackedAgentsCB(const cohan_msgs::msg::TrackedAgents &tracked_agents) { tracked_agents_ = tracked_agents; }
 
 void AgentPathPrediction::externalPathsCB(const cohan_msgs::msg::AgentPathArray::ConstPtr &external_paths) {
@@ -1107,13 +1091,13 @@ bool AgentPathPrediction::transformPoseTwist(const cohan_msgs::msg::TrackedAgent
             twist.twist.angular.z -= start_twist_to_plan_transform.angular.z;
             twist.header.frame_id = to_frame;
             return true;
-          } catch (tf::LookupException &ex) {
+          } catch (const tf2::LookupException &ex) {
             // ROS_ERROR_NAMED(NODE_NAME, "No Transform available Error: %s\n", ex.what());
             RCLCPP_ERROR(node_->get_logger(), "No Transform available Error: %s", ex.what());
-          } catch (tf::ConnectivityException &ex) {
+          } catch (const tf2::ConnectivityException &ex) {
             // ROS_ERROR_NAMED(NODE_NAME, "Connectivity Error: %s\n", ex.what());
             RCLCPP_ERROR(node_->get_logger(), "Connectivity Error: %s", ex.what());
-          } catch (tf::ExtrapolationException &ex) {
+          } catch (const tf2::ExtrapolationException &ex) {
             // ROS_ERROR_NAMED(NODE_NAME, "Extrapolation Error: %s\n", ex.what());
             RCLCPP_ERROR(node_->get_logger(), "Extrapolation Error: %s", ex.what());
           }
@@ -1126,7 +1110,8 @@ bool AgentPathPrediction::transformPoseTwist(const cohan_msgs::msg::TrackedAgent
   return false;
 }
 
-geometry_msgs::msg::Twist AgentPathPrediction::getRelativeTwist(const std::string &target_frame, const std::string &source_frame, const rclcpp::Time &time_now, const rclcpp::Duration &duration) {
+geometry_msgs::msg::Twist AgentPathPrediction::getRelativeTwist(const std::string &target_frame, const std::string &source_frame, const rclcpp::Time &time_now,
+                                                                const rclcpp::Duration &duration) const {
   geometry_msgs::msg::Twist relative_twist;
   try {
     // Get transforms at current time and past time (time_now - duration)
@@ -1149,9 +1134,8 @@ geometry_msgs::msg::Twist AgentPathPrediction::getRelativeTwist(const std::strin
     tf2::Quaternion rot_delta = rot_past.inverse() * rot_now;
 
     // Convert quaternion to angle-axis to get angular velocity
-    double angle;
-    tf2::Vector3 axis;
-    rot_delta.getAngleAxis(angle, axis);
+    double angle = rot_delta.getAngle();
+    tf2::Vector3 axis = rot_delta.getAxis();
 
     if (angle > M_PI) {
       angle -= 2 * M_PI;
@@ -1176,23 +1160,19 @@ geometry_msgs::msg::Twist AgentPathPrediction::getRelativeTwist(const std::strin
 
 }  // namespace agents
 
-// handler for something to do before killing the node
-void sigintHandler(int sig) {
-  ROS_DEBUG_NAMED(NODE_NAME, "node %s will now shutdown", NODE_NAME);
-
-  // the default sigint handler, it calls shutdown() on node
-  ros::shutdown();
-}
-
 // the main method starts a rosnode and initializes the optotrack_person class
 int main(int argc, char **argv) {
   rclcpp::init(argc, argv);
-  ROS_DEBUG_NAMED(NODE_NAME, "started %s node", NODE_NAME);
 
-  // initiazling agent_pathHeadBehavior class
+  // initializing agent_path_prediction class
   auto ros2_node = std::make_shared<rclcpp::Node>(NODE_NAME);
-  agents::AgentPathPrediction agent_path_prediction(ros2_node.get());
-  rclcpp::spin(agent_path_prediction);
+  RCLCPP_DEBUG(ros2_node->get_logger(), "started %s node", NODE_NAME);
+
+  agents::AgentPathPrediction agent_path_prediction(ros2_node);
+  agent_path_prediction.initialize();
+
+  rclcpp::spin(ros2_node);
+  rclcpp::shutdown();
 
   return 0;
 }

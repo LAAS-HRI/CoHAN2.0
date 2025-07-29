@@ -24,15 +24,16 @@
  * Author: Phani Teja Singamaneni
  *********************************************************************************/
 
-#include <agent_path_prediction/PredictedGoal.h>
-#include <agent_path_prediction/PredictedGoals.h>
-#include <agent_path_prediction/predict_goal.h>
-#include <cohan_msgs/TrackedAgent.h>
-#include <cohan_msgs/TrackedAgents.h>
-#include <cohan_msgs/TrackedSegmentType.h>
-#include <geometry_msgs/PoseArray.h>
-#include <ros/ros.h>
 #include <yaml-cpp/yaml.h>
+
+#include <agent_path_prediction/msg/predicted_goal.hpp>
+#include <agent_path_prediction/msg/predicted_goals.hpp>
+#include <agent_path_prediction/predict_goal.hpp>
+#include <cohan_msgs/msg/tracked_agent.hpp>
+#include <cohan_msgs/msg/tracked_agents.hpp>
+#include <cohan_msgs/msg/tracked_segment_type.hpp>
+#include <geometry_msgs/msg/pose_array.hpp>
+#include <rclcpp/rclcpp.hpp>
 
 namespace agents {
 /**

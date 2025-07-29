@@ -28,6 +28,7 @@
 #define AGENT_PATH_PREDICTION_HPP_
 
 #include <agent_path_prediction/agents_class.hpp>
+#include <agent_path_prediction/parameter_utils.hpp>
 #include <agent_path_prediction/predict_goal.hpp>
 #include <chrono>
 #include <functional>
@@ -36,10 +37,10 @@
 
 // ros
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 
 #include <rclcpp/rclcpp.hpp>
-#include <tf2_ros/buffer.hpp>
-#include <tf2_ros/transform_listener.hpp>
 
 // msgs
 #include <agent_path_prediction/msg/agent_pose.hpp>
@@ -83,31 +84,14 @@
 namespace agents {
 class AgentPathPrediction {
  public:
-  AgentPathPrediction(std::shared_ptr<rclcpp::Node> node) : node_(node) {
-    RCLCPP_INFO(node_->get_logger(), "MyNodeWrapper initialized");
+  AgentPathPrediction(std::shared_ptr<rclcpp::Node> node) : node_(node), param_helper_(node) {
+    RCLCPP_INFO(node_->get_logger(), "AgentPathPrediction initialized");
     setupParameterCallback();
   };
 
   ~AgentPathPrediction() = default;
 
   void initialize();
-
-  void setupParameterCallback() {
-    declareFloatParam("velobs_mul", 1.0, 0.001, 10.0, "Multiplier for agent velocities for velocity-obstacle calculation");
-    declareFloatParam("velobs_min_rad", 0.25, 0.0, 10.0, "Minimum radius for velocity-obstacle calculation");
-    declareFloatParam("velobs_max_rad", 0.75, 0.0, 10.0, "Maximum radius for velocity-obstacle calculation");
-    declareFloatParam("velobs_max_rad_time", 4.0, 0.0, 60.0, "Time for maximum radius for velocity-obstacle calculation");
-    declareBoolParam("velobs_use_ang", true, "Whether to use angular velocity for velocity-obstacle calculation");
-    this->set_on_parameters_set_callback([this](const std::vector<rclcpp::Parameter> &params) -> rcl_interfaces::msg::SetParametersResult {
-      for (const auto &param : params) {
-        RCLCPP_DEBUG(this->get_logger(), "Parameter '%s' changed", param.get_name().c_str());
-        // You can also validate or reject changes here
-      }
-      rcl_interfaces::msg::SetParametersResult result;
-      result.successful = true;
-      return result;
-    });
-  }
 
  private:
   // Structs
@@ -128,7 +112,7 @@ class AgentPathPrediction {
   static size_t prunePath(size_t begin_index, const geometry_msgs::msg::Pose &pose, const std::vector<geometry_msgs::msg::PoseWithCovarianceStamped> &path);
   bool transformPoseTwist(const cohan_msgs::msg::TrackedAgents &tracked_agents, const uint64_t &agent_id, const std::string &to_frame, geometry_msgs::msg::PoseStamped &pose,
                           geometry_msgs::msg::TwistStamped &twist) const;
-  geometry_msgs::msg::Twist getRelativeTwist(const std::string &target_frame, const std::string &source_frame, const rclcpp::Time &time_now, const rclcpp::Duration &duration);
+  geometry_msgs::msg::Twist getRelativeTwist(const std::string &target_frame, const std::string &source_frame, const rclcpp::Time &time_now, const rclcpp::Duration &duration) const;
   static double checkdist(geometry_msgs::msg::Pose agent, geometry_msgs::msg::Pose robot) { return std::hypot(agent.position.x - robot.position.x, agent.position.y - robot.position.y); }
 
   // subscriber callbacks
@@ -146,29 +130,91 @@ class AgentPathPrediction {
   void resetPredictionSrvs(const std::shared_ptr<std_srvs::Empty::Request> req, std::shared_ptr<std_srvs::Empty::Response> res);
   void predictAgentsFromPaths(const std::shared_ptr<agent_path_prediction::srv::AgentPosePredict::Request> req, std::shared_ptr<agent_path_prediction::srv::AgentPosePredict::Response> res);
 
-  // parameters
-  void AgentPathPrediction::loadParameters();
+  void setupParameterCallback() {
+    // Declare parameters using the generic helper
+    param_helper_.declareFloatParam("velobs_mul", 1.0, 0.001, 10.0, "Multiplier for agent velocities for velocity-obstacle calculation");
+    param_helper_.declareFloatParam("velobs_min_rad", 0.25, 0.0, 10.0, "Minimum radius for velocity-obstacle calculation");
+    param_helper_.declareFloatParam("velobs_max_rad", 0.75, 0.0, 10.0, "Maximum radius for velocity-obstacle calculation");
+    param_helper_.declareFloatParam("velobs_max_rad_time", 4.0, 0.0, 60.0, "Time for maximum radius for velocity-obstacle calculation");
+    param_helper_.declareBoolParam("velobs_use_ang", true, "Whether to use angular velocity for velocity-obstacle calculation");
+    param_helper_.declareBoolParam("publish_markers", true, "Whether to publish visualization markers for predicted agent poses");
+    param_helper_.declareStringParam("robot_frame_id", ROBOT_FRAME_ID, "Frame ID for the robot base");
+    param_helper_.declareStringParam("map_frame_id", MAP_FRAME_ID, "Frame ID for the map");
+    param_helper_.declareFloatParam("agent_dist_behind_robot", AGENT_DIST_BEHIND_ROBOT, 0.0, 10.0, "Distance behind the robot where agents should be positioned");
+    param_helper_.declareFloatParam("agent_angle_behind_robot", AGENT_ANGLE_BEHIND_ROBOT, -M_PI, M_PI, "Angle behind the robot where agents should be positioned (radians)");
+    param_helper_.declareStringParam("tracked_agents_sub_topic", AGENTS_SUB_TOPIC, "Topic name for subscribing to tracked agents");
+    param_helper_.declareStringParam("external_paths_sub_topic", EXTERNAL_PATHS_SUB_TOPIC, "Topic name for subscribing to external agent paths");
+    param_helper_.declareStringParam("predicted_goal_topic", PREDICTED_GOAL_SUB_TOPIC, "Topic name for subscribing to predicted goals");
+    param_helper_.declareStringParam("get_plan_srv_name", GET_PLAN_SRV_NAME, "Service name for path planning");
+    param_helper_.declareIntParam("default_agent_part", DEFAULT_AGENT_PART, 0, 10, "Default agent body part to track");
 
-  void declareFloatParam(const std::string &name, double default_value, double min, double max, const std::string &description) {
-    rcl_interfaces::msg::ParameterDescriptor descriptor;
-    descriptor.description = description;
+    // Set up parameter change callback with custom validation
+    param_helper_.setupParameterCallback([this](const std::vector<rclcpp::Parameter> &params) -> bool {
+      // Custom parameter validation logic for this specific node
+      for (const auto &param : params) {
+        const std::string &name = param.get_name();
 
-    rcl_interfaces::msg::FloatingPointRange range;
-    range.from_value = min;
-    range.to_value = max;
-    range.step = 0.001;
-    descriptor.floating_point_range.push_back(range);
+        // Update internal variables when parameters change
+        if (name == "velobs_mul")
+          velobs_mul_ = param.as_double();
+        else if (name == "velobs_min_rad")
+          velobs_min_rad_ = param.as_double();
+        else if (name == "velobs_max_rad")
+          velobs_max_rad_ = param.as_double();
+        else if (name == "velobs_max_rad_time")
+          velobs_max_rad_time_ = param.as_double();
+        else if (name == "velobs_use_ang")
+          velobs_use_ang_ = param.as_bool();
+        else if (name == "publish_markers")
+          publish_markers_ = param.as_bool();
+        else if (name == "robot_frame_id")
+          robot_frame_id_ = param.as_string();
+        else if (name == "map_frame_id")
+          map_frame_id_ = param.as_string();
+        else if (name == "agent_dist_behind_robot")
+          agent_dist_behind_robot_ = param.as_double();
+        else if (name == "agent_angle_behind_robot")
+          agent_angle_behind_robot_ = param.as_double();
+        else if (name == "tracked_agents_sub_topic")
+          tracked_agents_sub_topic_ = param.as_string();
+        else if (name == "external_paths_sub_topic")
+          external_paths_sub_topic_ = param.as_string();
+        else if (name == "predicted_goal_topic")
+          predicted_goal_topic_ = param.as_string();
+        else if (name == "get_plan_srv_name")
+          get_plan_srv_name_ = param.as_string();
+        else if (name == "default_agent_part")
+          default_agent_part_ = param.as_int();
+      }
+      return true;
+    });
 
-    this->declare_parameter(name, default_value, descriptor);
+    // Load initial parameter values
+    loadParameters();
   }
 
-  void declareBoolParam(const std::string &name, bool default_value, const std::string &description) {
-    rcl_interfaces::msg::ParameterDescriptor descriptor;
-    descriptor.description = description;
-    this->declare_parameter(name, default_value, descriptor);
+  // parameters
+  void loadParameters() {
+    // Get parameter values and store them in member variables
+    publish_markers_ = param_helper_.getParam<bool>("publish_markers", true);
+    robot_frame_id_ = param_helper_.getParam<std::string>("robot_frame_id", ROBOT_FRAME_ID);
+    map_frame_id_ = param_helper_.getParam<std::string>("map_frame_id", MAP_FRAME_ID);
+    agent_dist_behind_robot_ = param_helper_.getParam<double>("agent_dist_behind_robot", AGENT_DIST_BEHIND_ROBOT);
+    agent_angle_behind_robot_ = param_helper_.getParam<double>("agent_angle_behind_robot", AGENT_ANGLE_BEHIND_ROBOT);
+    tracked_agents_sub_topic_ = param_helper_.getParam<std::string>("tracked_agents_sub_topic", AGENTS_SUB_TOPIC);
+    external_paths_sub_topic_ = param_helper_.getParam<std::string>("external_paths_sub_topic", EXTERNAL_PATHS_SUB_TOPIC);
+    predicted_goal_topic_ = param_helper_.getParam<std::string>("predicted_goal_topic", PREDICTED_GOAL_SUB_TOPIC);
+    get_plan_srv_name_ = param_helper_.getParam<std::string>("get_plan_srv_name", GET_PLAN_SRV_NAME);
+    default_agent_part_ = param_helper_.getParam<int>("default_agent_part", DEFAULT_AGENT_PART);
+    velobs_mul_ = param_helper_.getParam<double>("velobs_mul", 1.0);
+    velobs_min_rad_ = param_helper_.getParam<double>("velobs_min_rad", 0.25);
+    velobs_max_rad_ = param_helper_.getParam<double>("velobs_max_rad", 0.75);
+    velobs_max_rad_time_ = param_helper_.getParam<double>("velobs_max_rad_time", 4.0);
+    velobs_use_ang_ = param_helper_.getParam<bool>("velobs_use_ang", true);
   }
 
   // Properties
+  parameter_utils::ParameterHelper param_helper_;
   cohan_msgs::msg::TrackedAgents tracked_agents_;
   cohan_msgs::msg::AgentPathArray::ConstPtr external_paths_;
   agent_path_prediction::msg::PredictedGoals predicted_goals_;
