@@ -23,45 +23,26 @@
  *
  * Author: Phani Teja Singamaneni
  *********************************************************************************/
-
-#include <agent_path_prediction/agent_path_prediction.h>
-#include <agent_path_prediction/predict_goal_ros.h>
-
+#include <agent_path_prediction/agent_path_prediction.hpp>
+#include <agent_path_prediction/predict_goal_ros.hpp>
+#include <chrono>
 #include <csignal>
-#include <memory>
+#include <future>
 #include <utility>
-
-// Reconfigurable Parameters
-#define AGENTS_SUB_TOPIC "/tracked_agents"                      //!< Absolute topic name for the tracked agents
-#define GET_PLAN_SRV_NAME "/move_base/GlobalPlanner/make_plan"  //!< Absolute service name for the global planner
-#define PREDICTED_GOAL_SUB_TOPIC "predicted_goal"               //!< Relative topic name for the predicted goal
-#define EXTERNAL_PATHS_SUB_TOPIC "external_agent_paths"         //!< Relative topic name for the external agent paths
-#define ROBOT_FRAME_ID "base_footprint"
-#define MAP_FRAME_ID "map"
-
-#define AGENT_DIST_BEHIND_ROBOT 0.5
-#define AGENT_ANGLE_BEHIND_ROBOT 3.14
 
 namespace agents {
 
 void AgentPathPrediction::initialize() {
-  // get private node handle
-  ros::NodeHandle private_nh("~/");
-
-  // Initialize tf2 listener with buffer
-  tf_listener_ = std::make_unique<tf2_ros::TransformListener>(tf_);
-
-  // Load params from the server
-  loadRosParamFromNodeHandle(private_nh);
-
   // Initialize Publishers
-  predicted_agents_pub_ = private_nh.advertise<visualization_msgs::MarkerArray>("predicted_agent_poses", 1);
-  front_pose_pub_ = private_nh.advertise<geometry_msgs::PoseStamped>("front_pose", 1);
+  predicted_agents_pub_ = node_->create_publisher<visualization_msgs::msg::MarkerArray>("~/predicted_agent_poses", 1);
+  front_pose_pub_ = node_->create_publisher<geometry_msgs::msg::PoseStamped>("~/front_pose", 1);
 
-  // Initialize Service servers
-  set_goal_srv_ = private_nh.advertiseService("set_agent_goal", &AgentPathPrediction::setGoal, this);
-  predict_agents_server_ = private_nh.advertiseService("predict_agent_poses", &AgentPathPrediction::predictAgents, this);
-  reset_prediction_services_server_ = private_nh.advertiseService("reset_prediction_services", &AgentPathPrediction::resetPredictionSrvs, this);
+  // Initialize Service servers (with node namespace)
+  set_goal_srv_ = node_->create_service<agent_path_prediction::srv::AgentGoal>("~/set_agent_goal", std::bind(&AgentPathPrediction::setGoal, this, std::placeholders::_1, std::placeholders::_2));
+  predict_agents_server_ =
+      node_->create_service<agent_path_prediction::srv::AgentPosePredict>("~/predict_agent_poses", std::bind(&AgentPathPrediction::predictAgents, this, std::placeholders::_1, std::placeholders::_2));
+  reset_prediction_services_server_ =
+      node_->create_service<std_srvs::srv::Empty>("~/reset_prediction_services", std::bind(&AgentPathPrediction::resetPredictionSrvs, this, std::placeholders::_1, std::placeholders::_2));
 
   // Need to remap subscriber properly
   if (!ns_.empty()) {
@@ -70,139 +51,123 @@ void AgentPathPrediction::initialize() {
   }
 
   // Initialize Subscribers
-  tracked_agents_sub_ = private_nh.subscribe(tracked_agents_sub_topic_, 1, &AgentPathPrediction::trackedAgentsCB, this);
-  external_paths_sub_ = private_nh.subscribe(external_paths_sub_topic_, 1, &AgentPathPrediction::externalPathsCB, this);
-  predicted_goal_sub_ = private_nh.subscribe(predicted_goal_topic_, 1, &AgentPathPrediction::predictedGoalCB, this);
+  tracked_agents_sub_ = node_->create_subscription<cohan_msgs::msg::TrackedAgents>(tracked_agents_sub_topic_, 1, std::bind(&AgentPathPrediction::trackedAgentsCB, this, std::placeholders::_1));
+  external_paths_sub_ = node_->create_subscription<cohan_msgs::msg::AgentPathArray>(external_paths_sub_topic_, 1, std::bind(&AgentPathPrediction::externalPathsCB, this, std::placeholders::_1));
+  predicted_goal_sub_ = node_->create_subscription<agent_path_prediction::msg::PredictedGoals>(predicted_goal_topic_, 1, std::bind(&AgentPathPrediction::predictedGoalCB, this, std::placeholders::_1));
 
   // Initialize Service clients
-  get_plan_client_ = private_nh.serviceClient<nav_msgs::GetPlan>(get_plan_srv_name_, true);
-
-  // Set-up dynamic reconfigure
-  dsrv_ = new dynamic_reconfigure::Server<agent_path_prediction::AgentPathPredictionConfig>(private_nh);
-  dynamic_reconfigure::Server<agent_path_prediction::AgentPathPredictionConfig>::CallbackType cb = boost::bind(&AgentPathPrediction::reconfigureCB, this, _1, _2);
-  dsrv_->setCallback(cb);
+  get_plan_client_ = node_->create_client<nav_msgs::srv::GetPlan>(get_plan_srv_name_);
 
   // Initialize properties
   showing_markers_ = false;
   got_new_agent_paths_ = false;
   got_external_goal_ = false;
 
-  ROS_DEBUG_NAMED(NODE_NAME, "node %s initialized", NODE_NAME);
+  RCLCPP_DEBUG(node_->get_logger(), "node %s initialized", NODE_NAME);
 }
 
-void AgentPathPrediction::trackedAgentsCB(const cohan_msgs::TrackedAgents &tracked_agents) {
-  ROS_INFO_ONCE_NAMED(NODE_NAME, "agent_path_prediction: received agents");
-  tracked_agents_ = tracked_agents;
-}
+void AgentPathPrediction::trackedAgentsCB(const cohan_msgs::msg::TrackedAgents::SharedPtr tracked_agents) { tracked_agents_ = *tracked_agents; }
 
-void AgentPathPrediction::externalPathsCB(const cohan_msgs::AgentPathArray::ConstPtr &external_paths) {
-  ROS_INFO_ONCE_NAMED(NODE_NAME, "agent_path_prediction: received agent paths");
-  external_paths_ = external_paths;
+void AgentPathPrediction::externalPathsCB(const cohan_msgs::msg::AgentPathArray::SharedPtr external_paths) {
+  external_paths_ = *external_paths;
   got_new_agent_paths_ = true;
 }
 
-void AgentPathPrediction::predictedGoalCB(const agent_path_prediction::PredictedGoals::ConstPtr &predicted_goals) {
-  ROS_INFO_ONCE_NAMED(NODE_NAME, "agent_path_prediction: received predicted goal");
-  predicted_goals_ = *predicted_goals;
-}
+void AgentPathPrediction::predictedGoalCB(const agent_path_prediction::msg::PredictedGoals::SharedPtr predicted_goals) { predicted_goals_ = *predicted_goals; }
 
-bool AgentPathPrediction::predictAgents(agent_path_prediction::AgentPosePredict::Request &req, agent_path_prediction::AgentPosePredict::Response &res) {
-  boost::function<bool(agent_path_prediction::AgentPosePredict::Request & req, agent_path_prediction::AgentPosePredict::Response & res)> prediction_function;
-
-  switch (req.type) {
-    case agent_path_prediction::AgentPosePredictRequest::VELOCITY_OBSTACLE:
-      prediction_function = boost::bind(&AgentPathPrediction::predictAgentsVelObs, this, _1, _2);
+void AgentPathPrediction::predictAgents(const std::shared_ptr<agent_path_prediction::srv::AgentPosePredict::Request> req, std::shared_ptr<agent_path_prediction::srv::AgentPosePredict::Response> res) {
+  switch (req->type) {
+    case agent_path_prediction::srv::AgentPosePredict::Request::VELOCITY_OBSTACLE:
+      predictAgentsVelObs(req, res);
       break;
-    case agent_path_prediction::AgentPosePredictRequest::EXTERNAL:
-      prediction_function = boost::bind(&AgentPathPrediction::predictAgentsExternal, this, _1, _2);
+    case agent_path_prediction::srv::AgentPosePredict::Request::EXTERNAL:
+      predictAgentsExternal(req, res);
       break;
-    case agent_path_prediction::AgentPosePredictRequest::BEHIND_ROBOT:
-      prediction_function = boost::bind(&AgentPathPrediction::predictAgentsBehind, this, _1, _2);
+    case agent_path_prediction::srv::AgentPosePredict::Request::BEHIND_ROBOT:
+      predictAgentsBehind(req, res);
       break;
-    case agent_path_prediction::AgentPosePredictRequest::PREDICTED_GOAL:
-      prediction_function = boost::bind(&AgentPathPrediction::predictAgentsGoal, this, _1, _2);
+    case agent_path_prediction::srv::AgentPosePredict::Request::PREDICTED_GOAL:
+      predictAgentsGoal(req, res);
       break;
     default:
-      ROS_ERROR_NAMED(NODE_NAME, "%s: unkonwn prediction type %d", NODE_NAME, req.type);
+      RCLCPP_ERROR(node_->get_logger(), "%s: unknown prediction type %d", NODE_NAME, req->type);
+      return;
   }
+  if (publish_markers_) {
+    // create new markers
+    predicted_agents_markers_.markers.clear();
 
-  if (!prediction_function.empty() && prediction_function(req, res)) {
-    if (publish_markers_) {
-      // create new markers
-      predicted_agents_markers_.markers.clear();
+    for (auto predicted_agent : res->predicted_agents_poses) {
+      if (!predicted_agent.poses.empty()) {
+        auto first_pose_time = predicted_agent.poses[0].header.stamp;
+        int marker_id = 0;
 
-      for (auto predicted_agent : res.predicted_agents_poses) {
-        if (!predicted_agent.poses.empty()) {
-          auto first_pose_time = predicted_agent.poses[0].header.stamp;
-          int marker_id = 0;
-
-          for (auto predicted_agent_pose : predicted_agent.poses) {
-            visualization_msgs::Marker predicted_agent_marker;
-            predicted_agent_marker.header.frame_id = predicted_agent_pose.header.frame_id;
-            predicted_agent_marker.header.stamp = first_pose_time;
-            predicted_agent_marker.id = (predicted_agent.id * MAX_AGENT_MARKERS) + marker_id++;
-            predicted_agent_marker.type = visualization_msgs::Marker::CYLINDER;
-            predicted_agent_marker.action = visualization_msgs::Marker::MODIFY;
-            // assuming diagonal covariance matrix (with row-major order)
-            predicted_agent_marker.scale.x = std::max(predicted_agent_pose.pose.covariance[0], MINIMUM_COVARIANCE_MARKERS);
-            predicted_agent_marker.scale.y = std::max(predicted_agent_pose.pose.covariance[7], MINIMUM_COVARIANCE_MARKERS);
-            predicted_agent_marker.scale.z = 0.01;
-            predicted_agent_marker.color.a = 1.0;
-            predicted_agent_marker.color.r = 0.0;
-            predicted_agent_marker.color.g = 0.0;
-            predicted_agent_marker.color.b = 1.0;
-            predicted_agent_marker.lifetime = ros::Duration(MIN_MARKER_LIFETIME) + (predicted_agent_pose.header.stamp - first_pose_time);
-            predicted_agent_marker.pose.position.x = predicted_agent_pose.pose.pose.position.x;
-            predicted_agent_marker.pose.position.y = predicted_agent_pose.pose.pose.position.y;
-            // time on z axis
-            predicted_agent_marker.pose.position.z = (predicted_agent_pose.header.stamp - first_pose_time).toSec();
-            predicted_agents_markers_.markers.push_back(predicted_agent_marker);
-          }
-
-          auto it = last_markers_size_map_.find(predicted_agent.id);
-          if (it != last_markers_size_map_.end()) {
-            while (it->second >= marker_id) {
-              visualization_msgs::Marker delete_agent_marker;
-              delete_agent_marker.id = (predicted_agent.id * MAX_AGENT_MARKERS) + marker_id++;
-              delete_agent_marker.action = visualization_msgs::Marker::DELETE;
-              predicted_agents_markers_.markers.push_back(delete_agent_marker);
-            }
-          }
-          last_markers_size_map_[predicted_agent.id] = --marker_id;
-        } else {
-          ROS_WARN_NAMED(NODE_NAME, "no predicted poses fro agent %d", predicted_agent.id);
+        for (auto predicted_agent_pose : predicted_agent.poses) {
+          visualization_msgs::msg::Marker predicted_agent_marker;
+          predicted_agent_marker.header.frame_id = predicted_agent_pose.header.frame_id;
+          predicted_agent_marker.header.stamp = first_pose_time;
+          predicted_agent_marker.id = (predicted_agent.id * MAX_AGENT_MARKERS) + marker_id++;
+          predicted_agent_marker.type = visualization_msgs::msg::Marker::CYLINDER;
+          predicted_agent_marker.action = visualization_msgs::msg::Marker::MODIFY;
+          // assuming diagonal covariance matrix (with row-major order)
+          predicted_agent_marker.scale.x = std::max(predicted_agent_pose.pose.covariance[0], MINIMUM_COVARIANCE_MARKERS);
+          predicted_agent_marker.scale.y = std::max(predicted_agent_pose.pose.covariance[7], MINIMUM_COVARIANCE_MARKERS);
+          predicted_agent_marker.scale.z = 0.01;
+          predicted_agent_marker.color.a = 1.0;
+          predicted_agent_marker.color.r = 0.0;
+          predicted_agent_marker.color.g = 0.0;
+          predicted_agent_marker.color.b = 1.0;
+          rclcpp::Time predicted_time(predicted_agent_pose.header.stamp, node_->get_clock()->get_clock_type());
+          rclcpp::Time first_time(first_pose_time, node_->get_clock()->get_clock_type());
+          predicted_agent_marker.lifetime = rclcpp::Duration::from_seconds(MIN_MARKER_LIFETIME) + (predicted_time - first_time);
+          predicted_agent_marker.pose.position.x = predicted_agent_pose.pose.pose.position.x;
+          predicted_agent_marker.pose.position.y = predicted_agent_pose.pose.pose.position.y;
+          // time on z axis
+          predicted_agent_marker.pose.position.z = (predicted_time - first_time).seconds();
+          predicted_agents_markers_.markers.push_back(predicted_agent_marker);
         }
-      }
 
-      predicted_agents_pub_.publish(predicted_agents_markers_);
-      showing_markers_ = true;
-
-      ROS_DEBUG_NAMED(NODE_NAME, "published predicted agents");
-    } else {
-      if (showing_markers_) {
-        predicted_agents_markers_.markers.clear();
-        visualization_msgs::Marker delete_agent_markers;
-        delete_agent_markers.action = 3;  // visualization_msgs::Marker::DELETEALL;
-        predicted_agents_markers_.markers.push_back(delete_agent_markers);
-        predicted_agents_pub_.publish(predicted_agents_markers_);
-        showing_markers_ = false;
+        auto it = last_markers_size_map_.find(predicted_agent.id);
+        if (it != last_markers_size_map_.end()) {
+          while (it->second >= marker_id) {
+            visualization_msgs::msg::Marker delete_agent_marker;
+            delete_agent_marker.id = (predicted_agent.id * MAX_AGENT_MARKERS) + marker_id++;
+            delete_agent_marker.action = visualization_msgs::msg::Marker::DELETE;
+            predicted_agents_markers_.markers.push_back(delete_agent_marker);
+          }
+        }
+        last_markers_size_map_[predicted_agent.id] = --marker_id;
+      } else {
+        RCLCPP_WARN(node_->get_logger(), "no predicted poses for agent %d", predicted_agent.id);
       }
     }
 
-    return true;
+    predicted_agents_pub_->publish(predicted_agents_markers_);
+    showing_markers_ = true;
+
+    RCLCPP_DEBUG(node_->get_logger(), "published predicted agents");
+  } else {
+    if (showing_markers_) {
+      predicted_agents_markers_.markers.clear();
+      visualization_msgs::msg::Marker delete_agent_markers;
+      delete_agent_markers.action = 3;  // visualization_msgs::Marker::DELETEALL;
+      predicted_agents_markers_.markers.push_back(delete_agent_markers);
+      predicted_agents_pub_->publish(predicted_agents_markers_);
+      showing_markers_ = false;
+    }
   }
-  return false;
 }
 
-bool AgentPathPrediction::predictAgentsVelObs(agent_path_prediction::AgentPosePredict::Request &req, agent_path_prediction::AgentPosePredict::Response &res) const {
+void AgentPathPrediction::predictAgentsVelObs(const std::shared_ptr<agent_path_prediction::srv::AgentPosePredict::Request> req,
+                                              std::shared_ptr<agent_path_prediction::srv::AgentPosePredict::Response> res) const {
   // validate prediction time
-  if (req.predict_times.empty()) {
-    ROS_ERROR_NAMED(NODE_NAME, "prediction times cannot be empty");
-    return false;
+  if (req->predict_times.empty()) {
+    RCLCPP_ERROR(node_->get_logger(), "prediction times cannot be empty");
+    return;
   }
-  if (*std::min_element(req.predict_times.begin(), req.predict_times.end()) < 0.0) {
-    ROS_ERROR_NAMED(NODE_NAME, "prediction time cannot be negative");
-    return false;
+  if (*std::min_element(req->predict_times.begin(), req->predict_times.end()) < 0.0) {
+    RCLCPP_ERROR(node_->get_logger(), "prediction time cannot be negative");
+    return;
   }
 
   // get local refrence of agents
@@ -210,36 +175,36 @@ bool AgentPathPrediction::predictAgentsVelObs(agent_path_prediction::AgentPosePr
   auto track_frame = tracked_agents_.header.frame_id;
   auto track_time = tracked_agents_.header.stamp;
 
-  if ((ros::Time::now() - track_time).toSec() > *std::max_element(req.predict_times.begin(), req.predict_times.end())) {
-    ROS_DEBUG_NAMED(NODE_NAME,
-                    "agent data is older than maximum given "
-                    "prediction time, predicting nothing");
-    return true;
+  if ((node_->now() - track_time).seconds() > *std::max_element(req->predict_times.begin(), req->predict_times.end())) {
+    RCLCPP_DEBUG(node_->get_logger(), "agent data is older than maximum given prediction time, predicting nothing");
+    return;
   }
 
-  for (const auto &agent : agents) {
-    if (std::find(req.ids.begin(), req.ids.end(), agent.track_id) == req.ids.end()) {
+  for (const auto& agent : agents) {
+    if (std::find(req->ids.begin(), req->ids.end(), agent.track_id) == req->ids.end()) {
       continue;
     }
     for (auto segment : agent.segments) {
       if (segment.type == default_agent_part_) {
         // calculate future agent poses based on current velocity
-        agent_path_prediction::PredictedPoses predicted_poses;
+        agent_path_prediction::msg::PredictedPoses predicted_poses;
         predicted_poses.id = agent.track_id;
 
         // get linear velocity of the agent
         tf2::Vector3 linear_vel(segment.twist.twist.linear.x, segment.twist.twist.linear.y, segment.twist.twist.linear.z);
 
-        for (auto predict_time : req.predict_times) {
+        for (auto predict_time : req->predict_times) {
           // validate prediction time
           if (predict_time < 0) {
-            ROS_ERROR_NAMED(NODE_NAME, "%s: prediction time cannot be negative (give %f)", NODE_NAME, predict_time);
-            return false;
+            RCLCPP_ERROR(node_->get_logger(), "%s: prediction time cannot be negative (give %f)", NODE_NAME, predict_time);
+            return;
           }
 
-          geometry_msgs::PoseWithCovarianceStamped predicted_pose;
+          geometry_msgs::msg::PoseWithCovarianceStamped predicted_pose;
           predicted_pose.header.frame_id = track_frame;
-          predicted_pose.header.stamp = track_time + ros::Duration(predict_time);
+          rclcpp::Time track_time_rclcpp(track_time, node_->get_clock()->get_clock_type());
+          rclcpp::Time predicted_time = track_time_rclcpp + rclcpp::Duration::from_seconds(predict_time);
+          predicted_pose.header.stamp = predicted_time;
 
           if (velobs_use_ang_ && std::abs(segment.twist.twist.angular.z) > ANG_VEL_EPS) {
             // velocity multiplier is only applied to linear velocities
@@ -265,42 +230,38 @@ bool AgentPathPrediction::predictAgentsVelObs(agent_path_prediction::AgentPosePr
           predicted_pose.pose.covariance[7] = predicted_pose.pose.covariance[0];
           predicted_poses.poses.push_back(predicted_pose);
 
-          ROS_DEBUG_NAMED(NODE_NAME,
-                          "%s: predected agent (%lu) segment (%d)"
-                          " pose: x=%f, y=%f, theta=%f, predict-time=%f",
-                          NODE_NAME, agent.track_id, segment.type, predicted_pose.pose.pose.position.x, predicted_pose.pose.pose.position.y, tf2::getYaw(predicted_pose.pose.pose.orientation),
-                          predict_time);
+          RCLCPP_DEBUG(node_->get_logger(), "%s: predicted agent (%lu) segment (%d) pose: x=%f, y=%f, theta=%f, predict-time=%f", NODE_NAME, agent.track_id, segment.type,
+                       predicted_pose.pose.pose.position.x, predicted_pose.pose.pose.position.y, tf2::getYaw(predicted_pose.pose.pose.orientation), predict_time);
         }
 
-        geometry_msgs::TwistStamped current_twist;
+        geometry_msgs::msg::TwistStamped current_twist;
         current_twist.header.frame_id = track_frame;
         current_twist.header.stamp = track_time;
         current_twist.twist = segment.twist.twist;
         predicted_poses.start_velocity = current_twist;
 
-        res.predicted_agents_poses.push_back(predicted_poses);
+        res->predicted_agents_poses.push_back(predicted_poses);
       }
     }
   }
-
-  return true;
 }
 
-bool AgentPathPrediction::predictAgentsExternal(agent_path_prediction::AgentPosePredict::Request &req, agent_path_prediction::AgentPosePredict::Response &res) {
+void AgentPathPrediction::predictAgentsExternal(const std::shared_ptr<agent_path_prediction::srv::AgentPosePredict::Request> req,
+                                                std::shared_ptr<agent_path_prediction::srv::AgentPosePredict::Response> res) {
   // Using external paths
-  if (external_paths_) {
+  if (!external_paths_.paths.empty()) {
     auto external_paths = external_paths_;
     auto tracked_agents = tracked_agents_;
 
     std::vector<AgentPathVel> agent_path_vel_array;
-    for (const auto &path : external_paths->paths) {
+    for (const auto& path : external_paths.paths) {
       AgentPathVel agent_path_vel{.id = path.id, .path = path.path};
 
       // set starting velocity of the agent if we find them
       // we do not add current pose at first pose in this case
-      for (auto &agent : tracked_agents.agents) {
+      for (auto& agent : tracked_agents.agents) {
         if (agent.track_id == path.id) {
-          for (auto &segment : agent.segments) {
+          for (auto& segment : agent.segments) {
             if (segment.type == default_agent_part_) {
               agent_path_vel.start_vel = segment.twist;
               break;
@@ -311,56 +272,56 @@ bool AgentPathPrediction::predictAgentsExternal(agent_path_prediction::AgentPose
       }
       agent_path_vel_array.push_back(agent_path_vel);
     }
-    return predictAgentsFromPaths(req, res, agent_path_vel_array);
+    path_vels_ = agent_path_vel_array;
+    predictAgentsFromPaths(req, res);
+    return;
   }
 
   // Using an external goal
   if (got_external_goal_) {
-    auto now = ros::Time::now();
+    auto now = node_->now();
     auto tracked_agents = tracked_agents_;
-    std::map<uint64_t, geometry_msgs::PoseStamped> ext_goal;
+    std::map<uint64_t, geometry_msgs::msg::PoseStamped> ext_goal;
 
     // get robot pose
-    geometry_msgs::TransformStamped robot_to_map_tf;
-    geometry_msgs::TransformStamped agent_to_map_tf;
+    geometry_msgs::msg::TransformStamped robot_to_map_tf;
+    geometry_msgs::msg::TransformStamped agent_to_map_tf;
     bool transforms_found = false;
     try {
-      // tf_.lookupTransform(map_frame_id_, robot_frame_id_, ros::Time(0), robot_to_map_tf);
-      robot_to_map_tf = tf_.lookupTransform(map_frame_id_, robot_frame_id_, ros::Time(0), ros::Duration(0.5));
+      robot_to_map_tf = tf_buffer_->lookupTransform(map_frame_id_, robot_frame_id_, tf2::TimePointZero, tf2::durationFromSec(0.5));
 
       std::string agents_frame = "map";
       if (!tracked_agents.header.frame_id.empty()) {
         agents_frame = tracked_agents.header.frame_id;
       }
-      // tf_.lookupTransform(map_frame_id_, agents_frame, ros::Time(0), agent_to_map_tf);
-      agent_to_map_tf = tf_.lookupTransform(map_frame_id_, agents_frame, ros::Time(0), ros::Duration(0.5));
+      agent_to_map_tf = tf_buffer_->lookupTransform(map_frame_id_, agents_frame, tf2::TimePointZero, tf2::durationFromSec(0.5));
 
       transforms_found = true;
-    } catch (tf2::LookupException &ex) {
-      ROS_ERROR_NAMED(NODE_NAME, "No Transform available Error: %s\n", ex.what());
-    } catch (tf2::ConnectivityException &ex) {
-      ROS_ERROR_NAMED(NODE_NAME, "Connectivity Error: %s\n", ex.what());
-    } catch (tf2::ExtrapolationException &ex) {
-      ROS_ERROR_NAMED(NODE_NAME, "Extrapolation Error: %s\n", ex.what());
+    } catch (tf2::LookupException& ex) {
+      RCLCPP_ERROR(node_->get_logger(), "No Transform available Error: %s\n", ex.what());
+    } catch (tf2::ConnectivityException& ex) {
+      RCLCPP_ERROR(node_->get_logger(), "Connectivity Error: %s\n", ex.what());
+    } catch (tf2::ExtrapolationException& ex) {
+      RCLCPP_ERROR(node_->get_logger(), "Extrapolation Error: %s\n", ex.what());
     }
 
     // first check if path calculation is needed, and for whom
     std::vector<AgentStartPoseVel> agent_start_pose_vels;
     std::vector<bool> start_poses_far;
     int idx_order = 0;
-    for (auto &agent : tracked_agents.agents) {
+    for (auto& agent : tracked_agents.agents) {
       path_vels_pos_.push_back(-1);
-      if (std::find(req.ids.begin(), req.ids.end(), agent.track_id) == req.ids.end()) {
+      if (std::find(req->ids.begin(), req->ids.end(), agent.track_id) == req->ids.end()) {
         continue;
       }
       bool path_exist = false;
-      for (auto &ex_gl : external_goals_) {
+      for (auto& ex_gl : external_goals_) {
         if (ex_gl.id == agent.track_id) {
           ext_goal[ex_gl.id] = ex_gl.pose;
           break;
         }
       }
-      for (const auto &path_vel : path_vels_) {
+      for (const auto& path_vel : path_vels_) {
         if (path_vel.id == agent.track_id) {
           path_exist = true;
           break;
@@ -368,9 +329,9 @@ bool AgentPathPrediction::predictAgentsExternal(agent_path_prediction::AgentPose
       }
 
       // get agent pose
-      for (auto &segment : agent.segments) {
+      for (auto& segment : agent.segments) {
         if (segment.type == default_agent_part_) {
-          geometry_msgs::PoseStamped agent_start;
+          geometry_msgs::msg::PoseStamped agent_start;
           agent_start.header.frame_id = tracked_agents.header.frame_id;
           agent_start.header.stamp = now;
           agent_start.pose = segment.pose.pose;
@@ -378,7 +339,7 @@ bool AgentPathPrediction::predictAgentsExternal(agent_path_prediction::AgentPose
           // TODO: Remove unncessary conversions
           tf2::Transform start_pose_tf;
           start_pose_tf.setRotation(tf2::Quaternion(0.0, 0.0, 0.0, 1.0));
-          geometry_msgs::Pose start_pose;
+          geometry_msgs::msg::Pose start_pose;
           start_pose.orientation.w = 1.0;
           tf2::fromMsg(agent_start.pose, start_pose_tf);
           tf2::Transform agent_to_map_transform;
@@ -391,7 +352,7 @@ bool AgentPathPrediction::predictAgentsExternal(agent_path_prediction::AgentPose
             agent_start_pose_vels.push_back(agent_start_pose_vel);
             path_vels_pos_[agent.track_id - 1] = idx_order;
           } else {
-            if (std::find(req.ids.begin(), req.ids.end(), agent.track_id) != req.ids.end()) {
+            if (std::find(req->ids.begin(), req->ids.end(), agent.track_id) != req->ids.end()) {
               double dist_far = std::hypot(agent_start.pose.position.x - path_vels_[path_vels_pos_[agent.track_id - 1]].path.poses[0].pose.position.x,
                                            agent_start.pose.position.y - path_vels_[path_vels_pos_[agent.track_id - 1]].path.poses[0].pose.position.y);
               if (dist_far > RECALC_DIST) {  // To ensure that the path is recalculated only if the agent is deviating from the path
@@ -411,9 +372,11 @@ bool AgentPathPrediction::predictAgentsExternal(agent_path_prediction::AgentPose
 
     if (!agent_start_pose_vels.empty()) {
       if (transforms_found) {
-        for (auto &agent_start_pose_vel : agent_start_pose_vels) {
-          nav_msgs::GetPlan get_plan_srv;
-          if (ext_goal.find(agent_start_pose_vel.id) == ext_goal.end()) continue;
+        for (auto& agent_start_pose_vel : agent_start_pose_vels) {
+          auto get_plan_srv = std::make_shared<nav_msgs::srv::GetPlan::Request>();
+          if (ext_goal.find(agent_start_pose_vel.id) == ext_goal.end()) {
+            continue;
+          }
           // get agent pose in map frame
           // (tf2)
           tf2::Transform start_pose_tf;
@@ -427,95 +390,92 @@ bool AgentPathPrediction::predictAgentsExternal(agent_path_prediction::AgentPose
           auto start_path = setFixedPath(start_pose_stamped);
           //(tf2)
 
-          get_plan_srv.request.start.header.frame_id = map_frame_id_;
-          get_plan_srv.request.start.header.stamp = now;
-          get_plan_srv.request.start.pose = start_path.poses.back().pose;
-          front_pose_pub_.publish(start_path.poses.back());
+          get_plan_srv->start.header.frame_id = map_frame_id_;
+          get_plan_srv->start.header.stamp = now;
+          get_plan_srv->start.pose = start_path.poses.back().pose;
+          front_pose_pub_->publish(start_path.poses.back());
 
-          get_plan_srv.request.goal.header.frame_id = map_frame_id_;
-          get_plan_srv.request.goal.header.stamp = now;
-          get_plan_srv.request.goal.pose.position.x = ext_goal[agent_start_pose_vel.id].pose.position.x;
-          get_plan_srv.request.goal.pose.position.y = ext_goal[agent_start_pose_vel.id].pose.position.y;
-          get_plan_srv.request.goal.pose.position.z = ext_goal[agent_start_pose_vel.id].pose.position.z;
-          get_plan_srv.request.goal.pose.orientation = ext_goal[agent_start_pose_vel.id].pose.orientation;
+          get_plan_srv->goal.header.frame_id = map_frame_id_;
+          get_plan_srv->goal.header.stamp = now;
+          get_plan_srv->goal.pose.position.x = ext_goal[agent_start_pose_vel.id].pose.position.x;
+          get_plan_srv->goal.pose.position.y = ext_goal[agent_start_pose_vel.id].pose.position.y;
+          get_plan_srv->goal.pose.position.z = ext_goal[agent_start_pose_vel.id].pose.position.z;
+          get_plan_srv->goal.pose.orientation = ext_goal[agent_start_pose_vel.id].pose.orientation;
 
-          ROS_DEBUG_NAMED(NODE_NAME,
-                          "agent start: x=%.2f, y=%.2f, theta=%.2f, "
-                          "goal: x=%.2f, y=%.2f, theta=%.2f",
-                          get_plan_srv.request.start.pose.position.x, get_plan_srv.request.start.pose.position.y, tf2::getYaw(get_plan_srv.request.start.pose.orientation),
-                          get_plan_srv.request.goal.pose.position.x, get_plan_srv.request.goal.pose.position.y, tf2::getYaw(get_plan_srv.request.goal.pose.orientation));
+          RCLCPP_DEBUG(node_->get_logger(), "agent start: x=%.2f, y=%.2f, theta=%.2f, goal: x=%.2f, y=%.2f, theta=%.2f", get_plan_srv->start.pose.position.x, get_plan_srv->start.pose.position.y,
+                       tf2::getYaw(get_plan_srv->start.pose.orientation), get_plan_srv->goal.pose.position.x, get_plan_srv->goal.pose.position.y, tf2::getYaw(get_plan_srv->goal.pose.orientation));
 
           // make plan for agent
           if (get_plan_client_) {
-            if (get_plan_client_.call(get_plan_srv)) {
-              if (!get_plan_srv.response.plan.poses.empty()) {
+            auto future = get_plan_client_->async_send_request(get_plan_srv);
+            if (future.wait_for(std::chrono::seconds(2)) == std::future_status::ready) {
+              auto response = future.get();
+              if (!response->plan.poses.empty()) {
                 AgentPathVel agent_path_vel;
                 agent_path_vel.id = agent_start_pose_vel.id;
-                agent_path_vel.path = get_plan_srv.response.plan;
+                agent_path_vel.path = response->plan;
                 agent_path_vel.start_vel = agent_start_pose_vel.vel;
                 path_vels_.push_back(agent_path_vel);
                 got_new_agent_paths_ = true;
               } else {
-                ROS_WARN_NAMED(NODE_NAME,
-                               "Got empty path for agent, start or "
-                               "goal position is probably invalid");
+                RCLCPP_WARN(node_->get_logger(), "Got empty path for agent, start or goal position is probably invalid");
               }
             } else {
-              ROS_WARN_NAMED(NODE_NAME, "Failed to call %s service", get_plan_srv_name_.c_str());
+              RCLCPP_WARN(node_->get_logger(), "Failed to call %s service", get_plan_srv_name_.c_str());
             }
           } else {
-            ROS_WARN_NAMED(NODE_NAME, "%s service does not exist, re-trying to subscribe", get_plan_srv_name_.c_str());
-            ros::NodeHandle private_nh("~/");
-            get_plan_client_ = private_nh.serviceClient<nav_msgs::GetPlan>(get_plan_srv_name_, true);
+            RCLCPP_WARN(node_->get_logger(), "%s service does not exist, re-trying to subscribe", get_plan_srv_name_.c_str());
+            get_plan_client_ = node_->create_client<nav_msgs::srv::GetPlan>(get_plan_srv_name_);
           }
         }
       }
     }
-    return predictAgentsFromPaths(req, res, path_vels_);
+    predictAgentsFromPaths(req, res);
+    return;
   }
 
   std::vector<AgentPathVel> empty_path_vels;
-  return predictAgentsFromPaths(req, res, empty_path_vels);
+  path_vels_ = empty_path_vels;
+  predictAgentsFromPaths(req, res);
 }
 
-bool AgentPathPrediction::predictAgentsBehind(agent_path_prediction::AgentPosePredict::Request &req, agent_path_prediction::AgentPosePredict::Response &res) {
-  auto now = ros::Time::now();
+void AgentPathPrediction::predictAgentsBehind(const std::shared_ptr<agent_path_prediction::srv::AgentPosePredict::Request> req,
+                                              std::shared_ptr<agent_path_prediction::srv::AgentPosePredict::Response> res) {
+  auto now = node_->now();
   auto tracked_agents = tracked_agents_;
 
   // get robot pose
-  geometry_msgs::TransformStamped robot_to_map_tf;
-  geometry_msgs::TransformStamped agent_to_map_tf;
+  geometry_msgs::msg::TransformStamped robot_to_map_tf;
+  geometry_msgs::msg::TransformStamped agent_to_map_tf;
   bool transforms_found = false;
   try {
-    // tf_.lookupTransform(map_frame_id_, robot_frame_id_, ros::Time(0), robot_to_map_tf);
-    robot_to_map_tf = tf_.lookupTransform(map_frame_id_, robot_frame_id_, ros::Time(0), ros::Duration(0.5));
+    robot_to_map_tf = tf_buffer_->lookupTransform(map_frame_id_, robot_frame_id_, tf2::TimePointZero, tf2::durationFromSec(0.5));
     std::string agents_frame = "map";
     if (!tracked_agents.header.frame_id.empty()) {
       agents_frame = tracked_agents.header.frame_id;
     }
-    // tf_.lookupTransform(map_frame_id_, agents_frame, ros::Time(0), agent_to_map_tf);
-    agent_to_map_tf = tf_.lookupTransform(map_frame_id_, agents_frame, ros::Time(0), ros::Duration(0.5));
+    agent_to_map_tf = tf_buffer_->lookupTransform(map_frame_id_, agents_frame, tf2::TimePointZero, tf2::durationFromSec(0.5));
 
     transforms_found = true;
-  } catch (tf2::LookupException &ex) {
-    ROS_ERROR_NAMED(NODE_NAME, "No Transform available Error: %s\n", ex.what());
-  } catch (tf2::ConnectivityException &ex) {
-    ROS_ERROR_NAMED(NODE_NAME, "Connectivity Error: %s\n", ex.what());
-  } catch (tf2::ExtrapolationException &ex) {
-    ROS_ERROR_NAMED(NODE_NAME, "Extrapolation Error: %s\n", ex.what());
+  } catch (tf2::LookupException& ex) {
+    RCLCPP_ERROR(node_->get_logger(), "No Transform available Error: %s\n", ex.what());
+  } catch (tf2::ConnectivityException& ex) {
+    RCLCPP_ERROR(node_->get_logger(), "Connectivity Error: %s\n", ex.what());
+  } catch (tf2::ExtrapolationException& ex) {
+    RCLCPP_ERROR(node_->get_logger(), "Extrapolation Error: %s\n", ex.what());
   }
 
   // first check if path calculation is needed, and for whom
   std::vector<AgentStartPoseVel> agent_start_pose_vels;
   std::vector<bool> start_poses_far;
   int idx_order = 0;
-  for (auto &agent : tracked_agents.agents) {
+  for (auto& agent : tracked_agents.agents) {
     path_vels_pos_.push_back(-1);
-    if (std::find(req.ids.begin(), req.ids.end(), agent.track_id) == req.ids.end()) {
+    if (std::find(req->ids.begin(), req->ids.end(), agent.track_id) == req->ids.end()) {
       continue;
     }
     bool path_exist = false;
-    for (const auto &path_vel : path_vels_) {
+    for (const auto& path_vel : path_vels_) {
       if (path_vel.id == agent.track_id) {
         path_exist = true;
         break;
@@ -523,16 +483,16 @@ bool AgentPathPrediction::predictAgentsBehind(agent_path_prediction::AgentPosePr
     }
 
     // get agent pose
-    for (auto &segment : agent.segments) {
+    for (auto& segment : agent.segments) {
       if (segment.type == default_agent_part_) {
-        geometry_msgs::PoseStamped agent_start;
+        geometry_msgs::msg::PoseStamped agent_start;
         agent_start.header.frame_id = tracked_agents.header.frame_id;
         agent_start.header.stamp = now;
         agent_start.pose = segment.pose.pose;
 
         tf2::Transform start_pose_tf;
         start_pose_tf.setRotation(tf2::Quaternion(0.0, 0.0, 0.0, 1.0));
-        geometry_msgs::Pose start_pose;
+        geometry_msgs::msg::Pose start_pose;
         start_pose.orientation.w = 1.0;
         tf2::fromMsg(agent_start.pose, start_pose_tf);
         tf2::Transform agent_to_map_transform;
@@ -545,7 +505,7 @@ bool AgentPathPrediction::predictAgentsBehind(agent_path_prediction::AgentPosePr
           agent_start_pose_vels.push_back(agent_start_pose_vel);
           path_vels_pos_[agent.track_id - 1] = idx_order;
         } else {
-          if (std::find(req.ids.begin(), req.ids.end(), agent.track_id) != req.ids.end()) {
+          if (std::find(req->ids.begin(), req->ids.end(), agent.track_id) != req->ids.end()) {
             double dist_far = std::hypot(agent_start.pose.position.x - path_vels_[path_vels_pos_[agent.track_id - 1]].path.poses[0].pose.position.x,
                                          agent_start.pose.position.y - path_vels_[path_vels_pos_[agent.track_id - 1]].path.poses[0].pose.position.y);
 
@@ -563,12 +523,13 @@ bool AgentPathPrediction::predictAgentsBehind(agent_path_prediction::AgentPosePr
     }
     idx_order++;
   }
+
   if (!agent_start_pose_vels.empty()) {
     if (transforms_found) {
-      for (auto &agent_start_pose_vel : agent_start_pose_vels) {
-        nav_msgs::GetPlan get_plan_srv;
-
+      for (auto& agent_start_pose_vel : agent_start_pose_vels) {
+        auto get_plan_srv = std::make_shared<nav_msgs::srv::GetPlan::Request>();
         auto hum_id = agent_start_pose_vel.id;
+
         // get agent pose in map frame
         // (tf2)
         tf2::Transform start_pose_tf;
@@ -582,10 +543,10 @@ bool AgentPathPrediction::predictAgentsBehind(agent_path_prediction::AgentPosePr
         auto start_path = setFixedPath(start_pose_stamped);
         //(tf2)
 
-        get_plan_srv.request.start.header.frame_id = map_frame_id_;
-        get_plan_srv.request.start.header.stamp = now;
-        get_plan_srv.request.start.pose = start_path.poses.back().pose;
-        front_pose_pub_.publish(start_path.poses.back());
+        get_plan_srv->start.header.frame_id = map_frame_id_;
+        get_plan_srv->start.header.stamp = now;
+        get_plan_srv->start.pose = start_path.poses.back().pose;
+        front_pose_pub_->publish(start_path.poses.back());
 
         // calculate agent pose behind robot
         if (!check_path_) {
@@ -598,79 +559,75 @@ bool AgentPathPrediction::predictAgentsBehind(agent_path_prediction::AgentPosePr
           behind_tr = robot_to_map_transform * behind_tr;
           behind_pose_ = tf2::toMsg(behind_tr);
         }
-        get_plan_srv.request.goal.header.frame_id = map_frame_id_;
-        get_plan_srv.request.goal.header.stamp = now;
-        get_plan_srv.request.goal.pose.position.x = behind_pose_.translation.x;
-        get_plan_srv.request.goal.pose.position.y = behind_pose_.translation.y;
-        get_plan_srv.request.goal.pose.position.z = behind_pose_.translation.z;
-        get_plan_srv.request.goal.pose.orientation = behind_pose_.rotation;
+        get_plan_srv->goal.header.frame_id = map_frame_id_;
+        get_plan_srv->goal.header.stamp = now;
+        get_plan_srv->goal.pose.position.x = behind_pose_.translation.x;
+        get_plan_srv->goal.pose.position.y = behind_pose_.translation.y;
+        get_plan_srv->goal.pose.position.z = behind_pose_.translation.z;
+        get_plan_srv->goal.pose.orientation = behind_pose_.rotation;
 
-        ROS_DEBUG_NAMED(NODE_NAME,
-                        "agent start: x=%.2f, y=%.2f, theta=%.2f, "
-                        "goal: x=%.2f, y=%.2f, theta=%.2f",
-                        get_plan_srv.request.start.pose.position.x, get_plan_srv.request.start.pose.position.y, tf2::getYaw(get_plan_srv.request.start.pose.orientation),
-                        get_plan_srv.request.goal.pose.position.x, get_plan_srv.request.goal.pose.position.y, tf2::getYaw(get_plan_srv.request.goal.pose.orientation));
+        RCLCPP_DEBUG(node_->get_logger(), "agent start: x=%.2f, y=%.2f, theta=%.2f, goal: x=%.2f, y=%.2f, theta=%.2f", get_plan_srv->start.pose.position.x, get_plan_srv->start.pose.position.y,
+                     tf2::getYaw(get_plan_srv->start.pose.orientation), get_plan_srv->goal.pose.position.x, get_plan_srv->goal.pose.position.y, tf2::getYaw(get_plan_srv->goal.pose.orientation));
 
         // make plan for agent
         if (get_plan_client_) {
-          if (get_plan_client_.call(get_plan_srv)) {
-            if (!get_plan_srv.response.plan.poses.empty()) {
+          auto future = get_plan_client_->async_send_request(get_plan_srv);
+
+          if (future.wait_for(std::chrono::seconds(2)) == std::future_status::ready) {
+            auto response = future.get();
+            if (!response->plan.poses.empty()) {
               AgentPathVel agent_path_vel;
               agent_path_vel.id = agent_start_pose_vel.id;
-              agent_path_vel.path = get_plan_srv.response.plan;
+              agent_path_vel.path = response->plan;
               agent_path_vel.start_vel = agent_start_pose_vel.vel;
               path_vels_.push_back(agent_path_vel);
               got_new_agent_paths_ = true;
             } else {
-              ROS_WARN_NAMED(NODE_NAME,
-                             "Got empty path for agent, start or "
-                             "goal position is probably invalid");
+              RCLCPP_WARN(node_->get_logger(), "Got empty path for agent, start or goal position is probably invalid");
             }
           } else {
-            ROS_WARN_NAMED(NODE_NAME, "Failed to call %s service", get_plan_srv_name_.c_str());
+            RCLCPP_WARN(node_->get_logger(), "Failed to call %s service", get_plan_srv_name_.c_str());
           }
         } else {
-          ROS_WARN_NAMED(NODE_NAME, "%s service does not exist, re-trying to subscribe", get_plan_srv_name_.c_str());
-          ros::NodeHandle private_nh("~/");
-          get_plan_client_ = private_nh.serviceClient<nav_msgs::GetPlan>(get_plan_srv_name_, true);
+          RCLCPP_WARN(node_->get_logger(), "%s service does not exist, re-trying to subscribe", get_plan_srv_name_.c_str());
+          get_plan_client_ = node_->create_client<nav_msgs::srv::GetPlan>(get_plan_srv_name_);
         }
       }
     }
   }
 
-  return predictAgentsFromPaths(req, res, path_vels_);
+  return predictAgentsFromPaths(req, res);
 }
 
-bool AgentPathPrediction::predictAgentsGoal(agent_path_prediction::AgentPosePredict::Request &req, agent_path_prediction::AgentPosePredict::Response &res) {
-  auto now = ros::Time::now();
+void AgentPathPrediction::predictAgentsGoal(const std::shared_ptr<agent_path_prediction::srv::AgentPosePredict::Request> req,
+                                            std::shared_ptr<agent_path_prediction::srv::AgentPosePredict::Response> res) {
+  auto now = node_->now();
   auto tracked_agents = tracked_agents_;
-  std::map<int, geometry_msgs::Pose> predicted_goals;
+  std::map<int, geometry_msgs::msg::Pose> predicted_goals;
 
-  for (auto &goal : predicted_goals_.goals) {
+  for (auto& goal : predicted_goals_.goals) {
     predicted_goals[goal.id] = goal.goal;
   }
 
   // get robot pose
-  geometry_msgs::TransformStamped robot_to_map_tf;
-  geometry_msgs::TransformStamped agent_to_map_tf;
+  geometry_msgs::msg::TransformStamped robot_to_map_tf;
+  geometry_msgs::msg::TransformStamped agent_to_map_tf;
   bool transforms_found = false;
   try {
-    // tf_.lookupTransform(map_frame_id_, robot_frame_id_, ros::Time(0), robot_to_map_tf);
-    robot_to_map_tf = tf_.lookupTransform(map_frame_id_, robot_frame_id_, ros::Time(0), ros::Duration(0.5));
+    robot_to_map_tf = tf_buffer_->lookupTransform(map_frame_id_, robot_frame_id_, tf2::TimePointZero, tf2::durationFromSec(0.5));
     std::string agents_frame = "map";
     if (!tracked_agents.header.frame_id.empty()) {
       agents_frame = tracked_agents.header.frame_id;
     }
-    // tf_.lookupTransform(map_frame_id_, agents_frame, ros::Time(0), agent_to_map_tf);
-    agent_to_map_tf = tf_.lookupTransform(map_frame_id_, agents_frame, ros::Time(0), ros::Duration(0.5));
+    agent_to_map_tf = tf_buffer_->lookupTransform(map_frame_id_, agents_frame, tf2::TimePointZero, tf2::durationFromSec(0.5));
 
     transforms_found = true;
-  } catch (tf2::LookupException &ex) {
-    ROS_ERROR_NAMED(NODE_NAME, "No Transform available Error: %s\n", ex.what());
-  } catch (tf2::ConnectivityException &ex) {
-    ROS_ERROR_NAMED(NODE_NAME, "Connectivity Error: %s\n", ex.what());
-  } catch (tf2::ExtrapolationException &ex) {
-    ROS_ERROR_NAMED(NODE_NAME, "Extrapolation Error: %s\n", ex.what());
+  } catch (tf2::LookupException& ex) {
+    RCLCPP_ERROR(node_->get_logger(), "No Transform available Error: %s\n", ex.what());
+  } catch (tf2::ConnectivityException& ex) {
+    RCLCPP_ERROR(node_->get_logger(), "Connectivity Error: %s\n", ex.what());
+  } catch (tf2::ExtrapolationException& ex) {
+    RCLCPP_ERROR(node_->get_logger(), "Extrapolation Error: %s\n", ex.what());
   }
 
   // first check if path calculation is needed, and for whom
@@ -678,13 +635,13 @@ bool AgentPathPrediction::predictAgentsGoal(agent_path_prediction::AgentPosePred
   std::vector<bool> start_poses_far;
   int idx_order = 0;
 
-  for (auto &agent : tracked_agents.agents) {
+  for (auto& agent : tracked_agents.agents) {
     path_vels_pos_.push_back(-1);
-    if (std::find(req.ids.begin(), req.ids.end(), agent.track_id) == req.ids.end()) {
+    if (std::find(req->ids.begin(), req->ids.end(), agent.track_id) == req->ids.end()) {
       continue;
     }
     bool path_exist = false;
-    for (const auto &path_vel : path_vels_) {
+    for (const auto& path_vel : path_vels_) {
       if (path_vel.id == agent.track_id) {
         path_exist = true;
         break;
@@ -692,9 +649,9 @@ bool AgentPathPrediction::predictAgentsGoal(agent_path_prediction::AgentPosePred
     }
 
     // get agent pose
-    for (auto &segment : agent.segments) {
+    for (auto& segment : agent.segments) {
       if (segment.type == default_agent_part_) {
-        geometry_msgs::PoseStamped agent_start;
+        geometry_msgs::msg::PoseStamped agent_start;
         agent_start.header.frame_id = tracked_agents.header.frame_id;
         agent_start.header.stamp = now;
         agent_start.pose = segment.pose.pose;
@@ -702,7 +659,7 @@ bool AgentPathPrediction::predictAgentsGoal(agent_path_prediction::AgentPosePred
         //(tf2)
         tf2::Transform start_pose_tf;
         start_pose_tf.setRotation(tf2::Quaternion(0.0, 0.0, 0.0, 1.0));
-        geometry_msgs::Pose start_pose;
+        geometry_msgs::msg::Pose start_pose;
         start_pose.orientation.w = 1.0;
         tf2::fromMsg(agent_start.pose, start_pose_tf);
         tf2::Transform agent_to_map_transform;
@@ -711,12 +668,13 @@ bool AgentPathPrediction::predictAgentsGoal(agent_path_prediction::AgentPosePred
         tf2::toMsg(start_pose_tf, start_pose);
         //(tf2)
 
-        if (!path_exist || predicted_goals_.header.stamp.toSec() < 1) {
+        rclcpp::Time predicted_goals_time(predicted_goals_.header.stamp, node_->get_clock()->get_clock_type());
+        if (!path_exist || predicted_goals_time.seconds() < 1) {
           AgentStartPoseVel agent_start_pose_vel = {.id = agent.track_id, .pose = agent_start, .vel = segment.twist};
           agent_start_pose_vels.push_back(agent_start_pose_vel);
           path_vels_pos_[agent.track_id - 1] = idx_order;
         } else {
-          if (std::find(req.ids.begin(), req.ids.end(), agent.track_id) != req.ids.end()) {
+          if (std::find(req->ids.begin(), req->ids.end(), agent.track_id) != req->ids.end()) {
             double dist_far = std::hypot(agent_start.pose.position.x - path_vels_[path_vels_pos_[agent.track_id - 1]].path.poses[0].pose.position.x,
                                          agent_start.pose.position.y - path_vels_[path_vels_pos_[agent.track_id - 1]].path.poses[0].pose.position.y);
 
@@ -737,8 +695,8 @@ bool AgentPathPrediction::predictAgentsGoal(agent_path_prediction::AgentPosePred
 
   if (!agent_start_pose_vels.empty()) {
     if (transforms_found) {
-      for (auto &agent_start_pose_vel : agent_start_pose_vels) {
-        nav_msgs::GetPlan get_plan_srv;
+      for (auto& agent_start_pose_vel : agent_start_pose_vels) {
+        auto get_plan_srv = std::make_shared<nav_msgs::srv::GetPlan::Request>();
 
         // get agent pose in map frame
         // (tf2)
@@ -753,75 +711,73 @@ bool AgentPathPrediction::predictAgentsGoal(agent_path_prediction::AgentPosePred
         auto start_path = setFixedPath(start_pose_stamped);
         //(tf2)
 
-        get_plan_srv.request.start.header.frame_id = map_frame_id_;
-        get_plan_srv.request.start.header.stamp = now;
-        get_plan_srv.request.start.pose = start_path.poses.back().pose;
-        front_pose_pub_.publish(start_path.poses.back());
+        get_plan_srv->start.header.frame_id = map_frame_id_;
+        get_plan_srv->start.header.stamp = now;
+        get_plan_srv->start.pose = start_path.poses.back().pose;
+        front_pose_pub_->publish(start_path.poses.back());
 
-        get_plan_srv.request.goal.header.frame_id = map_frame_id_;
-        get_plan_srv.request.goal.header.stamp = now;
-        get_plan_srv.request.goal.pose = predicted_goals[agent_start_pose_vel.id];
+        get_plan_srv->goal.header.frame_id = map_frame_id_;
+        get_plan_srv->goal.header.stamp = now;
+        get_plan_srv->goal.pose = predicted_goals[agent_start_pose_vel.id];
 
-        ROS_DEBUG_NAMED(NODE_NAME,
-                        "agent start: x=%.2f, y=%.2f, theta=%.2f, "
-                        "goal: x=%.2f, y=%.2f, theta=%.2f",
-                        get_plan_srv.request.start.pose.position.x, get_plan_srv.request.start.pose.position.y, tf2::getYaw(get_plan_srv.request.start.pose.orientation),
-                        get_plan_srv.request.goal.pose.position.x, get_plan_srv.request.goal.pose.position.y, tf2::getYaw(get_plan_srv.request.goal.pose.orientation));
+        RCLCPP_DEBUG(node_->get_logger(), "agent start: x=%.2f, y=%.2f, theta=%.2f, goal: x=%.2f, y=%.2f, theta=%.2f", get_plan_srv->start.pose.position.x, get_plan_srv->start.pose.position.y,
+                     tf2::getYaw(get_plan_srv->start.pose.orientation), get_plan_srv->goal.pose.position.x, get_plan_srv->goal.pose.position.y, tf2::getYaw(get_plan_srv->goal.pose.orientation));
 
         // make plan for agent
         if (get_plan_client_) {
-          if (get_plan_client_.call(get_plan_srv)) {
-            if (!get_plan_srv.response.plan.poses.empty()) {
+          auto future = get_plan_client_->async_send_request(get_plan_srv);
+          if (future.wait_for(std::chrono::seconds(2)) == std::future_status::ready) {
+            auto response = future.get();
+            if (!response->plan.poses.empty()) {
               AgentPathVel agent_path_vel;
               agent_path_vel.id = agent_start_pose_vel.id;
-              agent_path_vel.path = get_plan_srv.response.plan;
+              agent_path_vel.path = response->plan;
               agent_path_vel.start_vel = agent_start_pose_vel.vel;
               path_vels_.push_back(agent_path_vel);
               got_new_agent_paths_ = true;
             } else {
-              ROS_WARN_NAMED(NODE_NAME,
-                             "Got empty path for agent, start or "
-                             "goal position is probably invalid");
+              RCLCPP_WARN(node_->get_logger(), "Got empty path for agent, start or goal position is probably invalid");
             }
           } else {
-            ROS_WARN_NAMED(NODE_NAME, "Failed to call %s service", get_plan_srv_name_.c_str());
+            RCLCPP_WARN(node_->get_logger(), "Failed to call %s service", get_plan_srv_name_.c_str());
           }
         } else {
-          ROS_WARN_NAMED(NODE_NAME, "%s service does not exist, re-trying to subscribe", get_plan_srv_name_.c_str());
-          ros::NodeHandle private_nh("~/");
-          get_plan_client_ = private_nh.serviceClient<nav_msgs::GetPlan>(get_plan_srv_name_, true);
+          RCLCPP_WARN(node_->get_logger(), "%s service does not exist, re-trying to subscribe", get_plan_srv_name_.c_str());
+          get_plan_client_ = node_->create_client<nav_msgs::srv::GetPlan>(get_plan_srv_name_);
         }
       }
     }
   }
 
-  return predictAgentsFromPaths(req, res, path_vels_);
+  return predictAgentsFromPaths(req, res);
 }
 
-bool AgentPathPrediction::predictAgentsFromPaths(agent_path_prediction::AgentPosePredict::Request & /*req*/, agent_path_prediction::AgentPosePredict::Response &res,
-                                                 const std::vector<AgentPathVel> &path_vels) {
+void AgentPathPrediction::predictAgentsFromPaths(const std::shared_ptr<agent_path_prediction::srv::AgentPosePredict::Request> req,
+                                                 std::shared_ptr<agent_path_prediction::srv::AgentPosePredict::Response> res) {
   auto tracked_agents = tracked_agents_;
 
   if (got_new_agent_paths_) {
-    for (auto agent_path_vel : path_vels) {
-      auto &poses = agent_path_vel.path.poses;
+    for (auto agent_path_vel : path_vels_) {
+      auto& poses = agent_path_vel.path.poses;
       if (!poses.empty()) {
-        agent_path_prediction::PredictedPoses predicted_poses;
+        agent_path_prediction::msg::PredictedPoses predicted_poses;
         predicted_poses.id = agent_path_vel.id;
 
         auto lin_vel = std::hypot(agent_path_vel.start_vel.twist.linear.x, agent_path_vel.start_vel.twist.linear.y);
-        auto now = ros::Time::now();
+        auto now = node_->now();
 
         predicted_poses.poses.resize(poses.size());
         for (size_t i = 0; i < poses.size(); ++i) {
-          auto &pose = poses[i];
-          geometry_msgs::PoseWithCovarianceStamped predicted_pose;
+          auto& pose = poses[i];
+          geometry_msgs::msg::PoseWithCovarianceStamped predicted_pose;
           if (i == 0 || lin_vel == 0.0) {
             predicted_pose.header.stamp = now;
           } else {
-            auto &last_pose = poses[i - 1];
+            auto& last_pose = poses[i - 1];
             auto dist = std::hypot(pose.pose.position.x - last_pose.pose.position.x, pose.pose.position.y - last_pose.pose.position.y);
-            predicted_pose.header.stamp = predicted_poses.poses[i - 1].header.stamp + ros::Duration(dist / lin_vel);
+            rclcpp::Time last_time(predicted_poses.poses[i - 1].header.stamp, node_->get_clock()->get_clock_type());
+            rclcpp::Time new_time = last_time + rclcpp::Duration::from_seconds(dist / lin_vel);
+            predicted_pose.header.stamp = new_time;
           }
           predicted_pose.header.frame_id = pose.header.frame_id;
           predicted_pose.pose.pose = pose.pose;
@@ -837,107 +793,92 @@ bool AgentPathPrediction::predictAgentsFromPaths(agent_path_prediction::AgentPos
         last_predicted_poses_.push_back(predicted_poses);
         last_prune_indices_.erase(predicted_poses.id);
 
-        ROS_DEBUG_NAMED(NODE_NAME, "Processed new path for agent %ld with %ld poses in frame %s", agent_path_vel.id, predicted_poses.poses.size(),
-                        predicted_poses.poses.front().header.frame_id.c_str());
+        RCLCPP_DEBUG(node_->get_logger(), "Processed new path for agent %ld with %ld poses in frame %s", agent_path_vel.id, predicted_poses.poses.size(),
+                     predicted_poses.poses.front().header.frame_id.c_str());
       }
     }
   }
   got_new_agent_paths_ = false;
 
-  for (auto &poses : last_predicted_poses_) {
+  for (auto& poses : last_predicted_poses_) {
     if (!poses.poses.empty()) {
-      geometry_msgs::PoseStamped start_pose;
-      geometry_msgs::TwistStamped start_twist;
+      geometry_msgs::msg::PoseStamped start_pose;
+      geometry_msgs::msg::TwistStamped start_twist;
+
       if (transformPoseTwist(tracked_agents, poses.id, poses.poses.front().header.frame_id, start_pose, start_twist)) {
         auto last_prune_index_it = last_prune_indices_.find(poses.id);
         auto begin_index = (last_prune_index_it != last_prune_indices_.end()) ? last_prune_index_it->second : 0;
         auto prune_index = prunePath(begin_index, start_pose.pose, poses.poses);
         last_prune_indices_[poses.id] = prune_index;
-        if (prune_index < 0 || prune_index > poses.poses.size()) {
-          ROS_ERROR_NAMED(NODE_NAME, "Logical error, cannot prune path");
+        if (prune_index >= poses.poses.size()) {
+          RCLCPP_ERROR(node_->get_logger(), "Logical error, cannot prune path");
           continue;
         }
-        geometry_msgs::PoseWithCovarianceStamped start_pose_co;
+        geometry_msgs::msg::PoseWithCovarianceStamped start_pose_co;
         start_pose_co.header.stamp = start_pose.header.stamp;
         start_pose_co.header.frame_id = start_pose.header.frame_id;
         start_pose_co.pose.pose = start_pose.pose;
-        std::vector<geometry_msgs::PoseWithCovarianceStamped> pruned_path;
+        std::vector<geometry_msgs::msg::PoseWithCovarianceStamped> pruned_path;
         pruned_path.push_back(start_pose_co);
         pruned_path.insert(pruned_path.end(), poses.poses.begin() + prune_index, poses.poses.end());
 
         if (!pruned_path.empty()) {
           // update time stamps for the predicted path
           auto lin_vel = std::hypot(start_twist.twist.linear.x, start_twist.twist.linear.y);
-          auto now = ros::Time::now();
+          auto now = node_->now();
           for (size_t i = 0; i < pruned_path.size(); i++) {
             if (i == 0 || lin_vel == 0) {
               pruned_path[i].header.stamp = now;
             } else {
-              auto &pose = pruned_path[i].pose.pose;
-              auto &last_pose = pruned_path[i - 1].pose.pose;
+              auto& pose = pruned_path[i].pose.pose;
+              auto& last_pose = pruned_path[i - 1].pose.pose;
               auto dist = std::hypot(pose.position.x - last_pose.position.x, pose.position.y - last_pose.position.y);
-              pruned_path[i].header.stamp = pruned_path[i - 1].header.stamp + ros::Duration(dist / lin_vel);
+              rclcpp::Time last_time(pruned_path[i - 1].header.stamp, node_->get_clock()->get_clock_type());
+              rclcpp::Time new_time = last_time + rclcpp::Duration::from_seconds(dist / lin_vel);
+              pruned_path[i].header.stamp = new_time;
             }
           }
 
-          agent_path_prediction::PredictedPoses predicted_poses;
+          agent_path_prediction::msg::PredictedPoses predicted_poses;
           predicted_poses.id = poses.id;
           predicted_poses.start_velocity = start_twist;
           predicted_poses.poses = pruned_path;
 
-          res.predicted_agents_poses.push_back(predicted_poses);
-          // ROS_INFO("Pushed the poses");
-          ROS_DEBUG_NAMED(NODE_NAME, "Giving path of %ld points from %ld points for agent %d", predicted_poses.poses.size(), poses.poses.size(), poses.id);
+          res->predicted_agents_poses.push_back(predicted_poses);
+          // RCLCPP_INFO(node_->get_logger(), "Pushed the poses");
+          RCLCPP_DEBUG(node_->get_logger(), "Giving path of %ld points from %ld points for agent %d", predicted_poses.poses.size(), poses.poses.size(), poses.id);
         }
       }
     }
   }
-
-  return true;
 }
 
 // TODO: Remove this and make it a subscriber
-bool AgentPathPrediction::setGoal(agent_path_prediction::AgentGoal::Request &req, agent_path_prediction::AgentGoal::Response &res) {
-  ROS_DEBUG_NAMED(NODE_NAME, "Received new agent goal");
+void AgentPathPrediction::setGoal(const std::shared_ptr<agent_path_prediction::srv::AgentGoal::Request> req, std::shared_ptr<agent_path_prediction::srv::AgentGoal::Response> res) {
+  RCLCPP_DEBUG(node_->get_logger(), "Received new agent goal");
   got_external_goal_ = true;
   external_goals_.clear();
   path_vels_.clear();
-  for (auto &goal : req.goals) {
+  for (auto& goal : req->goals) {
     external_goals_.push_back(goal);
   }
 
-  res.success = true;
-  res.message = "Goal has been set.";
-  return true;
+  res->success = true;
+  res->message = "Goal has been set.";
 }
 
-bool AgentPathPrediction::resetPredictionSrvs(std_srvs::Empty::Request & /*req*/, std_srvs::Empty::Response & /*res*/) {
+void AgentPathPrediction::resetPredictionSrvs(const std::shared_ptr<std_srvs::srv::Empty::Request> /*req*/, std::shared_ptr<std_srvs::srv::Empty::Response> /*res*/) {
   got_new_agent_paths_ = false;
   got_external_goal_ = false;
   last_predicted_poses_.clear();
   path_vels_.clear();
   check_path_ = false;
-  behind_pose_ = geometry_msgs::Transform();
-  return true;
+  behind_pose_ = geometry_msgs::msg::Transform();
+  RCLCPP_INFO(node_->get_logger(), "Reset agent path prediction");
 }
 
-void AgentPathPrediction::setParams(double velobs_mul, double velobs_min_rad, double velobs_max_rad, double velobs_max_rad_time, bool velobs_use_ang) {
-  velobs_mul_ = velobs_mul;
-  velobs_min_rad_ = velobs_min_rad;
-  velobs_max_rad_ = velobs_max_rad;
-  velobs_max_rad_time_ = velobs_max_rad_time;
-  velobs_use_ang_ = velobs_use_ang;
-
-  ROS_DEBUG_NAMED(NODE_NAME, "parameters set: velobs-mul=%f, velocity-obstacle: min-radius:%f, max-radius:%f, max-radius-time=%f use-ang=%d", velobs_mul_, velobs_min_rad_, velobs_max_rad_,
-                  velobs_max_rad_time_, velobs_use_ang_);
-}
-
-void AgentPathPrediction::reconfigureCB(agent_path_prediction::AgentPathPredictionConfig &config, uint32_t /*level*/) {
-  setParams(config.velobs_mul, config.velobs_min_rad, config.velobs_max_rad, config.velobs_max_rad_time, config.velobs_use_ang);
-}
-
-nav_msgs::Path AgentPathPrediction::setFixedPath(const geometry_msgs::PoseStamped &start_pose) {
-  nav_msgs::Path path;
+nav_msgs::msg::Path AgentPathPrediction::setFixedPath(const geometry_msgs::msg::PoseStamped& start_pose) {
+  nav_msgs::msg::Path path;
   path.header.frame_id = start_pose.header.frame_id;
   path.header.stamp = start_pose.header.stamp;
   path.poses.push_back(start_pose);
@@ -953,7 +894,7 @@ nav_msgs::Path AgentPathPrediction::setFixedPath(const geometry_msgs::PoseStampe
   double total_distance = 0.5;  // meters
 
   for (double dist = step_distance; dist <= total_distance; dist += step_distance) {
-    geometry_msgs::PoseStamped new_pose = start_pose;
+    geometry_msgs::msg::PoseStamped new_pose = start_pose;
     new_pose.pose.position.x += dist * cos(yaw);
     new_pose.pose.position.y += dist * sin(yaw);
     path.poses.push_back(new_pose);
@@ -961,21 +902,7 @@ nav_msgs::Path AgentPathPrediction::setFixedPath(const geometry_msgs::PoseStampe
   return path;
 }
 
-void AgentPathPrediction::loadRosParamFromNodeHandle(const ros::NodeHandle &private_nh) {
-  private_nh.param("ns", ns_, std::string(""));
-  private_nh.param("publish_markers", publish_markers_, true);
-  private_nh.param("robot_frame_id", robot_frame_id_, std::string(ROBOT_FRAME_ID));
-  private_nh.param("map_frame_id", map_frame_id_, std::string(MAP_FRAME_ID));
-  private_nh.param("agent_dist_behind_robot", agent_dist_behind_robot_, AGENT_DIST_BEHIND_ROBOT);
-  private_nh.param("agent_angle_behind_robot", agent_angle_behind_robot_, AGENT_ANGLE_BEHIND_ROBOT);
-  private_nh.param("tracked_agents_sub_topic", tracked_agents_sub_topic_, std::string(AGENTS_SUB_TOPIC));
-  private_nh.param("external_paths_sub_topic", external_paths_sub_topic_, std::string(EXTERNAL_PATHS_SUB_TOPIC));
-  private_nh.param("predicted_goal_topic", predicted_goal_topic_, std::string(PREDICTED_GOAL_SUB_TOPIC));
-  private_nh.param("get_plan_srv_name", get_plan_srv_name_, std::string(GET_PLAN_SRV_NAME));
-  private_nh.param("default_agent_part", default_agent_part_, static_cast<int>(DEFAULT_AGENT_PART));
-}
-
-size_t AgentPathPrediction::prunePath(size_t begin_index, const geometry_msgs::Pose &pose, const std::vector<geometry_msgs::PoseWithCovarianceStamped> &path) {
+size_t AgentPathPrediction::prunePath(size_t begin_index, const geometry_msgs::msg::Pose& pose, const std::vector<geometry_msgs::msg::PoseWithCovarianceStamped>& path) {
   size_t prune_index = begin_index;
   double x_diff;
   double y_diff;
@@ -994,13 +921,13 @@ size_t AgentPathPrediction::prunePath(size_t begin_index, const geometry_msgs::P
   return prune_index;
 }
 
-bool AgentPathPrediction::transformPoseTwist(const cohan_msgs::TrackedAgents &tracked_agents, const uint64_t &agent_id, const std::string &to_frame, geometry_msgs::PoseStamped &pose,
-                                             geometry_msgs::TwistStamped &twist) const {
-  for (const auto &agent : tracked_agents.agents) {
+bool AgentPathPrediction::transformPoseTwist(const cohan_msgs::msg::TrackedAgents& tracked_agents, const uint64_t& agent_id, const std::string& to_frame, geometry_msgs::msg::PoseStamped& pose,
+                                             geometry_msgs::msg::TwistStamped& twist) const {
+  for (const auto& agent : tracked_agents.agents) {
     if (agent.track_id == agent_id) {
-      for (const auto &segment : agent.segments) {
+      for (const auto& segment : agent.segments) {
         if (segment.type == default_agent_part_) {
-          geometry_msgs::PoseStamped pose_ut;
+          geometry_msgs::msg::PoseStamped pose_ut;
           pose_ut.header.stamp = tracked_agents.header.stamp;
           pose_ut.header.frame_id = tracked_agents.header.frame_id;
           pose_ut.pose = segment.pose.pose;
@@ -1009,33 +936,47 @@ bool AgentPathPrediction::transformPoseTwist(const cohan_msgs::TrackedAgents &tr
           twist.twist = segment.twist.twist;
           try {
             tf2::Stamped<tf2::Transform> pose_tf;
-            tf2::fromMsg(pose_ut, pose_tf);
-            geometry_msgs::TransformStamped start_pose_to_plan_transform;
+            // Manual conversion from PoseStamped to tf2::Stamped<tf2::Transform>
+            tf2::Transform transform;
+            tf2::fromMsg(pose_ut.pose, transform);
+            pose_tf.setData(transform);
+            pose_tf.frame_id_ = pose_ut.header.frame_id;
+            pose_tf.stamp_ = tf2::TimePoint(std::chrono::nanoseconds(rclcpp::Time(pose_ut.header.stamp, node_->get_clock()->get_clock_type()).nanoseconds()));
+            geometry_msgs::msg::TransformStamped start_pose_to_plan_transform;
 
             if (to_frame.empty() || pose_ut.header.frame_id.empty() || twist.header.frame_id.empty()) {
               continue;
             }
-            tf_.canTransform(to_frame, pose_ut.header.frame_id, ros::Time(0), ros::Duration(0.5));
-            start_pose_to_plan_transform = tf_.lookupTransform(to_frame, pose_ut.header.frame_id, ros::Time(0), ros::Duration(1.0));
+            start_pose_to_plan_transform = tf_buffer_->lookupTransform(to_frame, pose_ut.header.frame_id, tf2::TimePointZero, tf2::durationFromSec(0.5));
             tf2::Transform start_transform;
             tf2::fromMsg(start_pose_to_plan_transform.transform, start_transform);
             pose_tf.setData(start_transform * pose_tf);
             pose_tf.frame_id_ = to_frame;
-            tf2::toMsg(pose_tf, pose);
 
-            geometry_msgs::Twist start_twist_to_plan_transform;
-            lookupTwist(to_frame, twist.header.frame_id, ros::Time::now(), ros::Duration(0.1), start_twist_to_plan_transform);
+            // Convert tf2::Stamped<tf2::Transform> to geometry_msgs::msg::PoseStamped manually
+            pose.header.frame_id = pose_tf.frame_id_;
+            pose.header.stamp = rclcpp::Time(std::chrono::nanoseconds(pose_tf.stamp_.time_since_epoch().count()).count(), node_->get_clock()->get_clock_type());
+            pose.pose.position.x = pose_tf.getOrigin().x();
+            pose.pose.position.y = pose_tf.getOrigin().y();
+            pose.pose.position.z = pose_tf.getOrigin().z();
+            pose.pose.orientation = tf2::toMsg(pose_tf.getRotation());
+
+            geometry_msgs::msg::Twist start_twist_to_plan_transform;
+            lookupTwist(to_frame, twist.header.frame_id, node_->now(), tf2::durationFromSec(0.1), start_twist_to_plan_transform, tf_buffer_);
+
             twist.twist.linear.x = start_twist_to_plan_transform.linear.x;
             twist.twist.linear.y = start_twist_to_plan_transform.linear.y;
             twist.twist.angular.z = start_twist_to_plan_transform.angular.z;
             twist.header.frame_id = to_frame;
             return true;
-          } catch (tf2::LookupException &ex) {
-            ROS_ERROR_NAMED(NODE_NAME, "No Transform available Error: %s\n", ex.what());
-          } catch (tf2::ConnectivityException &ex) {
-            ROS_ERROR_NAMED(NODE_NAME, "Connectivity Error: %s\n", ex.what());
-          } catch (tf2::ExtrapolationException &ex) {
-            ROS_ERROR_NAMED(NODE_NAME, "Extrapolation Error: %s\n", ex.what());
+          } catch (tf2::LookupException& ex) {
+            RCLCPP_ERROR(node_->get_logger(), "No Transform available Error: %s", ex.what());
+
+          } catch (tf2::ConnectivityException& ex) {
+            RCLCPP_ERROR(node_->get_logger(), "Connectivity Error: %s", ex.what());
+
+          } catch (tf2::ExtrapolationException& ex) {
+            RCLCPP_ERROR(node_->get_logger(), "Extrapolation Error: %s", ex.what());
           }
           break;
         }
@@ -1050,27 +991,29 @@ bool AgentPathPrediction::transformPoseTwist(const cohan_msgs::TrackedAgents &tr
 
 // handler for something to do before killing the node
 void sigintHandler(int sig) {
-  ROS_DEBUG_NAMED(NODE_NAME, "node %s will now shutdown", NODE_NAME);
+  RCLCPP_DEBUG(rclcpp::get_logger(NODE_NAME), "node %s will now shutdown", NODE_NAME);
 
   // the default sigint handler, it calls shutdown() on node
-  ros::shutdown();
+  rclcpp::shutdown();
 }
 #if !defined(DOXYGEN_SHOULD_SKIP_THIS)
-// the main method starts a rosnode and initializes the optotrack_person class
-int main(int argc, char **argv) {
-  // starting the optotrack_person node
-  ros::init(argc, argv, NODE_NAME);
-  ROS_DEBUG_NAMED(NODE_NAME, "started %s node", NODE_NAME);
+// the main method starts a rosnode and initializes the agent_path_prediction class
+int main(int argc, char** argv) {
+  // starting the agent_path_prediction node
+  rclcpp::init(argc, argv);
 
-  // initiazling agent_path_prediction class
-  agents::AgentPathPrediction agent_path_prediction;
+  auto node = std::make_shared<rclcpp::Node>(NODE_NAME);
+  RCLCPP_DEBUG(node->get_logger(), "started %s node", NODE_NAME);
+
+  // initializing agent_path_prediction class
+  agents::AgentPathPrediction agent_path_prediction(node);
   agent_path_prediction.initialize();
 
-  agents::PredictGoalROS predict_srv;
+  agents::PredictGoalROS predict_srv(node);
 
   // look for sigint and start spinning the node
   signal(SIGINT, sigintHandler);
-  ros::spin();
+  rclcpp::spin(node);
 
   return 0;
 }

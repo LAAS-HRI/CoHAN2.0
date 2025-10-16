@@ -24,8 +24,7 @@
  * Author: Phani Teja Singamaneni
  *********************************************************************************/
 
-#include <agent_path_prediction/agents_class.h>
-
+#include <agent_path_prediction/agents_class.hpp>
 #include <numeric>
 
 // Configuarable parameters
@@ -40,21 +39,16 @@
 
 namespace agents {
 
-Agents::Agents() : initialized_(false) {
-  // Throw error on wrong initialization
-  ROS_ERROR("The Agents class needs tf2_ros::Buffer* and costmap_2d::Costmap2DROS *, and are not passed!");
-}
-
-Agents::Agents(tf2_ros::Buffer *tf, costmap_2d::Costmap2DROS *costmap_ros) : initialized_(false) {
+Agents::Agents(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<tf2_ros::Buffer> tf, std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros)
+    : node_(node), param_helper_(node), initialized_(false) {
   // call the initialize class to start things
   if (!initialized_) {
-    ros::NodeHandle private_nh("~");
-
-    // Get params
-    loadRosParamFromNodeHandle(private_nh);
+    RCLCPP_INFO(node_->get_logger(), "Agents initialized");
+    // Initialize parameters
+    setupParameterCallback();
 
     // Initialize the publisher
-    agents_info_pub_ = private_nh.advertise<agent_path_prediction::AgentsInfo>("agentsInfo", 10);
+    agents_info_pub_ = node_->create_publisher<agent_path_prediction::msg::AgentsInfo>("agentsInfo", 10);
 
     // Need to remap subscriber properly
     if (!ns_.empty()) {
@@ -62,8 +56,7 @@ Agents::Agents(tf2_ros::Buffer *tf, costmap_2d::Costmap2DROS *costmap_ros) : ini
     }
 
     // Subscribers
-    tracked_agents_sub_ = private_nh.subscribe(tracked_agents_sub_topic_, 1, &Agents::trackedAgentsCB, this);
-
+    tracked_agents_sub_ = node_->create_subscription<cohan_msgs::msg::TrackedAgents>(tracked_agents_sub_topic_, 1, std::bind(&AgentPathPrediction::trackedAgentsCB, this, _1));
     // Initialize variables
     tf_ = tf;
     costmap_ros_ = costmap_ros;
@@ -74,25 +67,25 @@ Agents::Agents(tf2_ros::Buffer *tf, costmap_2d::Costmap2DROS *costmap_ros) : ini
   }
 }
 
-void Agents::trackedAgentsCB(const cohan_msgs::TrackedAgents &tracked_agents) {
-  tracked_agents_ = tracked_agents;
+void Agents::trackedAgentsCB(const cohan_msgs::msg::TrackedAgents::SharedPtr tracked_agents) {
+  tracked_agents_ = *tracked_agents;
 
   // Msg for publishing agents info
-  agent_path_prediction::AgentsInfo agents_info;
+  agent_path_prediction::msg::AgentsInfo agents_info;
 
-  geometry_msgs::TransformStamped transform_stamped;
+  geometry_msgs::msg::TransformStamped transform_stamped;
   auto base_link = base_link_frame_;
   if (!ns_.empty()) {
     base_link = ns_ + "/" + base_link_frame_;
   }
 
   // Get the robot pose
-  transform_stamped = tf_->lookupTransform(map_frame_, base_link, ros::Time(0), ros::Duration(0.5));
+  transform_stamped = tf_->lookupTransform(map_frame_, base_link, tf2::TimePointZero, tf2::durationFromSec(0.5));
   auto xpos = transform_stamped.transform.translation.x;
   auto ypos = transform_stamped.transform.translation.y;
   auto ryaw = tf2::getYaw(transform_stamped.transform.rotation);
   Eigen::Vector2d robot_vec(std::cos(ryaw), std::sin(ryaw));
-  geometry_msgs::Pose2D robot_pose;
+  geometry_msgs::msg::Pose2D robot_pose;
   robot_pose.x = xpos;
   robot_pose.y = ypos;
   robot_pose.theta = ryaw;
@@ -106,10 +99,10 @@ void Agents::trackedAgentsCB(const cohan_msgs::TrackedAgents &tracked_agents) {
 
   std::map<double, int> agent_dist_id_map;
   std::map<int, double> agents_radii;
-  std::map<int, agent_path_prediction::HumanInfo> humans_info;
+  std::map<int, agent_path_prediction::msg::HumanInfo> humans_info;
 
-  for (auto &agent : tracked_agents_.agents) {
-    agent_path_prediction::HumanInfo human_info;
+  for (auto& agent : tracked_agents_.agents) {
+    agent_path_prediction::msg::HumanInfo human_info;
     auto h_id = agent.track_id;
     human_info.id = h_id;
     human_info.name = agent.name;
@@ -131,11 +124,11 @@ void Agents::trackedAgentsCB(const cohan_msgs::TrackedAgents &tracked_agents) {
       std::vector<double> h_vels;
       agent_vels_[h_id] = h_vels;
       agent_nominal_vels_[h_id] = 0.0;
-      geometry_msgs::Pose h_pose;
+      geometry_msgs::msg::Pose h_pose;
       agents_[h_id] = h_pose;
     }
     // double h_xpos, h_ypos;
-    for (auto &segment : agent.segments) {
+    for (auto& segment : agent.segments) {
       if (segment.type == DEFAULT_AGENT_SEGMENT) {
         agents_[h_id] = segment.pose.pose;
         double h_xpos = segment.pose.pose.position.x;
@@ -203,12 +196,10 @@ void Agents::trackedAgentsCB(const cohan_msgs::TrackedAgents &tracked_agents) {
   }
   prev_agents_ = agents_;
 
-  ROS_INFO_ONCE("Number of agents_agents_info, %d ", (int)agents_.size());
-
   // Get the distance sorted list of visible ids
   visible_agent_ids_.clear();
 
-  for (auto &dist_id_map : agent_dist_id_map) {
+  for (auto& dist_id_map : agent_dist_id_map) {
     visible_agent_ids_.push_back(dist_id_map.second);
   }
 
@@ -228,7 +219,7 @@ void Agents::trackedAgentsCB(const cohan_msgs::TrackedAgents &tracked_agents) {
 
   agents_info.visible = sorted_ids;
 
-  for (auto &f_id : sorted_ids) {
+  for (auto& f_id : sorted_ids) {
     if (agents_states_[f_id] == agents::AgentState::NO_STATE || agents_states_[f_id] == agents::AgentState::STATIC) {
       agents_states_[f_id] = agents::AgentState::STATIC;
       humans_info[f_id].state = agents::AgentState::STATIC;
@@ -251,10 +242,10 @@ void Agents::trackedAgentsCB(const cohan_msgs::TrackedAgents &tracked_agents) {
 
   if (planning_mode_ > 0) {
     for (int i = 0; i < sorted_ids.size() && i < agents_.size(); i++) {
-      geometry_msgs::Point v1;
-      geometry_msgs::Point v2;
-      geometry_msgs::Point v3;
-      geometry_msgs::Point v4;
+      geometry_msgs::msg::Point v1;
+      geometry_msgs::msg::Point v2;
+      geometry_msgs::msg::Point v3;
+      geometry_msgs::msg::Point v4;
       auto idx = sorted_ids[i];
       auto agent_radius = agents_radii[idx];
       v1.x = agents_[idx].position.x - agent_radius, v1.y = agents_[idx].position.y - agent_radius, v1.z = 0.0;
@@ -262,9 +253,9 @@ void Agents::trackedAgentsCB(const cohan_msgs::TrackedAgents &tracked_agents) {
       v3.x = agents_[idx].position.x + agent_radius, v3.y = agents_[idx].position.y + agent_radius, v3.z = 0.0;
       v4.x = agents_[idx].position.x + agent_radius, v4.y = agents_[idx].position.y - agent_radius, v4.z = 0.0;
 
-      std::vector<geometry_msgs::Point> agent_pos_costmap;
+      std::vector<geometry_msgs::msg::Point> agent_pos_costmap;
 
-      transform_stamped = tf_->lookupTransform(odom_frame_, map_frame_, ros::Time(0), ros::Duration(0.5));
+      transform_stamped = tf_->lookupTransform(odom_frame_, map_frame_, tf2::TimePointZero, tf2::durationFromSec(0.5));
       tf2::doTransform(v1, v1, transform_stamped);
       tf2::doTransform(v2, v2, transform_stamped);
       tf2::doTransform(v3, v3, transform_stamped);
@@ -280,10 +271,11 @@ void Agents::trackedAgentsCB(const cohan_msgs::TrackedAgents &tracked_agents) {
     }
   }
 
-  agents_info_pub_.publish(agents_info);
+  agents_info_pub_->publish(agents_info);
 };  // namespace agents
 
-std::vector<int> Agents::filterVisibleAgents(std::map<int, geometry_msgs::Pose> tr_agents, std::vector<int> sorted_ids, std::map<int, double> agents_radii, geometry_msgs::Pose2D robot_pose) {
+std::vector<int> Agents::filterVisibleAgents(std::map<int, geometry_msgs::msg::Pose> tr_agents, std::vector<int> sorted_ids, std::map<int, double> agents_radii,
+                                             geometry_msgs::msg::Pose2D robot_pose) {
   std::vector<int> filtered_ids;
   auto xpos = robot_pose.x;
   auto ypos = robot_pose.y;
@@ -293,7 +285,7 @@ std::vector<int> Agents::filterVisibleAgents(std::map<int, geometry_msgs::Pose> 
     if (sorted_ids.size() >= AGENT_NUM_TH) {
       n = MIN_PTS;
     }
-    for (auto &it : sorted_ids) {
+    for (auto& it : sorted_ids) {
       // Ray Tracing
       double tm_x = tr_agents[it].position.x;
       double tm_y = tr_agents[it].position.y;
@@ -352,21 +344,6 @@ void Agents::resetAgents() {
   agent_nominal_vels_.clear();
   stuck_agent_id_ = -1;
   stuck_ = false;
-}
-
-void Agents::loadRosParamFromNodeHandle(const ros::NodeHandle &private_nh) {
-  private_nh.param("ns", ns_, std::string(""));
-  private_nh.param("local_costmap/inflater/inflation_radius", inflation_radius_, 0.0);
-  private_nh.param("planning_mode", planning_mode_, 0);
-  private_nh.param("use_simulated_fov", use_simulated_fov_, false);
-  private_nh.param("window_moving_avg", window_moving_avg_, WINDOW_MOVING_AVG);
-  private_nh.param("HATebLocalPlannerROS/agent_radius", human_radius_, HUM_RADIUS);
-  private_nh.param("HATebLocalPlannerROS/robot_radius", robot_radius_, ROBOT_RADIUS);
-  private_nh.param("tracked_agents_sub_topic", tracked_agents_sub_topic_, std::string(AGENTS_SUB_TOPIC));
-  private_nh.param("base_link_frame", base_link_frame_, std::string(BASE_LINK_FRAME));
-  private_nh.param("map_frame", map_frame_, std::string(MAP_FRAME));
-  private_nh.param("odom_frame", odom_frame_, std::string(ODOM_FRAME));
-  private_nh.param("planning_radius", planning_radius_, PLANNING_RADIUS);
 }
 
 }  // namespace agents

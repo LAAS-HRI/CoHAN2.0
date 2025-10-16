@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
-<package>
+<package format="3">
   <name>cohan_msgs</name>
-  <version>0.0.2</version>
-  <description>agent message definitions (for human aware multi-agent navigation planning)</description>
+  <version>0.1.0</version>
+  <description>message definitions (for human aware cooperative navigation planning)</description>
 
   <maintainer email="ptsingaman@laas.fr">Phani Teja Singamaneni</maintainer>
 
@@ -10,19 +10,31 @@
 
   <license>MIT</license>
 
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  
+  <depend>rclcpp</depend>
+  <depend>ament_index_cpp</depend>
+
   <build_depend>roscpp</build_depend>
-  <build_depend>message_generation</build_depend>
   <build_depend>geometry_msgs</build_depend>
   <build_depend>nav_msgs</build_depend>
   <build_depend>tf</build_depend>
   <build_depend>visualization_msgs</build_depend>
+  <build_depend>rosidl_default_generators</build_depend>
+  
+  <exec_depend>roscpp</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>tf</exec_depend>
+  <exec_depend>visualization_msgs</exec_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
 
-  <run_depend>roscpp</run_depend>
-  <run_depend>message_runtime</run_depend>
-  <run_depend>geometry_msgs</run_depend>
-  <run_depend>nav_msgs</run_depend>
-  <run_depend>tf</run_depend>
-  <run_depend>visualization_msgs</run_depend>
+  <test_depend>ament_cmake_gtest</test_depend>
+
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <export>                               
+   <build_type>ament_cmake</build_type> 
+  </export> 
 
 </package>

@@ -1,119 +1,95 @@
 
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.8)
 project(agent_path_prediction)
 
-set(CMAKE_CXX_COMPILER_ARG1 -std=c++17)
-set(CMAKE_BUILD_TYPE Release)
+# Default to C++20
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 20)
+endif()
 
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(cohan_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(nav2_costmap_2d REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
 find_package(yaml-cpp REQUIRED)
+find_package(ros2_helpers REQUIRED)
 
-find_package(catkin REQUIRED COMPONENTS
-  dynamic_reconfigure
-  geometry_msgs
-  cohan_msgs
-  message_generation
-  nav_msgs
-  roscpp
-  std_srvs
-  tf
-  visualization_msgs
-  tf2
-  tf2_ros
-  costmap_2d
-)
-
-# # install python modules and global scripts
-# catkin_python_setup()
-
-# add message, serviece and action files
-add_message_files(DIRECTORY msg
-  FILES
-  PredictedPoses.msg
-  PredictedGoal.msg
-  PredictedGoals.msg
-  AgentPose.msg
-  HumanInfo.msg
-  AgentsInfo.msg
-)
-
-add_service_files(DIRECTORY srv
-  FILES
-  AgentPosePredict.srv
-  AgentGoal.srv
-)
-
-# generate added messages and services with any dependencies listed here
-generate_messages(
+# Generate interfaces
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/PredictedPoses.msg"
+  "msg/PredictedGoal.msg"
+  "msg/PredictedGoals.msg"
+  "msg/AgentPose.msg"
+  "msg/HumanInfo.msg"
+  "msg/AgentsInfo.msg"
+  "srv/AgentPosePredict.srv"
+  "srv/AgentGoal.srv"
   DEPENDENCIES
-  cohan_msgs
-  geometry_msgs
-)
-
-# add dynamic reconfigure configs
-generate_dynamic_reconfigure_options(
-  cfg/AgentPathPrediction.cfg
-)
-
-# # declare catkin package
-catkin_package(
-  INCLUDE_DIRS include
-  LIBRARIES agent_path_prediction
-  CATKIN_DEPENDS
-  dynamic_reconfigure
   geometry_msgs
   cohan_msgs
-  message_runtime
-  nav_msgs
-  roscpp
-  std_srvs
-  tf
-  visualization_msgs
-  tf2
-  tf2_ros
-  costmap_2d
-
-  # DEPENDS
-  # system_lib
 )
 
-# # build ##
-include_directories(
-  include
-  ${catkin_INCLUDE_DIRS}
-)
+# Include directories
+include_directories(include)
 
-# # Build the library
-add_library(agent_path_prediction
-  src/agents_class.cpp
-  src/predict_goal_ros.cpp
-)
-
-# Dynamic reconfigure: make sure configure headers are built before any node using them
-add_dependencies(agent_path_prediction ${PROJECT_NAME}_gencfg)
-
-# Generate messages before compiling the lib
-add_dependencies(agent_path_prediction ${PROJECT_NAME}_generate_messages_cpp)
-
-add_dependencies(agent_path_prediction ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-
-target_link_libraries(agent_path_prediction
-  ${EXTERNAL_LIBS}
-  ${catkin_LIBRARIES}
-  yaml-cpp
-)
-
-# declare a c++ executable
+# Create executable
 add_executable(agent_path_predict
   src/agent_path_prediction.cpp
-  src/predict_goal_ros.cpp
 )
 
-# cmake target dependencies of the c++ executable
-add_dependencies(agent_path_predict ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} )
-
-# libraries to link the target c++ executable against
-target_link_libraries(agent_path_predict ${EXTERNAL_LIBS} ${catkin_LIBRARIES} yaml-cpp)
-
-install(TARGETS agent_path_prediction
-  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+# Dependencies for executable
+ament_target_dependencies(agent_path_predict
+  rclcpp
+  geometry_msgs
+  cohan_msgs
+  nav_msgs
+  std_srvs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
+  nav2_costmap_2d
+  visualization_msgs
+  ros2_helpers
 )
+
+# Link yaml-cpp
+target_link_libraries(agent_path_predict yaml-cpp)
+
+# Link generated interfaces
+rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(agent_path_predict "${cpp_typesupport_target}")
+
+# Install executable
+install(TARGETS agent_path_predict
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# Export dependencies
+ament_export_dependencies(
+  rclcpp
+  geometry_msgs
+  cohan_msgs
+  nav_msgs
+  std_srvs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
+  nav2_costmap_2d
+  visualization_msgs
+  ros2_helpers
+  rosidl_default_runtime
+)
+
+ament_package()

@@ -129,7 +129,7 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
   ~HATebLocalPlannerROS() override;
 
   // CPP wrapper for the planner
-  HATebLocalPlannerROS(std::string name, tf2_ros::Buffer *tf, costmap_2d::Costmap2DROS *costmap_ros);
+  HATebLocalPlannerROS(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros);
 
   /**
    * @brief Initializes the teb plugin
@@ -137,14 +137,14 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * @param tf Pointer to a tf buffer
    * @param costmap_ros Cost map representing occupied and free space
    */
-  void initialize(std::string name, tf2_ros::Buffer *tf, costmap_2d::Costmap2DROS *costmap_ros) override;
+  void initialize(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros) override;
 
   /**
    * @brief Set the plan that the teb local planner is following
    * @param orig_global_plan The plan to pass to the local planner
    * @return True if the plan was updated successfully, false otherwise
    */
-  bool setPlan(const std::vector<geometry_msgs::PoseStamped> &orig_global_plan) override;
+  bool setPlan(const std::vector<geometry_msgs::PoseStamped>& orig_global_plan) override;
 
   /**
    * @brief Given the current position, orientation, and velocity of the robot,
@@ -153,7 +153,7 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * robot base
    * @return True if a valid trajectory was found, false otherwise
    */
-  bool computeVelocityCommands(geometry_msgs::Twist &cmd_vel) override;
+  bool computeVelocityCommands(geometry_msgs::Twist& cmd_vel) override;
 
   /**
    * @brief Given the current position, orientation, and velocity of the robot,
@@ -183,7 +183,7 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    *         INTERNAL_ERROR  = 114
    *         121..149 are reserved as plugin specific errors
    */
-  uint32_t computeVelocityCommands(const geometry_msgs::PoseStamped &pose, const geometry_msgs::TwistStamped &velocity, geometry_msgs::TwistStamped &cmd_vel, std::string &message) override;
+  uint32_t computeVelocityCommands(const geometry_msgs::PoseStamped& pose, const geometry_msgs::TwistStamped& velocity, geometry_msgs::TwistStamped& cmd_vel, std::string& message) override;
 
   /**
    * @brief  Check if the goal pose has been achieved
@@ -216,7 +216,7 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * @param nh const reference to the local ros::NodeHandle
    * @return Robot footprint model used for optimization
    */
-  static FootprintModelPtr getRobotFootprintFromParamServer(const ros::NodeHandle &nh, const HATebConfig &config);
+  static FootprintModelPtr getRobotFootprintFromParamServer(const ros::NodeHandle& nh, const HATebConfig& config);
 
   /**
    * @brief Set the footprint from the given XmlRpcValue.
@@ -231,7 +231,7 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * footprint_xmlrpc value came. It is used only for reporting errors.
    * @return container of vertices describing the polygon
    */
-  static Point2dContainer makeFootprintFromXMLRPC(XmlRpc::XmlRpcValue &footprint_xmlrpc, const std::string &full_param_name);
+  static Point2dContainer makeFootprintFromXMLRPC(XmlRpc::XmlRpcValue& footprint_xmlrpc, const std::string& full_param_name);
 
   /**
    * @brief Get a number from the given XmlRpcValue.
@@ -244,7 +244,7 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * footprint_xmlrpc value came. It is used only for reporting errors.
    * @returns double value
    */
-  static double getNumberFromXMLRPC(XmlRpc::XmlRpcValue &value, const std::string &full_param_name);
+  static double getNumberFromXMLRPC(XmlRpc::XmlRpcValue& value, const std::string& full_param_name);
 
   //@}
 
@@ -295,7 +295,7 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * already transformed to the planning frame)
    * @param min_separation minimum separation between two consecutive via-points
    */
-  void updateViaPointsContainer(const std::vector<geometry_msgs::PoseStamped> &transformed_plan, double min_separation);
+  void updateViaPointsContainer(const std::vector<geometry_msgs::PoseStamped>& transformed_plan, double min_separation);
 
   /**
    * @brief Update internal via-point container for human based on the current reference plan
@@ -304,7 +304,7 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * already transformed to the planning frame)
    * @param min_separation minimum separation between two consecutive via-points
    */
-  void updateAgentViaPointsContainers(const AgentPlanVelMap &transformed_agent_plan_vel_map, double min_separation);
+  void updateAgentViaPointsContainers(const AgentPlanVelMap& transformed_agent_plan_vel_map, double min_separation);
 
   /**
    * @brief Callback for the dynamic_reconfigure node.
@@ -314,26 +314,26 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * @param config Reference to the dynamic reconfigure config
    * @param level Dynamic reconfigure level
    */
-  void reconfigureCB(HATebLocalPlannerReconfigureConfig &config, uint32_t level);
+  void reconfigureCB(HATebLocalPlannerReconfigureConfig& config, uint32_t level);
   /**
    * @brief Callback for custom obstacles that are not obtained from the costmap
    * @param obst_msg pointer to the message containing a list of polygon shaped
    * obstacles
    */
-  void customObstacleCB(const costmap_converter::ObstacleArrayMsg::ConstPtr &obst_msg);
+  void customObstacleCB(const costmap_converter::ObstacleArrayMsg::ConstPtr& obst_msg);
 
   /**
    * @brief Callback for invisible humans
    * @param obst_msg pointer to the message containing a list of circular obstacles
    */
-  void InvHumansCB(const costmap_converter::ObstacleArrayMsg::ConstPtr &obst_msg);
+  void InvHumansCB(const costmap_converter::ObstacleArrayMsg::ConstPtr& obst_msg);
 
   /**
    * @brief Callback for custom via-points
    * @param via_points_msg pointer to the message containing a list of
    * via-points
    */
-  void customViaPointsCB(const nav_msgs::Path::ConstPtr &via_points_msg);
+  void customViaPointsCB(const nav_msgs::Path::ConstPtr& via_points_msg);
 
   /**
    * @brief Prune global plan such that already passed poses are cut off
@@ -354,7 +354,7 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * @return \c true if the plan is pruned, \c false in case of a transform
    * exception or if no pose cannot be found inside the threshold
    */
-  static bool pruneGlobalPlan(const tf2_ros::Buffer &tf, const geometry_msgs::PoseStamped &global_pose, std::vector<geometry_msgs::PoseStamped> &global_plan, double dist_behind_robot = 1);
+  static bool pruneGlobalPlan(const tf2_ros::Buffer& tf, const geometry_msgs::PoseStamped& global_pose, std::vector<geometry_msgs::PoseStamped>& global_plan, double dist_behind_robot = 1);
 
   /**
    * @brief  Transforms the global plan of the robot from the planner frame to
@@ -380,9 +380,9 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * the global planning frame
    * @return \c true if the global plan is transformed, \c false otherwise
    */
-  bool transformGlobalPlan(const tf2_ros::Buffer &tf, const std::vector<geometry_msgs::PoseStamped> &global_plan, const geometry_msgs::PoseStamped &global_pose, const costmap_2d::Costmap2D &costmap,
-                           const std::string &global_frame, double max_plan_length, PlanCombined &transformed_plan_combined, int *current_goal_idx = nullptr,
-                           geometry_msgs::TransformStamped *tf_plan_to_global = nullptr) const;
+  bool transformGlobalPlan(const tf2_ros::Buffer& tf, const std::vector<geometry_msgs::PoseStamped>& global_plan, const geometry_msgs::PoseStamped& global_pose, const costmap_2d::Costmap2D& costmap,
+                           const std::string& global_frame, double max_plan_length, PlanCombined& transformed_plan_combined, int* current_goal_idx = nullptr,
+                           geometry_msgs::TransformStamped* tf_plan_to_global = nullptr) const;
 
   /**
    * @brief  Transforms the agent plan from the tracker frame to the local
@@ -399,9 +399,9 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * and the local planning frame
    * @return \c true if the global plan is transformed, \c false otherwise
    */
-  bool transformAgentPlan(const tf2_ros::Buffer &tf2, const geometry_msgs::PoseStamped &robot_pose, const costmap_2d::Costmap2D &costmap, const std::string &global_frame,
-                          const std::vector<geometry_msgs::PoseWithCovarianceStamped> &agent_plan, AgentPlanCombined &transformed_agent_plan_combined,
-                          geometry_msgs::TwistStamped &transformed_agent_twist, tf2::Stamped<tf2::Transform> *tf_agent_plan_to_global = nullptr) const;
+  bool transformAgentPlan(const tf2_ros::Buffer& tf2, const geometry_msgs::PoseStamped& robot_pose, const costmap_2d::Costmap2D& costmap, const std::string& global_frame,
+                          const std::vector<geometry_msgs::PoseWithCovarianceStamped>& agent_plan, AgentPlanCombined& transformed_agent_plan_combined,
+                          geometry_msgs::TwistStamped& transformed_agent_twist, tf2::Stamped<tf2::Transform>* tf_agent_plan_to_global = nullptr) const;
 
   /**
    * @brief Estimate the orientation of a pose from the global_plan that is
@@ -422,8 +422,8 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * be taken into account
    * @return orientation (yaw-angle) estimate
    */
-  static double estimateLocalGoalOrientation(const std::vector<geometry_msgs::PoseStamped> &global_plan, const geometry_msgs::PoseStamped &local_goal, int current_goal_idx,
-                                             const geometry_msgs::TransformStamped &tf_plan_to_global, int moving_average_length = 3);
+  static double estimateLocalGoalOrientation(const std::vector<geometry_msgs::PoseStamped>& global_plan, const geometry_msgs::PoseStamped& local_goal, int current_goal_idx,
+                                             const geometry_msgs::TransformStamped& tf_plan_to_global, int moving_average_length = 3);
 
   /**
    * @brief Saturate the translational and angular velocity to given limits.
@@ -442,7 +442,7 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * @param max_vel_x_backwards Maximum translational velocity for backwards
    * driving
    */
-  void saturateVelocity(double &vx, double &vy, double &omega, double max_vel_x, double max_vel_y, double max_vel_theta, double max_vel_x_backwards);
+  void saturateVelocity(double& vx, double& vy, double& omega, double max_vel_x, double max_vel_y, double max_vel_theta, double max_vel_x_backwards);
 
   /**
    * @brief Convert translational and rotational velocities to a steering angle
@@ -476,7 +476,7 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * used for the costmap
    * @param min_obst_dist desired distance to obstacles
    */
-  void configureBackupModes(std::vector<geometry_msgs::PoseStamped> &transformed_plan, int &goal_idx);
+  void configureBackupModes(std::vector<geometry_msgs::PoseStamped>& transformed_plan, int& goal_idx);
 
   static void validateFootprints(double opt_inscribed_radius, double costmap_inscribed_radius, double min_obst_dist);
 
@@ -500,7 +500,7 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * @param transformed_agent_plan_vel_map Map containing agent plans with their velocities
    * @return True if plans were successfully updated, false otherwise
    */
-  bool tickTreeAndUpdatePlans(const geometry_msgs::PoseStamped &robot_pose, std::vector<AgentPlanCombined> &transformed_agent_plans, AgentPlanVelMap &transformed_agent_plan_vel_map);
+  bool tickTreeAndUpdatePlans(const geometry_msgs::PoseStamped& robot_pose, std::vector<AgentPlanCombined>& transformed_agent_plans, AgentPlanVelMap& transformed_agent_plan_vel_map);
 
   /**
    * @brief Perform standalone trajectory optimization
@@ -511,7 +511,7 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * @param res Service response containing optimization results
    * @return True if optimization was successful, false otherwise
    */
-  bool optimizeStandalone(cohan_msgs::Optimize::Request &req, cohan_msgs::Optimize::Response &res);
+  bool optimizeStandalone(cohan_msgs::Optimize::Request& req, cohan_msgs::Optimize::Response& res);
 
   /**
    * @brief Look up twist information between frames with default reference point
@@ -524,7 +524,7 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * @param averaging_interval Time interval over which to average the twist
    * @param[out] twist The resulting twist message
    */
-  void lookupTwist(const std::string &tracking_frame, const std::string &observation_frame, const ros::Time &time, const ros::Duration &averaging_interval, geometry_msgs::Twist &twist) const {
+  void lookupTwist(const std::string& tracking_frame, const std::string& observation_frame, const ros::Time& time, const ros::Duration& averaging_interval, geometry_msgs::Twist& twist) const {
     // ref point is origin of tracking_frame, ref_frame = obs_frame
     lookupTwist(tracking_frame, observation_frame, observation_frame, tf2::Vector3(0, 0, 0), tracking_frame, time, averaging_interval, twist);
   }
@@ -546,8 +546,8 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * @param averaging_interval Time interval over which to average the twist
    * @param[out] twist The resulting twist message containing linear and angular velocities
    */
-  void lookupTwist(const std::string &tracking_frame, const std::string &observation_frame, const std::string &reference_frame, const tf2::Vector3 &reference_point,
-                   const std::string &reference_point_frame, const ros::Time &time, const ros::Duration &averaging_interval, geometry_msgs::Twist &twist) const {
+  void lookupTwist(const std::string& tracking_frame, const std::string& observation_frame, const std::string& reference_frame, const tf2::Vector3& reference_point,
+                   const std::string& reference_point_frame, const ros::Time& time, const ros::Duration& averaging_interval, geometry_msgs::Twist& twist) const {
     ros::Time latest_time;
     ros::Time target_time;
 
@@ -627,7 +627,7 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
     twist.angular.z = out_rot.z();
   }
 
-  std::string strip_leading_slash(const std::string &frame_id) const {
+  std::string strip_leading_slash(const std::string& frame_id) const {
     if (!frame_id.empty() && frame_id[0] == '/') {
       return frame_id.substr(1);
     }
@@ -638,9 +638,9 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
   // Definition of member variables
 
   // external objects (store weak pointers)
-  costmap_2d::Costmap2DROS *costmap_ros_;  //!< Pointer to the costmap ros wrapper, received from the navigation stack
-  costmap_2d::Costmap2D *costmap_;         //!< Pointer to the 2d costmap (obtained from the costmap ros wrapper)
-  tf2_ros::Buffer *tf_;                    //!< pointer to tf buffer
+  costmap_2d::Costmap2DROS* costmap_ros_;  //!< Pointer to the costmap ros wrapper, received from the navigation stack
+  costmap_2d::Costmap2D* costmap_;         //!< Pointer to the 2d costmap (obtained from the costmap ros wrapper)
+  tf2_ros::Buffer* tf_;                    //!< pointer to tf buffer
 
   // internal objects (memory management owned)
   PlannerInterfacePtr planner_;                                        //!< Instance of the underlying optimal planner class

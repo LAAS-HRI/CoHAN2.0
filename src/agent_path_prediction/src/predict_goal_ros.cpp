@@ -24,24 +24,16 @@
  * Author: Phani Teja Singamaneni
  *********************************************************************************/
 
-#include <agent_path_prediction/predict_goal_ros.h>
-
-#define AGENTS_SUB_TOPIC "/tracked_agents"
+#include <agent_path_prediction/predict_goal_ros.hpp>
 
 namespace agents {
 
-PredictGoalROS::PredictGoalROS() {
-  // ROS setup
-  ros::NodeHandle nh("~");
-
-  // Get params
-  loadRosParamFromNodeHandle(nh);
-
+void PredictGoalROS::initialize() {
   if (goals_file_.empty()) {
-    ROS_ERROR("Please provide a valid file path for goals files!");
+    RCLCPP_ERROR(node_->get_logger(), "Please provide a valid file path for goals files!");
   }
 
-  goal_pub_ = nh.advertise<agent_path_prediction::PredictedGoals>("predicted_goal", 2, true);
+  goal_pub_ = node_->create_publisher<agent_path_prediction::msg::PredictedGoals>("~/predicted_goal", 2);
 
   // Need to remap tracked agents subscriber properly
   if (!ns_.empty()) {
@@ -49,20 +41,20 @@ PredictGoalROS::PredictGoalROS() {
   }
 
   // Initialize Subscribers
-  agents_sub_ = nh.subscribe(tracked_agents_sub_topic_, 10, &PredictGoalROS::trackedAgentsCB, this);
+  agents_sub_ = node_->create_subscription<cohan_msgs::msg::TrackedAgents>(tracked_agents_sub_topic_, 1, std::bind(&PredictGoalROS::trackedAgentsCB, this, std::placeholders::_1));
 
   // Load goals file
   loadGoals(goals_file_);
   predictor_.initialize(goals_, window_size_);
-  ROS_INFO("Goal prediction intialized!");
+  RCLCPP_INFO(node_->get_logger(), "Goal prediction intialized!");
 }
 
-void PredictGoalROS::trackedAgentsCB(const cohan_msgs::TrackedAgents::ConstPtr &msg) {
+void PredictGoalROS::trackedAgentsCB(const cohan_msgs::msg::TrackedAgents::SharedPtr msg) {
   bool changed = false;
-  for (const auto &agent : msg->agents) {
-    for (const auto &segment : agent.segments) {
+  for (const auto& agent : msg->agents) {
+    for (const auto& segment : agent.segments) {
       // Make sure you are getting the correct segment data
-      if (segment.type == cohan_msgs::TrackedSegmentType::TORSO) {
+      if (segment.type == cohan_msgs::msg::TrackedSegmentType::TORSO) {
         auto xy = Eigen::Vector2d(segment.pose.pose.position.x, segment.pose.pose.position.y);
         if (agent_goal_predicts_.find(agent.track_id) == agent_goal_predicts_.end()) {
           agent_goal_predicts_[agent.track_id] = "None";
@@ -79,11 +71,11 @@ void PredictGoalROS::trackedAgentsCB(const cohan_msgs::TrackedAgents::ConstPtr &
   }
   if (changed) {
     // Publish the new goals
-    agent_path_prediction::PredictedGoals predicted_goals_msg;
+    agent_path_prediction::msg::PredictedGoals predicted_goals_msg;
     predicted_goals_msg.header.frame_id = "map";
-    predicted_goals_msg.header.stamp = ros::Time::now();
-    for (auto &agent_goal : agent_goal_predicts_) {
-      agent_path_prediction::PredictedGoal p_goal;
+    predicted_goals_msg.header.stamp = node_->now();
+    for (auto& agent_goal : agent_goal_predicts_) {
+      agent_path_prediction::msg::PredictedGoal p_goal;
       p_goal.id = agent_goal.first;
       p_goal.goal.position.x = goals_[agent_goal.second].x();
       p_goal.goal.position.y = goals_[agent_goal.second].y();
@@ -91,37 +83,31 @@ void PredictGoalROS::trackedAgentsCB(const cohan_msgs::TrackedAgents::ConstPtr &
       p_goal.goal.orientation.w = 1;
       predicted_goals_msg.goals.push_back(p_goal);
     }
-    goal_pub_.publish(predicted_goals_msg);
+    goal_pub_->publish(predicted_goals_msg);
   }
 }
 
-bool PredictGoalROS::loadGoals(const std::string &file) {
+bool PredictGoalROS::loadGoals(const std::string& file) {
   goals_.clear();
   try {
     // Load goals from the YAML file
     YAML::Node config = YAML::LoadFile(file);
 
     window_size_ = config["window_size"].as<int>();
-    const YAML::Node &goals = config["goals"];
+    const YAML::Node& goals = config["goals"];
 
     // Iterate through each goal
-    for (const auto &goal : goals) {
+    for (const auto& goal : goals) {
       std::string name = goal["name"].as<std::string>();
-      const auto &coordinates = goal["goal"];
+      const auto& coordinates = goal["goal"];
 
       goals_[name] = Eigen::Vector2d(coordinates[0].as<double>(), coordinates[1].as<double>());
     }
-  } catch (const YAML::Exception &e) {
+  } catch (const YAML::Exception& e) {
     std::cerr << "Error: " << e.what() << std::endl;
     return false;
   }
   return false;
-}
-
-void PredictGoalROS::loadRosParamFromNodeHandle(const ros::NodeHandle &private_nh) {
-  private_nh.param("ns", ns_, std::string(""));
-  private_nh.param("goals_file", goals_file_, std::string(""));
-  private_nh.param("tracked_agents_sub_topic", tracked_agents_sub_topic_, std::string(AGENTS_SUB_TOPIC));
 }
 
 };  // namespace agents

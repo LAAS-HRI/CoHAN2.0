@@ -24,15 +24,19 @@
  * Author: Phani Teja Singamaneni
  *********************************************************************************/
 
-#include <agent_path_prediction/PredictedGoal.h>
-#include <agent_path_prediction/PredictedGoals.h>
-#include <agent_path_prediction/predict_goal.h>
-#include <cohan_msgs/TrackedAgent.h>
-#include <cohan_msgs/TrackedAgents.h>
-#include <cohan_msgs/TrackedSegmentType.h>
-#include <geometry_msgs/PoseArray.h>
-#include <ros/ros.h>
 #include <yaml-cpp/yaml.h>
+
+#include <agent_path_prediction/msg/predicted_goal.hpp>
+#include <agent_path_prediction/msg/predicted_goals.hpp>
+#include <agent_path_prediction/predict_goal.hpp>
+#include <cohan_msgs/msg/tracked_agent.hpp>
+#include <cohan_msgs/msg/tracked_agents.hpp>
+#include <cohan_msgs/msg/tracked_segment_type.hpp>
+#include <geometry_msgs/msg/pose_array.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <ros2_helpers/parameters.hpp>
+
+#define AGENTS_SUB_TOPIC "/tracked_agents"
 
 namespace agents {
 /**
@@ -43,7 +47,17 @@ class PredictGoalROS {
   /**
    *@brief Default constructor, initializes ROS communication
    */
-  PredictGoalROS();
+  explicit PredictGoalROS(std::shared_ptr<rclcpp::Node> node) : node_(node) {
+    param_helper_.initialize(node);
+    RCLCPP_INFO(node_->get_logger(), "PredictGoalROS initialized");
+    // Initialize parameters
+    setupParameterCallback();
+  }
+
+  /**
+   * @brief Initializes the ROS node, subscribers, and publishers
+   */
+  void initialize();
 
   /**
    * @brief Default destructor
@@ -55,7 +69,7 @@ class PredictGoalROS {
    * @brief Callback for tracked agents updates. This method processes incoming tracked agents data and updates the internal state.
    * @param msg Message containing tracked agents data
    */
-  void trackedAgentsCB(const cohan_msgs::TrackedAgents::ConstPtr& msg);
+  void trackedAgentsCB(const cohan_msgs::msg::TrackedAgents::SharedPtr msg);
 
   /**
    * @brief Load goal positions from a YAML file. This method reads goal positions from the specified YAML file and populates the goals map.
@@ -66,14 +80,43 @@ class PredictGoalROS {
 
   // Internal Methods
   /**
-   * @brief Loads ROS parameters from the node handle
-   * @param private_nh Private node handle containing parameters
+   * @brief Loads and initializes all parameters from ROS2 parameter server
    */
-  void loadRosParamFromNodeHandle(const ros::NodeHandle& private_nh);
+  void setupParameterCallback() {
+    // Declare parameters using the generic helper
+    param_helper_.declareStringParam("goals_file", "", "Path to the goals YAML file");
+
+    // Set up parameter change callback with custom validation
+    param_helper_.setupParameterCallback([this](const std::vector<rclcpp::Parameter>& params) -> bool {
+      // Custom parameter validation logic for this specific node
+      for (const auto& param : params) {
+        const std::string& name = param.get_name();
+
+        // Update internal variables when parameters change
+        if (name == "goals_file") {
+          goals_file_ = param.as_string();
+        }
+      }
+      return true;
+    });
+
+    // Load initial parameter values
+    loadParameters();
+  }
+
+  /**
+   * @brief Loads and initializes all parameters from ROS2 parameter server
+   */
+  void loadParameters() {
+    // Get parameter values and store them in member variables
+    ns_ = node_->get_parameter("ns").as_string();
+    tracked_agents_sub_topic_ = node_->get_parameter("tracked_agents_sub_topic").as_string();
+    goals_file_ = node_->get_parameter("goals_file").as_string();
+  }
 
   // ROS
-  ros::Subscriber agents_sub_;  //!< Subscriber for tracked agents updates
-  ros::Publisher goal_pub_;     //!< Publisher for predicted goals
+  rclcpp::Subscription<cohan_msgs::msg::TrackedAgents>::SharedPtr agents_sub_;         //!< Subscriber for tracked agents updates
+  rclcpp::Publisher<agent_path_prediction::msg::PredictedGoals>::SharedPtr goal_pub_;  //!< Publisher for predicted goals
 
   // Core components
   agents::BayesianGoalPrediction predictor_;  //!< Instance of the Bayesian goal prediction algorithm
@@ -88,5 +131,7 @@ class PredictGoalROS {
   std::string tracked_agents_sub_topic_, predicted_goal_topic_;  //!< ROS topic names for subscribers and publishers
   std::string ns_;                                               //!< Namespace for the node
   std::string goals_file_;                                       //!< File name of the env goals
+  std::shared_ptr<rclcpp::Node> node_;                           //!< ROS2 node handle
+  parameters::ParameterHelper param_helper_;                     //!< Helper for managing parameters
 };
 }  // namespace agents
