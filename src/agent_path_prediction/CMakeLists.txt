@@ -47,6 +47,7 @@ include_directories(include)
 # Create executable
 add_executable(agent_path_predict
   src/agent_path_prediction.cpp
+  src/predict_goal_ros.cpp
 )
 
 # Dependencies for executable

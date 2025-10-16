@@ -49,7 +49,6 @@ class PredictGoalROS {
    */
   explicit PredictGoalROS(std::shared_ptr<rclcpp::Node> node) : node_(node) {
     param_helper_.initialize(node);
-    RCLCPP_INFO(node_->get_logger(), "PredictGoalROS initialized");
     // Initialize parameters
     setupParameterCallback();
   }

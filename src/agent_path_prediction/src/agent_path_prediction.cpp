@@ -1010,6 +1010,7 @@ int main(int argc, char** argv) {
   agent_path_prediction.initialize();
 
   agents::PredictGoalROS predict_srv(node);
+  predict_srv.initialize();
 
   // look for sigint and start spinning the node
   signal(SIGINT, sigintHandler);
