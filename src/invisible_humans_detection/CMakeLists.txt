@@ -1,61 +1,101 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.5)
 project(invisible_humans_detection)
 
-add_compile_options(-std=c++17)
+# Default to C++17
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 17)
+endif()
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
 
 set(CMAKE_BUILD_TYPE Release)
 
-# # Find catkin macros and libraries
-find_package(catkin REQUIRED COMPONENTS
-  angles
-  costmap_2d
+# Find dependencies
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(ros2_helpers REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_eigen REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(cohan_msgs REQUIRED)
+find_package(costmap_converter_msgs REQUIRED)
+find_package(Eigen3 REQUIRED)
+
+set(dependencies
+  rclcpp
+  ros2_helpers
   geometry_msgs
-  roscpp
-  rospy
-  tf2_ros
-  tf
-  tf2_eigen
   nav_msgs
+  sensor_msgs
+  std_msgs
+  visualization_msgs
+  tf2
+  tf2_ros
+  tf2_eigen
+  tf2_geometry_msgs
   cohan_msgs
-  costmap_converter
+  costmap_converter_msgs
 )
 
-# Eigen3 FindScript Backward compatibility (ubuntu saucy)
-# Since FindEigen.cmake is deprecated starting from jade.
-if(EXISTS "FindEigen3.cmake")
-  find_package(Eigen3 REQUIRED)
-  set(Eigen_INCLUDE_DIRS ${Eigen3_INCLUDE_DIRS})
-elseif(EXISTS "FindEigen.cmake")
-  find_package(Eigen REQUIRED)
-elseif(EXISTS "FindEigen.cmake")
-  message(WARNING "No findEigen cmake script found. You must provde one of them,
-  e.g. by adding it to ${PROJECT_SOURCE_DIR}/cmake_modules.")
-endif(EXISTS "FindEigen3.cmake")
-
-catkin_package(
-  INCLUDE_DIRS include ${EXTERNAL_INCLUDE_DIRS}
-  LIBRARIES invisible_humans_detection ${EXTERNAL_LIBS}
-  CATKIN_DEPENDS angles costmap_2d geometry_msgs roscpp rospy nav_msgs
-)
-
-# # Specify additional locations of header files
+# Include directories
 include_directories(
   include
-  ${EXTERNAL_INCLUDE_DIRS}
-  ${catkin_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIRS}
 )
 
-# # Declare a C++ library
-add_library(${PROJECT_NAME}
+# Declare a C++ library
+add_library(${PROJECT_NAME} SHARED
   src/invisible_humans_detection.cpp
 )
 
+ament_target_dependencies(${PROJECT_NAME}
+  ${dependencies}
+)
+
+# Declare a C++ executable
 add_executable(${PROJECT_NAME}_node src/invisible_humans_detection.cpp)
 
-add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+ament_target_dependencies(${PROJECT_NAME}_node
+  ${dependencies}
+)
 
 target_link_libraries(${PROJECT_NAME}_node
   ${PROJECT_NAME}
-  ${EXTERNAL_LIBS}
-  ${catkin_LIBRARIES}
 )
+
+# Install targets
+install(TARGETS
+  ${PROJECT_NAME}
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
+
+install(TARGETS
+  ${PROJECT_NAME}_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# Install header files
+install(DIRECTORY include/
+  DESTINATION include/
+)
+
+if(BUILD_TESTING)
+  find_package(ament_lint_auto REQUIRED)
+  ament_lint_auto_find_test_dependencies()
+endif()
+
+ament_export_include_directories(include)
+ament_export_libraries(${PROJECT_NAME})
+ament_export_dependencies(${dependencies})
+
+ament_package()

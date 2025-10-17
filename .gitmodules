@@ -2,3 +2,6 @@
 [submodule "src/3rdparty/BehaviorTree.CPP"]
 	path = src/3rdparty/BehaviorTree.CPP
 	url = https://github.com/sphanit/BehaviorTree.CPP.git
+[submodule "src/costmap_converter"]
+	path = src/costmap_converter
+	url = https://github.com/rst-tu-dortmund/costmap_converter.git

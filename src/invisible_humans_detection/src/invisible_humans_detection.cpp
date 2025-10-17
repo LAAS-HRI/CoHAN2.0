@@ -24,34 +24,35 @@
  * Author: Phani Teja Singamaneni
  *********************************************************************************/
 
-#include <invisible_humans_detection/map_scanner.h>
-#include <ros/console.h>
+#include <invisible_humans_detection/invisible_humans_detection.hpp>
 #define MAP_FRAME "map"
 #define FOOTPRINT_FRAME "base_footprint"
 
 namespace invisible_humans_detection {
-MapScanner::MapScanner() { initialize(); }
 
-MapScanner::~MapScanner() = default;
+void InvHumansDetection::initialize() {
+  param_helper_.initialize(shared_from_this());
 
-void MapScanner::initialize() {
-  ros::NodeHandle nh("~/");
-  // Load params
-  loadRosParamFromNodeHandle(nh);
-  // Initialize Tf listener
-  tf2_ros::TransformListener tf_listener(tf_);
+  // Initialize TF2 buffer and listener
+  tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
+  tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
+  // Setup parameter callback
+  setupParameterCallback();
 
   // Timer for corner detection
-  get_robot_pose_ = nh.createTimer(ros::Duration(0.02), &MapScanner::detectOccludedCorners, this);
+  timer_ = this->create_wall_timer(std::chrono::milliseconds(20), std::bind(&InvHumansDetection::detectOccludedCorners, this));
 
-  // Initialize Subscribers and Publishers
-  map_sub_ = nh.subscribe("/map", 1, &MapScanner::mapCB, this);
-  scan_pub_ = nh.advertise<sensor_msgs::LaserScan>("map_scan", 1);
-  pub_invis_human_viz_ = nh.advertise<visualization_msgs::MarkerArray>("invisible_humans_markers", 1);
-  pub_invis_human_corners_ = nh.advertise<geometry_msgs::PoseArray>("invisible_humans_corners", 1);
-  pub_invis_humans_pos_ = nh.advertise<geometry_msgs::PoseArray>("invisible_humans", 1);
-  pub_invis_human_ = nh.advertise<costmap_converter::ObstacleArrayMsg>("invisible_humans_obs", 1);
-  passage_detect_pub_ = nh.advertise<cohan_msgs::PassageType>("passage", 1);
+  // Initialize Subscribers
+  map_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>("/map", 1, std::bind(&InvHumansDetection::mapCB, this, std::placeholders::_1));
+
+  // Initialize Publishers
+  scan_pub_ = this->create_publisher<sensor_msgs::msg::LaserScan>("~/map_scan", 1);
+  pub_invis_human_viz_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("~/invisible_humans_markers", 1);
+  pub_invis_human_corners_ = this->create_publisher<geometry_msgs::msg::PoseArray>("~/invisible_humans_corners", 1);
+  pub_invis_humans_pos_ = this->create_publisher<geometry_msgs::msg::PoseArray>("~/invisible_humans", 1);
+  pub_invis_human_ = this->create_publisher<costmap_converter_msgs::msg::ObstacleArrayMsg>("~/invisible_humans_obs", 1);
+  passage_detect_pub_ = this->create_publisher<cohan_msgs::msg::PassageType>("~/passage", 1);
 
   // Initialize laser scan msg
   scan_msg_.angle_min = angle_min_;
@@ -60,57 +61,32 @@ void MapScanner::initialize() {
   scan_msg_.range_min = range_min_;
   scan_msg_.range_max = range_max_;
 
-  ros::spin();
+  RCLCPP_INFO(this->get_logger(), "InvHumansDetection initialized");
 }
 
-void MapScanner::loadRosParamFromNodeHandle(const ros::NodeHandle &private_nh) {
-  // Name space param
-  private_nh.param("ns", ns_, std::string(""));
-  // Laser scan parameters (can be set using ros parameter server)
-  private_nh.param("samples", samples_, 1081);
-  private_nh.param("range_min", range_min_, 0.05);
-  private_nh.param("range_max", range_max_, 7.0);
-  private_nh.param("angle_min", angle_min_, -2.358);
-  private_nh.param("angle_max", angle_max_, 2.358);
-  private_nh.param("scan_resolution", scan_resolution_, 700);
-  // Other params
-  private_nh.param("publish_scan", publish_scan_, true);
-  private_nh.param("human_radius", human_radius_, 0.31);
-}
-
-void MapScanner::mapCB(const nav_msgs::OccupancyGrid &grid) {
-  // Get map data
-  map_ = grid;
-  origin_x_ = map_.info.origin.position.x;
-  origin_y_ = map_.info.origin.position.y;
-  resolution_ = map_.info.resolution;
-  size_x_ = map_.info.width;
-  size_y_ = map_.info.height;
-}
-
-void MapScanner::publishInvisibleHumans(const geometry_msgs::PoseArray &corners, const geometry_msgs::PoseArray &poses, std::vector<std::vector<double>> &inv_humans) {
+void InvHumansDetection::publishInvisibleHumans(const geometry_msgs::msg::PoseArray& corners, const geometry_msgs::msg::PoseArray& poses, std::vector<std::vector<double>>& inv_humans) {
   // Publish Poses
-  pub_invis_humans_pos_.publish(poses);
+  pub_invis_humans_pos_->publish(poses);
 
   // Publish corners
-  pub_invis_human_corners_.publish(corners);
+  pub_invis_human_corners_->publish(corners);
 
-  costmap_converter::ObstacleArrayMsg obstacle_msg;
-  obstacle_msg.header.stamp = ros::Time::now();
+  costmap_converter_msgs::msg::ObstacleArrayMsg obstacle_msg;
+  obstacle_msg.header.stamp = this->now();
   obstacle_msg.header.frame_id = MAP_FRAME;  // CHANGE HERE : odom / map
   int id = 0;
-  for (const auto &human : inv_humans) {
+  for (const auto& human : inv_humans) {
     double yaw = atan2(human[3], human[2]);
     tf2::Quaternion quaternion_tf2;
     quaternion_tf2.setRPY(0, 0, yaw);
-    geometry_msgs::Quaternion quaternion = tf2::toMsg(quaternion_tf2);
+    geometry_msgs::msg::Quaternion quaternion = tf2::toMsg(quaternion_tf2);
     double mid_scan = ranges_[ranges_.size() / 2];
 
-    geometry_msgs::Point32 point;
+    geometry_msgs::msg::Point32 point;
     point.x = human[0];
     point.y = human[1];
 
-    costmap_converter::ObstacleMsg obstacle;
+    costmap_converter_msgs::msg::ObstacleMsg obstacle;
     obstacle.radius = 0.07;
     obstacle.id = id;
     obstacle.polygon.points.push_back(point);
@@ -121,22 +97,32 @@ void MapScanner::publishInvisibleHumans(const geometry_msgs::PoseArray &corners,
     id++;
   }
   // Publish Obstacle msg
-  pub_invis_human_.publish(obstacle_msg);
+  pub_invis_human_->publish(obstacle_msg);
 }
 
-void MapScanner::detectOccludedCorners(const ros::TimerEvent &event) {
+void InvHumansDetection::mapCB(const nav_msgs::msg::OccupancyGrid::SharedPtr grid) {
+  // Get map data
+  map_ = *grid;
+  origin_x_ = map_.info.origin.position.x;
+  origin_y_ = map_.info.origin.position.y;
+  resolution_ = map_.info.resolution;
+  size_x_ = map_.info.width;
+  size_y_ = map_.info.height;
+}
+
+void InvHumansDetection::detectOccludedCorners() {
   // Get Robot Pose
-  geometry_msgs::TransformStamped footprint_transform;
+  geometry_msgs::msg::TransformStamped footprint_transform;
   try {
     std::string base_frame = FOOTPRINT_FRAME;
     if (!ns_.empty()) {
       base_frame = ns_ + "/" + FOOTPRINT_FRAME;
     }
     scan_msg_.header.frame_id = base_frame;
-    footprint_transform = tf_.lookupTransform(MAP_FRAME, base_frame, ros::Time(0), ros::Duration(1.0));
+    footprint_transform = tf_buffer_->lookupTransform(MAP_FRAME, base_frame, tf2::TimePointZero);
 
-  } catch (tf2::TransformException &ex) {
-    ROS_WARN("%s", ex.what());
+  } catch (tf2::TransformException& ex) {
+    RCLCPP_WARN(this->get_logger(), "%s", ex.what());
   }
   robot_pose_.header = footprint_transform.header;
   robot_pose_.pose.position.x = footprint_transform.transform.translation.x;
@@ -185,7 +171,7 @@ void MapScanner::detectOccludedCorners(const ros::TimerEvent &event) {
   // Publish this scan if requried
   if (publish_scan_) {
     scan_msg_.ranges = ranges_;
-    scan_pub_.publish(scan_msg_);
+    scan_pub_->publish(scan_msg_);
   }
 
   // The Corner detection part starts from here
@@ -229,7 +215,7 @@ void MapScanner::detectOccludedCorners(const ros::TimerEvent &event) {
   locateInvHumans(corner_set1, corner_set2, dir, footprint_transform);
 }
 
-bool MapScanner::locateInvHumans(Coordinates c1, Coordinates c2, std::vector<char> direction, geometry_msgs::TransformStamped &footprint_transform) {
+bool InvHumansDetection::locateInvHumans(Coordinates c1, Coordinates c2, std::vector<char> direction, geometry_msgs::msg::TransformStamped& footprint_transform) {
   assert(c1.size() == c2.size());
   int n_corners = c1.size();
 
@@ -238,17 +224,17 @@ bool MapScanner::locateInvHumans(Coordinates c1, Coordinates c2, std::vector<cha
   // Initialize the necessary
   std::vector<Point> centers;
   std::vector<std::vector<double>> inv_humans;
-  auto now = ros::Time::now();
+  auto now = this->now();
 
-  geometry_msgs::PoseArray corner_array;
+  geometry_msgs::msg::PoseArray corner_array;
   corner_array.header.stamp = now;
   corner_array.header.frame_id = MAP_FRAME;
 
-  geometry_msgs::PoseArray inv_array;
+  geometry_msgs::msg::PoseArray inv_array;
   inv_array.header.stamp = now;
   inv_array.header.frame_id = MAP_FRAME;
 
-  visualization_msgs::MarkerArray marker_array;
+  visualization_msgs::msg::MarkerArray marker_array;
   int m_id = 0;
 
   tf2::Quaternion q(footprint_transform.transform.rotation.x, footprint_transform.transform.rotation.y, footprint_transform.transform.rotation.z, footprint_transform.transform.rotation.w);
@@ -384,7 +370,7 @@ bool MapScanner::locateInvHumans(Coordinates c1, Coordinates c2, std::vector<cha
       // Corners
       auto corner_position = tf2::Vector3(x1, y1, 0.);
       corner_position = transform * corner_position;
-      geometry_msgs::Pose corner_pose;
+      geometry_msgs::msg::Pose corner_pose;
       corner_pose.position.x = corner_position.x();
       corner_pose.position.y = corner_position.y();
       corner_pose.orientation.w = 1;
@@ -403,23 +389,23 @@ bool MapScanner::locateInvHumans(Coordinates c1, Coordinates c2, std::vector<cha
       double yaw = atan2(1.5 * sin(vec_ang), 1.5 * cos(vec_ang));
       tf2::Quaternion quaternion_tf2;
       quaternion_tf2.setRPY(0., 0., yaw);
-      geometry_msgs::Quaternion q = tf2::toMsg(quaternion_tf2);
+      geometry_msgs::msg::Quaternion q = tf2::toMsg(quaternion_tf2);
 
-      geometry_msgs::PoseStamped inv_pose;
+      geometry_msgs::msg::PoseStamped inv_pose;
       inv_pose.pose.position.x = in_pose_mid.x();
       inv_pose.pose.position.y = in_pose_mid.y();
       inv_pose.pose.orientation = q;
 
-      visualization_msgs::Marker arrow;
+      visualization_msgs::msg::Marker arrow;
       arrow.header.frame_id = MAP_FRAME;
       arrow.id = m_id;
-      arrow.type = visualization_msgs::Marker::ARROW;
-      arrow.action = visualization_msgs::Marker::ADD;
+      arrow.type = visualization_msgs::msg::Marker::ARROW;
+      arrow.action = visualization_msgs::msg::Marker::ADD;
       arrow.pose.orientation = q;
       arrow.pose.position.x = in_pose_mid.x();
       arrow.pose.position.y = in_pose_mid.y();
       arrow.pose.position.z = 0.0;
-      arrow.lifetime = ros::Duration(0.1);
+      arrow.lifetime = rclcpp::Duration::from_seconds(0.1);
       arrow.scale.x = 0.6;
       arrow.scale.y = 0.1;
       arrow.scale.z = 0.1;
@@ -428,16 +414,16 @@ bool MapScanner::locateInvHumans(Coordinates c1, Coordinates c2, std::vector<cha
 
       m_id += 1;
 
-      visualization_msgs::Marker marker;
+      visualization_msgs::msg::Marker marker;
       marker.header.frame_id = MAP_FRAME;
       marker.id = m_id;
-      marker.type = visualization_msgs::Marker::CYLINDER;
-      marker.action = visualization_msgs::Marker::ADD;
+      marker.type = visualization_msgs::msg::Marker::CYLINDER;
+      marker.action = visualization_msgs::msg::Marker::ADD;
       marker.pose.orientation.w = 1;
       marker.pose.position.x = in_pose_mid.x();
       marker.pose.position.y = in_pose_mid.y();
       marker.pose.position.z = 0.6;
-      marker.lifetime = ros::Duration(0.1);
+      marker.lifetime = rclcpp::Duration::from_seconds(0.1);
       marker.scale.x = 0.6;
       marker.scale.y = 0.6;
       marker.scale.z = 1.2;
@@ -452,7 +438,7 @@ bool MapScanner::locateInvHumans(Coordinates c1, Coordinates c2, std::vector<cha
       inv_array.poses.push_back(inv_pose.pose);
     }
 
-    pub_invis_human_viz_.publish(marker_array);
+    pub_invis_human_viz_->publish(marker_array);
     // Publish all data
     publishInvisibleHumans(corner_array, inv_array, inv_humans);
     // Detect the passages using these estimates for inv humans
@@ -462,9 +448,9 @@ bool MapScanner::locateInvHumans(Coordinates c1, Coordinates c2, std::vector<cha
 }
 
 // TODO: Check this method: Make it configurable to different envs
-void MapScanner::detectPassages(geometry_msgs::PoseArray detections) {
-  cohan_msgs::PassageType psg_type;
-  psg_type.type = cohan_msgs::PassageType::OPEN;
+void InvHumansDetection::detectPassages(geometry_msgs::msg::PoseArray detections) {
+  cohan_msgs::msg::PassageType psg_type;
+  psg_type.type = cohan_msgs::msg::PassageType::OPEN;
 
   if (!detections.poses.empty()) {
     std::map<double, int> dists;
@@ -472,7 +458,7 @@ void MapScanner::detectPassages(geometry_msgs::PoseArray detections) {
     double mid_scan = ranges_[ranges_.size() / 2];
     int i = 0;
     // Get the distances and indices of the inv humans from the robot
-    for (auto &pose : detections.poses) {
+    for (auto& pose : detections.poses) {
       dist = std::hypot(pose.position.x - robot_pose_.pose.position.x, pose.position.y - robot_pose_.pose.position.y);
       dists[dist] = i;
       i++;
@@ -496,27 +482,27 @@ void MapScanner::detectPassages(geometry_msgs::PoseArray detections) {
         // Condition for door
         if (inv1->first < 2.0 && abs(inv1->first - inv2->first) < 0.1 && seperation_dist < 3.0 && seperation_dist > 0.6) {
           if (mid_scan > 1.33) {
-            ROS_DEBUG("It's a door");
-            psg_type.type = cohan_msgs::PassageType::DOOR;
+            RCLCPP_DEBUG(this->get_logger(), "It's a door");
+            psg_type.type = cohan_msgs::msg::PassageType::DOOR;
 
           } else  // If there is not enough space to enter, it might be a pillar
           {
-            ROS_DEBUG("It is a pillar");
-            psg_type.type = cohan_msgs::PassageType::PILLAR;
+            RCLCPP_DEBUG(this->get_logger(), "It is a pillar");
+            psg_type.type = cohan_msgs::msg::PassageType::PILLAR;
           }
           // Neither, a possible passage (No need to switch to PASS THROUGH here)
-          ROS_DEBUG("Possibility of door or narrow junction pass");
+          RCLCPP_DEBUG(this->get_logger(), "Possibility of door or narrow junction pass");
         }
       }
     }
     // Condition for a wall
     else if (inv1->first < 2.0 && ranges_[corner_ranges_[inv1->second]] < 3.0) {
-      ROS_DEBUG("It is a wall");
-      psg_type.type = cohan_msgs::PassageType::WALL;
+      RCLCPP_DEBUG(this->get_logger(), "It is a wall");
+      psg_type.type = cohan_msgs::msg::PassageType::WALL;
     }
-    passage_detect_pub_.publish(psg_type);
+    passage_detect_pub_->publish(psg_type);
   } else {
-    passage_detect_pub_.publish(psg_type);
+    passage_detect_pub_->publish(psg_type);
     return;
   }
 }
@@ -525,9 +511,12 @@ void MapScanner::detectPassages(geometry_msgs::PoseArray detections) {
 
 #if !defined(DOXYGEN_SHOULD_SKIP_THIS)
 // ROS node for invisible humans detection
-int main(int argc, char **argv) {
-  ros::init(argc, argv, "map_scanner_node");
-  invisible_humans_detection::MapScanner mp_scanner;
+int main(int argc, char** argv) {
+  rclcpp::init(argc, argv);
+  auto node = std::make_shared<invisible_humans_detection::InvHumansDetection>();
+  node->initialize();
+  rclcpp::spin(node);
+  rclcpp::shutdown();
   return 0;
 }
 #endif

@@ -1,5 +1,6 @@
 <?xml version="1.0"?>
-<package format="2">
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
   <name>invisible_humans_detection</name>
   <version>0.1.0</version>
   <description>The invisible_humans_detection package</description>
@@ -7,30 +8,28 @@
 
   <license>MIT</license>
 
-  <buildtool_depend>catkin</buildtool_depend>
-  <build_depend>angles</build_depend>
-  <build_depend>costmap_2d</build_depend>
-  <build_depend>geometry_msgs</build_depend>
-  <build_depend>roscpp</build_depend>
-  <build_depend>rospy</build_depend>
-  <build_depend>nav_msgs</build_depend>
-  <build_depend>cohan_msgs</build_depend>
-  <build_depend>costmap_conveter</build_depend>
-  <build_export_depend>angles</build_export_depend>
-  <build_export_depend>costmap_2d</build_export_depend>
-  <build_export_depend>geometry_msgs</build_export_depend>
-  <build_export_depend>roscpp</build_export_depend>
-  <build_export_depend>rospy</build_export_depend>
-  <build_export_depend>nav_msgs</build_export_depend>
-  <build_export_depend>cohan_msgs</build_export_depend>
-  <build_export_depend>costmap_conveter</build_export_depend>
-  <exec_depend>angles</exec_depend>
-  <exec_depend>costmap_2d</exec_depend>
-  <exec_depend>geometry_msgs</exec_depend>
-  <exec_depend>roscpp</exec_depend>
-  <exec_depend>rospy</exec_depend>
-  <exec_depend>nav_msgs</exec_depend>
-  <exec_depend>cohan_msgs</exec_depend>
-  <exec_depend>costmap_converter</exec_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>ros2_helpers</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>visualization_msgs</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+  <depend>tf2_eigen</depend>
+  <depend>tf2_geometry_msgs</depend>
+  <depend>cohan_msgs</depend>
+  <depend>costmap_converter_msgs</depend>
+  <depend>eigen</depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
 
 </package>

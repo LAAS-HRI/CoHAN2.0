@@ -39,6 +39,8 @@
 #define AGENTS_SUB_TOPIC "/tracked_agents"
 
 namespace agents {
+// Pattern 2 of ROS2 Nodes --> Use a private node instance that can be obtained from another node
+
 /**
  * @brief ROS wrapper for the Bayesian goal prediction system
  */

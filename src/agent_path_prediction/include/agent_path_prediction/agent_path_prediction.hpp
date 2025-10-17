@@ -91,18 +91,15 @@
 #define AGENT_ANGLE_BEHIND_ROBOT M_PI
 
 namespace agents {
-class AgentPathPrediction {
+// Pattern 1 of ROS2 Nodes --> Inherit from rclcpp::Node (Good for Standalone nodes)
+/**
+ * @brief Class for agent path prediction using different methods
+ */
+class AgentPathPrediction : public rclcpp::Node {
  public:
   /**
    * @brief  Constructor for AgentPathPrediction class */
-  AgentPathPrediction(std::shared_ptr<rclcpp::Node> node) : node_(node) {
-    param_helper_.initialize(node);
-    RCLCPP_INFO(node_->get_logger(), "AgentPathPrediction initialized");
-    // Initialize TF2 buffer and transform listener
-    tf_buffer_ = std::make_shared<tf2_ros::Buffer>(node_->get_clock());
-    tf_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
-    setupParameterCallback();
-  };
+  AgentPathPrediction() : Node(NODE_NAME) {}
 
   /**
    * @brief Default destructor for AgentPathPrediction class */
@@ -336,7 +333,6 @@ class AgentPathPrediction {
   }
 
   // ROS2 node and helpers
-  rclcpp::Node::SharedPtr node_;              //!< Pointer to the ROS2 node
   parameters::ParameterHelper param_helper_;  //!< Helper for managing parameters
   std::string ns_;                            //!< Namespace for the node
 

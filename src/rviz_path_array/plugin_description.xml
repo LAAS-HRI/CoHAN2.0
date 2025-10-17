@@ -1,10 +1,10 @@
-<library path="lib/librviz_path_array">
+<library path="rviz_path_array">
   <class name="rviz_path_array/AgentPathArray"
          type="rviz_path_array::AgentPathArrayDisplay"
-         base_class_type="rviz::Display">
+         base_class_type="rviz_common::Display">
     <description>
-      Displays cohan_msgs/AgentPathArray messages.
+      Displays cohan_msgs/msg/AgentPathArray messages.
     </description>
-    <message_type>cohan_msgs/AgentPathArray</message_type>
+    <message_type>cohan_msgs/msg/AgentPathArray</message_type>
   </class>
 </library>

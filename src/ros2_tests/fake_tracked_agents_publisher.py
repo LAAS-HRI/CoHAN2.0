@@ -14,7 +14,7 @@ from rclpy.clock import Clock, ClockType
 class FakeTrackedAgentsPublisher(Node):
     def __init__(self):
         super().__init__('fake_tracked_agents_publisher', parameter_overrides=[
-            rclpy.parameter.Parameter('use_sim_time', rclpy.Parameter.Type.BOOL, True)
+            rclpy.parameter.Parameter('use_sim_time', rclpy.Parameter.Type.BOOL, False)
         ])
         
         # Create publisher for tracked agents
@@ -116,8 +116,8 @@ class FakeTrackedAgentsPublisher(Node):
         agent4.state = TrackedAgent.STATIC
         
         # Add agents to message
-        # msg.agents = [agent1, agent2, agent3, agent4]
-        msg.agents = [agent4]
+        msg.agents = [agent1, agent2, agent3, agent4]
+        # msg.agents = [agent4]
         
         # Publish
         self.publisher.publish(msg)

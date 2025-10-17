@@ -73,6 +73,7 @@ namespace agents {
  */
 enum AgentState { NO_STATE, STATIC, MOVING, STOPPED, BLOCKED };
 
+// Pattern 2 of ROS2 Nodes --> Use a private node instance that can be obtained from another node
 /**
  * @brief Class representing agents and their states
  */
