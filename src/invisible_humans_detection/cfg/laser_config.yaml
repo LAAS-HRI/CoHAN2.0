@@ -1,7 +1,0 @@
-samples: 1081
-range_min: 0.05
-range_max: 7.0
-angle_min: -2.358
-angle_max: 2.358
-scan_resolution: 700
-publish_scan_: false

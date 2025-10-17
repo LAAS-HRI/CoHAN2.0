@@ -103,8 +103,8 @@ class InvHumansDetection : public rclcpp::Node {
     param_helper_.declareIntParam("samples", DEFAULT_SAMPLES, 1, 10000, "Number of samples for scanning");
     param_helper_.declareFloatParam("range_min", DEFAULT_RANGE_MIN, 0.0, 10.0, "Minimum range for scanning");
     param_helper_.declareFloatParam("range_max", DEFAULT_RANGE_MAX, 0.1, 100.0, "Maximum range for scanning");
-    param_helper_.declareFloatParam("angle_min", DEFAULT_ANGLE_MIN, -M_PI, M_PI, "Minimum angle for scanning (radians)");
-    param_helper_.declareFloatParam("angle_max", DEFAULT_ANGLE_MAX, -M_PI, M_PI, "Maximum angle for scanning (radians)");
+    param_helper_.declareFloatParam("angle_min", DEFAULT_ANGLE_MIN, -6.3, 6.3, "Minimum angle for scanning (radians)");
+    param_helper_.declareFloatParam("angle_max", DEFAULT_ANGLE_MAX, -6.3, 6.3, "Maximum angle for scanning (radians)");
     param_helper_.declareIntParam("scan_resolution", DEFAULT_SCAN_RESOLUTION, 1, 10000, "Resolution of the scan");
     param_helper_.declareBoolParam("publish_scan", DEFAULT_PUBLISH_SCAN, "Whether to publish scan data");
     param_helper_.declareFloatParam("human_radius", DEFAULT_HUMAN_RADIUS, 0.1, 1.0, "Radius of a human for detection");

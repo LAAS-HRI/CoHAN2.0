@@ -211,6 +211,8 @@ void InvHumansDetection::detectOccludedCorners() {
     ang += angle_increment;
   }
 
+  std::cout << "Detected corners 1: " << corner_set1.size() << std::endl;
+  std::cout << "Detected corners 2: " << corner_set2.size() << std::endl;
   // Locate the invisible humans using the detected corners
   locateInvHumans(corner_set1, corner_set2, dir, footprint_transform);
 }

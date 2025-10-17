@@ -1,3 +1,0 @@
-<launch>
-  <node pkg="invisible_humans_detection" type="invisible_humans_detection_node" name="map_scanner" output="screen"/>
-</launch>
