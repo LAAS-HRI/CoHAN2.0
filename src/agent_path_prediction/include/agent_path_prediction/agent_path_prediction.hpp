@@ -317,7 +317,7 @@ class AgentPathPrediction {
    */
   void loadParameters() {
     // Get parameter values and store them in member variables
-    ns_ = node_->get_parameter("ns").as_string();
+    ns_ = param_helper_.getParam<std::string>("ns", "");
     publish_markers_ = param_helper_.getParam<bool>("publish_markers", true);
     robot_frame_id_ = param_helper_.getParam<std::string>("robot_frame_id", ROBOT_FRAME_ID);
     map_frame_id_ = param_helper_.getParam<std::string>("map_frame_id", MAP_FRAME_ID);

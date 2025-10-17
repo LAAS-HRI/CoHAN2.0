@@ -24,25 +24,25 @@
  * Author: Phani Teja Singamaneni
  *********************************************************************************/
 
-#ifndef STATIC_AGENT_LAYER_H
-#define STATIC_AGENT_LAYER_H
-#include <cohan_layers/AgentStaticLayerConfig.h>
-#include <cohan_layers/agent_layer.h>
-#include <dynamic_reconfigure/server.h>
-#include <ros/ros.h>
+#ifndef AGENT_VISIBILITY_LAYER_H
+#define AGENT_VISIBILITY_LAYER_H
+#include <cohan_layers/agent_layer.hpp>
+#include <rcl_interfaces/msg/set_parameters_result.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <vector>
 
 namespace cohan_layers {
-class StaticAgentLayer : public AgentLayer {
+class AgentVisibilityLayer : public AgentLayer {
  public:
-  StaticAgentLayer() { layered_costmap_ = nullptr; }
+  AgentVisibilityLayer() { layered_costmap_ = nullptr; }
 
   /**
-   * @brief Initializes the StaticAgentLayer and sets up ROS communication
+   * @brief Initializes the AgentVisibilityLayer and sets up ROS communication
    */
   void onInitialize() override;
 
   /**
-   * @brief Updates the bounds of the costmap based on static agent positions
+   * @brief Updates the bounds of the costmap based on agent positions
    * @param min_x Minimum x-coordinate of the bounds
    * @param min_y Minimum y-coordinate of the bounds
    * @param max_x Maximum x-coordinate of the bounds
@@ -51,39 +51,52 @@ class StaticAgentLayer : public AgentLayer {
   void updateBoundsFromAgents(double* min_x, double* min_y, double* max_x, double* max_y) override;
 
   /**
-   * @brief Updates the costmap with static agent information
+   * @brief Updates the costmap with agent visibility information
    * @param master_grid Reference to the master costmap grid
    * @param min_i Minimum i-index of the grid
    * @param min_j Minimum j-index of the grid
    * @param max_i Maximum i-index of the grid
    * @param max_j Maximum j-index of the grid
    */
-  void updateCosts(costmap_2d::Costmap2D& master_grid, int min_i, int min_j, int max_i, int max_j) override;
+  void updateCosts(nav2_costmap_2d::Costmap2D& master_grid, int min_i, int min_j, int max_i, int max_j) override;
+
+  /**
+   * @brief Match the size of the master costmap
+   */
+  void matchSize() override {}
+
+  /**
+   * @brief Reset the layer
+   */
+  void reset() override {}
+
+  /**
+   * @brief Check if this layer can be cleared
+   * @return true if clearable
+   */
+  bool isClearable() override { return false; }
 
  protected:
   /**
-   * @brief Loads ROS parameters from the node handle
-   * @param private_nh Private node handle containing parameters
+   * @brief Declares parameters and sets up dynamic reconfiguration
    */
-  void loadRosParamFromNodeHandle(const ros::NodeHandle& private_nh);
+  void declareParameters();
 
   /**
-   * @brief Configures the StaticAgentLayer using dynamic reconfigure
-   * @param config Configuration parameters for the layer
-   * @param level Reconfiguration level
+   * @brief Loads initial parameter values
    */
-  void configure(AgentStaticLayerConfig& config, uint32_t level);
+  void loadParameters();
 
   /**
-   * @brief Dynamic reconfigure server for StaticAgentLayer
+   * @brief Callback for dynamic parameter changes
    */
-  dynamic_reconfigure::Server<AgentStaticLayerConfig>* server_;
+  rcl_interfaces::msg::SetParametersResult dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters);
 
   /**
-   * @brief Callback type for dynamic reconfigure server
+   * @brief Callback handle for dynamic parameters
    */
-  dynamic_reconfigure::Server<AgentStaticLayerConfig>::CallbackType f_;
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr dyn_params_handler_;
 };
 }  // namespace cohan_layers
 
-#endif  // STATIC_AGENT_LAYER_H
+#endif  // AGENT_VISIBILITY_LAYER_H

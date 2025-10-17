@@ -25,20 +25,105 @@
  *********************************************************************************/
 
 #include <angles/angles.h>
-#include <cohan_layers/static_agent_layer.h>
-#include <pluginlib/class_list_macros.h>
-#include <tf2_eigen/tf2_eigen.h>
 
-PLUGINLIB_EXPORT_CLASS(cohan_layers::StaticAgentLayer, costmap_2d::Layer)
+#include <cohan_layers/static_agent_layer.hpp>
+#include <pluginlib/class_list_macros.hpp>
+
+PLUGINLIB_EXPORT_CLASS(cohan_layers::StaticAgentLayer, nav2_costmap_2d::Layer)
 
 namespace cohan_layers {
 void StaticAgentLayer::onInitialize() {
   AgentLayer::onInitialize();
-  ros::NodeHandle private_nh("~/" + name_);
-  loadRosParamFromNodeHandle(private_nh);
-  server_ = new dynamic_reconfigure::Server<AgentStaticLayerConfig>(private_nh);
-  f_ = [this](auto&& PH1, auto&& PH2) { configure(std::forward<decltype(PH1)>(PH1), std::forward<decltype(PH2)>(PH2)); };
-  server_->setCallback(f_);
+
+  auto node = node_.lock();
+  if (!node) {
+    throw std::runtime_error("Failed to lock node");
+  }
+
+  declareParameters();
+  loadParameters();
+
+  // Add callback for dynamic parameters
+  dyn_params_handler_ = node->add_on_set_parameters_callback(std::bind(&StaticAgentLayer::dynamicParametersCallback, this, std::placeholders::_1));
+}
+
+void StaticAgentLayer::declareParameters() {
+  auto node = node_.lock();
+  if (!node) {
+    throw std::runtime_error("Failed to lock node");
+  }
+
+  // Declare parameters with descriptions and ranges
+  rcl_interfaces::msg::ParameterDescriptor descriptor;
+  rcl_interfaces::msg::FloatingPointRange range;
+
+  // robot_radius
+  descriptor.description = "Radius of the robot";
+  range.from_value = 0.0;
+  range.to_value = 2.0;
+  range.step = 0.01;
+  descriptor.floating_point_range = {range};
+  declareParameter("robot_radius", rclcpp::ParameterValue(0.47));
+
+  // agent_radius
+  descriptor.description = "Radius of the agent";
+  descriptor.floating_point_range = {range};
+  declareParameter("agent_radius", rclcpp::ParameterValue(0.30));
+
+  // amplitude
+  descriptor.description = "Amplitude of the Gaussian";
+  range.from_value = 0.0;
+  range.to_value = 255.0;
+  descriptor.floating_point_range = {range};
+  declareParameter("amplitude", rclcpp::ParameterValue(255.0));
+
+  // radius
+  descriptor.description = "Radius of the effect";
+  range.from_value = 0.0;
+  range.to_value = 10.0;
+  descriptor.floating_point_range = {range};
+  declareParameter("radius", rclcpp::ParameterValue(2.0));
+}
+
+void StaticAgentLayer::loadParameters() {
+  // Get parameter values and store them in member variables
+  auto node = node_.lock();
+  if (!node) {
+    throw std::runtime_error("Failed to lock node");
+  }
+
+  node->get_parameter(name_ + ".robot_radius", robot_radius_);
+  node->get_parameter(name_ + ".agent_radius", agent_radius_);
+  node->get_parameter(name_ + ".amplitude", amplitude_);
+  node->get_parameter(name_ + ".radius", radius_);
+}
+
+rcl_interfaces::msg::SetParametersResult StaticAgentLayer::dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters) {
+  rcl_interfaces::msg::SetParametersResult result;
+  result.successful = true;
+
+  for (auto parameter : parameters) {
+    const auto& param_type = parameter.get_type();
+    const auto& param_name = parameter.get_name();
+
+    if (param_type == rclcpp::ParameterType::PARAMETER_DOUBLE) {
+      if (param_name == name_ + ".amplitude") {
+        amplitude_ = parameter.as_double();
+      } else if (param_name == name_ + ".radius") {
+        radius_ = parameter.as_double();
+      } else if (param_name == name_ + ".robot_radius") {
+        robot_radius_ = parameter.as_double();
+      } else if (param_name == name_ + ".agent_radius") {
+        agent_radius_ = parameter.as_double();
+      }
+    } else if (param_type == rclcpp::ParameterType::PARAMETER_BOOL) {
+      if (param_name == name_ + ".enabled") {
+        enabled_ = parameter.as_bool();
+      }
+    }
+  }
+
+  return result;
 }
 
 void StaticAgentLayer::updateBoundsFromAgents(double* min_x, double* min_y, double* max_x, double* max_y) {
@@ -50,13 +135,8 @@ void StaticAgentLayer::updateBoundsFromAgents(double* min_x, double* min_y, doub
   }
 }
 
-void StaticAgentLayer::loadRosParamFromNodeHandle(const ros::NodeHandle& private_nh) {
-  private_nh.param("robot_radius", robot_radius_, 0.47);
-  private_nh.param("agent_radius", agent_radius_, 0.30);
-}
-
-void StaticAgentLayer::updateCosts(costmap_2d::Costmap2D& /*master_grid*/, int min_i, int min_j, int max_i, int max_j) {
-  boost::recursive_mutex::scoped_lock lock(lock_);
+void StaticAgentLayer::updateCosts(nav2_costmap_2d::Costmap2D& /*master_grid*/, int min_i, int min_j, int max_i, int max_j) {
+  std::lock_guard<std::recursive_mutex> lock(lock_);
   if (!enabled_) {
     return;
   }
@@ -65,7 +145,7 @@ void StaticAgentLayer::updateCosts(costmap_2d::Costmap2D& /*master_grid*/, int m
     return;
   }
 
-  costmap_2d::Costmap2D* costmap = layered_costmap_->getCostmap();
+  nav2_costmap_2d::Costmap2D* costmap = layered_costmap_->getCostmap();
   double res = costmap->getResolution();
 
   for (uint i = 0; i < transformed_agents_.size(); i++) {
@@ -146,7 +226,7 @@ void StaticAgentLayer::updateCosts(costmap_2d::Costmap2D& /*master_grid*/, int m
     for (int i = start_x; i < end_x; i++) {
       for (int j = start_y; j < end_y; j++) {
         unsigned char old_cost = costmap->getCost(i + mx, j + my);
-        if (old_cost == costmap_2d::NO_INFORMATION) {
+        if (old_cost == nav2_costmap_2d::NO_INFORMATION) {
           continue;
         }
 
@@ -163,9 +243,8 @@ void StaticAgentLayer::updateCosts(costmap_2d::Costmap2D& /*master_grid*/, int m
           auto cvalue = static_cast<unsigned char>(val);
           costmap->setCost(i + mx, j + my, std::max(cvalue, old_cost));
 
-        }
-        else if (is_human_still && state > 2) { // This removes costmap while human is moving and could cause issues with planning
-        //else {
+        } else if (is_human_still && state > 2) {  // This removes costmap while human is moving and could cause issues with planning
+                                                   // else {
           double x;
           double y;
           costmap->mapToWorld(i + mx, j + my, x, y);
@@ -175,7 +254,7 @@ void StaticAgentLayer::updateCosts(costmap_2d::Costmap2D& /*master_grid*/, int m
           if (inrad > rad) {
             continue;
           }
-          auto cvalue = costmap_2d::LETHAL_OBSTACLE;
+          auto cvalue = nav2_costmap_2d::LETHAL_OBSTACLE;
           costmap->setCost(i + mx, j + my, std::max(cvalue, old_cost));
         }
       }
@@ -183,9 +262,4 @@ void StaticAgentLayer::updateCosts(costmap_2d::Costmap2D& /*master_grid*/, int m
   }
 }
 
-void StaticAgentLayer::configure(AgentStaticLayerConfig& config, uint32_t /*level*/) {
-  amplitude_ = config.amplitude;
-  radius_ = config.radius;
-  enabled_ = config.enabled;
-}
 };  // namespace cohan_layers

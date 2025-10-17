@@ -1,66 +1,82 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.5)
 project(cohan_layers)
-set_directory_properties(PROPERTIES COMPILE_OPTIONS "-Wall;-Werror")
-set(CMAKE_BUILD_TYPE Release)
 
-# add_compile_options(-std=c++11)
+# Default to C++20
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 20)
+endif()
 
-find_package(catkin REQUIRED COMPONENTS
-  angles
-  costmap_2d
-  dynamic_reconfigure
-  geometry_msgs
-  cohan_msgs
-  pluginlib
-  roscpp
-  rospy
-  agent_path_prediction
-)
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
 
-generate_dynamic_reconfigure_options(
-  cfg/AgentStaticLayer.cfg
-  cfg/AgentVisibilityLayer.cfg
-)
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(angles REQUIRED)
+find_package(nav2_costmap_2d REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(cohan_msgs REQUIRED)
+find_package(pluginlib REQUIRED)
+find_package(agent_path_prediction REQUIRED)
+find_package(ros2_helpers REQUIRED)
 
-catkin_package(
-  INCLUDE_DIRS include
-  LIBRARIES  cohan_layers
-  CATKIN_DEPENDS angles costmap_2d dynamic_reconfigure geometry_msgs cohan_msgs pluginlib roscpp rospy agent_path_prediction
-)
+
+# Note: dynamic_reconfigure is not available in ROS 2
+# Use node parameters with declare_parameter and parameter callbacks instead
 
 include_directories(
   include
-  ${catkin_INCLUDE_DIRS}
 )
 
-add_library(cohan_layers
+add_library(cohan_layers SHARED
   src/agent_layer.cpp
   src/static_agent_layer.cpp
   src/agent_visibility_layer.cpp
 )
 
+ament_target_dependencies(cohan_layers
+  rclcpp
+  angles
+  nav2_costmap_2d
+  geometry_msgs
+  cohan_msgs
+  pluginlib
+  agent_path_prediction
+  ros2_helpers
+)
 
-add_dependencies(cohan_layers  ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-target_link_libraries(cohan_layers  ${catkin_LIBRARIES})
-
-if(CATKIN_ENABLE_TESTING)
-  find_package(catkin REQUIRED COMPONENTS roslint)
-  roslint_cpp()
-  roslint_add_test()
+if(BUILD_TESTING)
+  find_package(ament_lint_auto REQUIRED)
+  ament_lint_auto_find_test_dependencies()
 endif()
 
-install(FILES costmap_plugins.xml
-        DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
-)
-
-
 install(TARGETS cohan_layers
-        LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-        ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-        RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION}
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
 )
 
-install(
-    DIRECTORY include/${PROJECT_NAME}/
-    DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+install(FILES costmap_plugins.xml
+  DESTINATION share/${PROJECT_NAME}
 )
+
+install(DIRECTORY include/
+  DESTINATION include
+)
+
+pluginlib_export_plugin_description_file(nav2_costmap_2d costmap_plugins.xml)
+
+ament_export_include_directories(include)
+ament_export_libraries(cohan_layers)
+ament_export_dependencies(
+  rclcpp
+  angles
+  nav2_costmap_2d
+  geometry_msgs
+  cohan_msgs
+  pluginlib
+  agent_path_prediction
+  ros2_helpers
+)
+
+ament_package()

@@ -3,7 +3,7 @@
 import rclpy
 from rclpy.node import Node
 import rclpy.parameter
-from cohan_msgs.msg import TrackedAgents, TrackedAgent, TrackedSegment
+from cohan_msgs.msg import TrackedAgents, TrackedAgent, TrackedSegment, TrackedSegmentType
 from geometry_msgs.msg import PoseWithCovariance, TwistWithCovariance, AccelWithCovariance
 from geometry_msgs.msg import Pose, Twist, Accel, Point, Quaternion, Vector3
 from std_msgs.msg import Header
@@ -13,7 +13,9 @@ from rclpy.clock import Clock, ClockType
 
 class FakeTrackedAgentsPublisher(Node):
     def __init__(self):
-        super().__init__('fake_tracked_agents_publisher')        
+        super().__init__('fake_tracked_agents_publisher', parameter_overrides=[
+            rclpy.parameter.Parameter('use_sim_time', rclpy.Parameter.Type.BOOL, True)
+        ])
         
         # Create publisher for tracked agents
         self.publisher = self.create_publisher(TrackedAgents, '/tracked_agents', 10)
@@ -35,7 +37,7 @@ class FakeTrackedAgentsPublisher(Node):
         
         # Create tracked segment (body part)
         segment = TrackedSegment()
-        segment.type = 1  # Default agent part type
+        segment.type = TrackedSegmentType.TORSO  # Default agent part type
         
         # Set pose
         segment.pose = PoseWithCovariance()
@@ -110,11 +112,12 @@ class FakeTrackedAgentsPublisher(Node):
         agent3 = self.create_fake_agent(3, x3, y3, vx3, vy3, yaw3)
         
         # Agent 4: Stationary agent
-        agent4 = self.create_fake_agent(4, 1.5, -1.0, 0.0, 0.0, 0.0)
+        agent4 = self.create_fake_agent(4, 1.7, -0.6, 0.0, 0.0, 0.0)
         agent4.state = TrackedAgent.STATIC
         
         # Add agents to message
-        msg.agents = [agent1, agent2, agent3, agent4]
+        # msg.agents = [agent1, agent2, agent3, agent4]
+        msg.agents = [agent4]
         
         # Publish
         self.publisher.publish(msg)

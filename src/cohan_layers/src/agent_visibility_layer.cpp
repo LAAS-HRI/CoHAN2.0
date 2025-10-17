@@ -25,19 +25,88 @@
  *********************************************************************************/
 
 #include <angles/angles.h>
-#include <cohan_layers/agent_visibility_layer.h>
-#include <pluginlib/class_list_macros.h>
-#include <tf2_eigen/tf2_eigen.h>
-#define DEFAULT_AGENT_PART cohan_msgs::TrackedSegmentType::TORSO
+
+#include <Eigen/Core>
+#include <cohan_layers/agent_visibility_layer.hpp>
+#include <pluginlib/class_list_macros.hpp>
+
+PLUGINLIB_EXPORT_CLASS(cohan_layers::AgentVisibilityLayer, nav2_costmap_2d::Layer)
 
 namespace cohan_layers {
 void AgentVisibilityLayer::onInitialize() {
   AgentLayer::onInitialize();
-  ros::NodeHandle nh("~/" + name_);
-  ros::NodeHandle g_nh;
-  server_ = new dynamic_reconfigure::Server<AgentVisibilityLayerConfig>(nh);
-  f_ = [this](auto&& PH1, auto&& PH2) { configure(std::forward<decltype(PH1)>(PH1), std::forward<decltype(PH2)>(PH2)); };
-  server_->setCallback(f_);
+
+  auto node = node_.lock();
+  if (!node) {
+    throw std::runtime_error("Failed to lock node");
+  }
+
+  declareParameters();
+  loadParameters();
+
+  // Add callback for dynamic parameters
+  dyn_params_handler_ = node->add_on_set_parameters_callback(std::bind(&AgentVisibilityLayer::dynamicParametersCallback, this, std::placeholders::_1));
+}
+
+void AgentVisibilityLayer::declareParameters() {
+  auto node = node_.lock();
+  if (!node) {
+    throw std::runtime_error("Failed to lock node");
+  }
+
+  // Declare parameters with descriptions and ranges
+  rcl_interfaces::msg::ParameterDescriptor descriptor;
+  rcl_interfaces::msg::FloatingPointRange range;
+
+  // amplitude
+  descriptor.description = "Amplitude of the Gaussian";
+  range.from_value = 0.0;
+  range.to_value = 255.0;
+  range.step = 0.01;
+  descriptor.floating_point_range = {range};
+  declareParameter("amplitude", rclcpp::ParameterValue(255.0));
+
+  // radius
+  descriptor.description = "Radius of the effect";
+  range.from_value = 0.0;
+  range.to_value = 10.0;
+  descriptor.floating_point_range = {range};
+  declareParameter("radius", rclcpp::ParameterValue(2.0));
+}
+
+void AgentVisibilityLayer::loadParameters() {
+  // Get parameter values and store them in member variables
+  auto node = node_.lock();
+  if (!node) {
+    throw std::runtime_error("Failed to lock node");
+  }
+
+  node->get_parameter(name_ + ".amplitude", amplitude_);
+  node->get_parameter(name_ + ".radius", radius_);
+}
+
+rcl_interfaces::msg::SetParametersResult AgentVisibilityLayer::dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters) {
+  rcl_interfaces::msg::SetParametersResult result;
+  result.successful = true;
+
+  for (auto parameter : parameters) {
+    const auto& param_type = parameter.get_type();
+    const auto& param_name = parameter.get_name();
+
+    if (param_type == rclcpp::ParameterType::PARAMETER_DOUBLE) {
+      if (param_name == name_ + ".amplitude") {
+        amplitude_ = parameter.as_double();
+      } else if (param_name == name_ + ".radius") {
+        radius_ = parameter.as_double();
+      }
+    } else if (param_type == rclcpp::ParameterType::PARAMETER_BOOL) {
+      if (param_name == name_ + ".enabled") {
+        enabled_ = parameter.as_bool();
+      }
+    }
+  }
+
+  return result;
 }
 
 void AgentVisibilityLayer::updateBoundsFromAgents(double* min_x, double* min_y, double* max_x, double* max_y) {
@@ -49,8 +118,8 @@ void AgentVisibilityLayer::updateBoundsFromAgents(double* min_x, double* min_y, 
   }
 }
 
-void AgentVisibilityLayer::updateCosts(costmap_2d::Costmap2D& /*master_grid*/, int min_i, int min_j, int max_i, int max_j) {
-  boost::recursive_mutex::scoped_lock lock(lock_);
+void AgentVisibilityLayer::updateCosts(nav2_costmap_2d::Costmap2D& /*master_grid*/, int min_i, int min_j, int max_i, int max_j) {
+  std::lock_guard<std::recursive_mutex> lock(lock_);
   if (!enabled_) {
     return;
   }
@@ -59,7 +128,7 @@ void AgentVisibilityLayer::updateCosts(costmap_2d::Costmap2D& /*master_grid*/, i
     return;
   }
 
-  costmap_2d::Costmap2D* costmap = layered_costmap_->getCostmap();
+  nav2_costmap_2d::Costmap2D* costmap = layered_costmap_->getCostmap();
   double res = costmap->getResolution();
 
   for (uint i = 0; i < transformed_agents_.size(); i++) {
@@ -127,7 +196,7 @@ void AgentVisibilityLayer::updateCosts(costmap_2d::Costmap2D& /*master_grid*/, i
       for (int i = start_x; i < end_x; i++) {
         for (int j = start_y; j < end_y; j++) {
           unsigned char old_cost = costmap->getCost(i + mx, j + my);
-          if (old_cost == costmap_2d::NO_INFORMATION) {
+          if (old_cost == nav2_costmap_2d::NO_INFORMATION) {
             continue;
           }
 
@@ -151,11 +220,4 @@ void AgentVisibilityLayer::updateCosts(costmap_2d::Costmap2D& /*master_grid*/, i
   }
 }
 
-void AgentVisibilityLayer::configure(AgentVisibilityLayerConfig& config, uint32_t /*level*/) {
-  amplitude_ = config.amplitude;
-  radius_ = config.radius;
-  enabled_ = config.enabled;
-}
 };  // namespace cohan_layers
-
-PLUGINLIB_EXPORT_CLASS(cohan_layers::AgentVisibilityLayer, costmap_2d::Layer)

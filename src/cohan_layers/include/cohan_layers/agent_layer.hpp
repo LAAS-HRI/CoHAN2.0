@@ -26,22 +26,25 @@
 
 #ifndef AGENT_LAYER_H
 #define AGENT_LAYER_H
-#include <agent_path_prediction/AgentsInfo.h>
-#include <cohan_msgs/StateArray.h>
-#include <cohan_msgs/TrackedAgents.h>
-#include <cohan_msgs/TrackedSegmentType.h>
-#include <costmap_2d/layer.h>
-#include <costmap_2d/layered_costmap.h>
-#include <dynamic_reconfigure/server.h>
-#include <ros/ros.h>
-#include <std_srvs/SetBool.h>
 #include <tf2/utils.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
-#include <boost/thread.hpp>
+#include <agent_path_prediction/msg/agents_info.hpp>
+#include <cohan_msgs/msg/state_array.hpp>
+#include <cohan_msgs/msg/tracked_agents.hpp>
+#include <cohan_msgs/msg/tracked_segment_type.hpp>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <nav2_costmap_2d/layer.hpp>
+#include <nav2_costmap_2d/layered_costmap.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <std_srvs/srv/set_bool.hpp>
+#include <string>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <vector>
 
 namespace cohan_layers {
-class AgentLayer : public costmap_2d::Layer {
+class AgentLayer : public nav2_costmap_2d::Layer {
  public:
   AgentLayer() { layered_costmap_ = nullptr; }
 
@@ -70,7 +73,7 @@ class AgentLayer : public costmap_2d::Layer {
    * @param max_i Maximum index in the i-direction defining the region to update.
    * @param max_j Maximum index in the j-direction defining the region to update.
    */
-  void updateCosts(costmap_2d::Costmap2D& master_grid, int min_i, int min_j, int max_i, int max_j) override = 0;
+  void updateCosts(nav2_costmap_2d::Costmap2D& master_grid, int min_i, int min_j, int max_i, int max_j) override = 0;
 
   /**
    * @brief Updates the bounds from agent positions
@@ -92,9 +95,9 @@ class AgentLayer : public costmap_2d::Layer {
     int track_id;  //!< Unique identifier for the agent
     int type;      //!< Type of the agent (e.g., human, robot)
     int state;     //!< State of the agent
-    std_msgs::Header header;
-    geometry_msgs::Pose pose;
-    geometry_msgs::Twist velocity;
+    std_msgs::msg::Header header;
+    geometry_msgs::msg::Pose pose;
+    geometry_msgs::msg::Twist velocity;
   };
 
   /**
@@ -102,22 +105,21 @@ class AgentLayer : public costmap_2d::Layer {
    * @param agents - Tracked agents data received from the topic
    * Updates the agents_ member variable with the received data.
    */
-  void agentsCB(const cohan_msgs::TrackedAgents& agents);
+  void agentsCB(const cohan_msgs::msg::TrackedAgents::SharedPtr agents);
 
   /**
    * @brief Callback for AgentsInfo to get the agent states
    * @param agents_info - Information about agents including their states
    * Updates the states_ member variable with the received data.
    */
-  void statesCB(const agent_path_prediction::AgentsInfo& agents_info);
+  void statesCB(const agent_path_prediction::msg::AgentsInfo::SharedPtr agents_info);
 
   /**
    * @brief Callback for shutdown service. Handles the shutdown of the agent layer.
    * @param req Service request containing the shutdown flag
    * @param res Service response indicating success or failure
-   * @return True if shutdown successful, false otherwise
    */
-  bool shutdownCB(std_srvs::SetBoolRequest& req, std_srvs::SetBoolResponse& res);
+  void shutdownCB(const std::shared_ptr<std_srvs::srv::SetBool::Request> req, std::shared_ptr<std_srvs::srv::SetBool::Response> res);
 
   /**
    * @brief Computes a 1D Gaussian value
@@ -175,14 +177,15 @@ class AgentLayer : public costmap_2d::Layer {
     return A / std::max(d, 1.0) * Guassian1D(xx, 0.0, 1.0, varx) * Guassian1D(yy, 0.0, 1.0, vary);
   }
 
-  ros::Subscriber agents_sub_, agents_states_sub_;  //!< ros subscribers
-  ros::ServiceServer stopmap_srv_;                  //!< ros services
-  cohan_msgs::TrackedAgents agents_;                //!< agents
-  std::map<int, int> states_;                       //!< agent_states
-  std::vector<AgentPoseVel> transformed_agents_;    //!< transformed agents
-  boost::recursive_mutex lock_;
+  rclcpp::Subscription<cohan_msgs::msg::TrackedAgents>::SharedPtr agents_sub_;  //!< ros subscribers
+  rclcpp::Subscription<agent_path_prediction::msg::AgentsInfo>::SharedPtr agents_states_sub_;
+  rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr stopmap_srv_;  //!< ros services
+  cohan_msgs::msg::TrackedAgents agents_;                           //!< agents
+  std::map<int, int> states_;                                       //!< agent_states
+  std::vector<AgentPoseVel> transformed_agents_;                    //!< transformed agents
+  std::recursive_mutex lock_;
   bool first_time_, reset_, shutdown_;                                   //!< flags
-  ros::Time last_time_;                                                  //!< time checks
+  rclcpp::Time last_time_;                                               //!< time checks
   double last_min_x_, last_min_y_, last_max_x_, last_max_y_;             //!< min and max x and y values for the costmap
   double radius_, amplitude_, covar_, cutoff_;                           //!< parameters for the gaussian
   double robot_radius_, agent_radius_;                                   //!< radii for the agents
