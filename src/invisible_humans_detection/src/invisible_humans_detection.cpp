@@ -43,8 +43,10 @@ void InvHumansDetection::initialize() {
   // Timer for corner detection
   timer_ = this->create_wall_timer(std::chrono::milliseconds(20), std::bind(&InvHumansDetection::detectOccludedCorners, this));
 
-  // Initialize Subscribers
-  map_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>("/map", 1, std::bind(&InvHumansDetection::mapCB, this, std::placeholders::_1));
+  // Initialize Subscribers with compatible QoS for map topic
+  auto map_qos = rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable();
+  map_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>("/map", map_qos, std::bind(&InvHumansDetection::mapCB, this, std::placeholders::_1));
+  RCLCPP_INFO(this->get_logger(), "Subscribed to /map topic, waiting for map data...");
 
   // Initialize Publishers
   scan_pub_ = this->create_publisher<sensor_msgs::msg::LaserScan>("~/map_scan", 1);
@@ -108,6 +110,7 @@ void InvHumansDetection::mapCB(const nav_msgs::msg::OccupancyGrid::SharedPtr gri
   resolution_ = map_.info.resolution;
   size_x_ = map_.info.width;
   size_y_ = map_.info.height;
+  RCLCPP_INFO(this->get_logger(), "Map received: %d x %d at res: %.3f", size_x_, size_y_, resolution_);
 }
 
 void InvHumansDetection::detectOccludedCorners() {
@@ -211,8 +214,8 @@ void InvHumansDetection::detectOccludedCorners() {
     ang += angle_increment;
   }
 
-  std::cout << "Detected corners 1: " << corner_set1.size() << std::endl;
-  std::cout << "Detected corners 2: " << corner_set2.size() << std::endl;
+  // std::cout << "Detected corners 1: " << corner_set1.size() << std::endl;
+  // std::cout << "Detected corners 2: " << corner_set2.size() << std::endl;
   // Locate the invisible humans using the detected corners
   locateInvHumans(corner_set1, corner_set2, dir, footprint_transform);
 }
