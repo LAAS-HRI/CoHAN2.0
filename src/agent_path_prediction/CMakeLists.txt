@@ -77,7 +77,13 @@ install(TARGETS agent_path_predict
   DESTINATION lib/${PROJECT_NAME}
 )
 
+# Install header files
+install(DIRECTORY include/
+  DESTINATION include/${PROJECT_NAME}
+)
+
 # Export dependencies
+ament_export_include_directories(include)
 ament_export_dependencies(
   rclcpp
   geometry_msgs

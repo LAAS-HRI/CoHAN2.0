@@ -25,6 +25,14 @@
 #ifndef UTILS_HPP_
 #define UTILS_HPP_
 #include <tf2/LinearMath/Vector3.h>
+//  TF2
+#include <tf2/convert.h>
+#include <tf2/time.h>
+#include <tf2/utils.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 /**
  * @brief Strips leading slash from frame ID if present

@@ -27,24 +27,25 @@
 #ifndef AGENT_PATH_PREDICTION_H_
 #define AGENT_PATH_PREDICTION_H_
 
-// Local and generic headers
-#include <agent_path_prediction/agents_class.hpp>
-#include <agent_path_prediction/predict_goal.hpp>
-#include <chrono>
-#include <functional>
-#include <memory>
-#include <ros2_helpers/parameters.hpp>
-#include <ros2_helpers/utils.hpp>
-#include <string>
-
 // ROS2 core
 #include <rclcpp/rclcpp.hpp>
+#include <ros2_helpers/parameters.hpp>
+#include <ros2_helpers/utils.hpp>
 
 //  TF2
+#include <tf2/convert.h>
 #include <tf2/time.h>
 #include <tf2/utils.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
+
+// Local and generic headers
+#include <agent_path_prediction/agent_path_prediction_config.hpp>
+#include <agent_path_prediction/predict_goal.hpp>
+#include <chrono>
+#include <functional>
+#include <memory>
+#include <string>
 
 // Messages
 #include <tf2/LinearMath/Quaternion.h>
@@ -54,7 +55,14 @@
 #include <agent_path_prediction/msg/agent_pose.hpp>
 #include <agent_path_prediction/msg/predicted_goal.hpp>
 #include <agent_path_prediction/msg/predicted_goals.hpp>
+#include <cohan_msgs/msg/agent_path_array.hpp>
+#include <cohan_msgs/msg/agent_trajectory.hpp>
+#include <cohan_msgs/msg/agent_trajectory_array.hpp>
+#include <cohan_msgs/msg/state_array.hpp>
+#include <cohan_msgs/msg/tracked_agents.hpp>
+#include <cohan_msgs/msg/tracked_segment_type.hpp>
 #include <geometry_msgs/msg/pose.hpp>
+#include <geometry_msgs/msg/pose2_d.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/twist_with_covariance.hpp>
 #include <nav_msgs/msg/path.hpp>
@@ -71,24 +79,15 @@
 #include <std_srvs/srv/set_bool.hpp>
 #include <std_srvs/srv/trigger.hpp>
 
+// Helepers (inlcude them at last)
+
 // Internal Parameters
 #define ANG_VEL_EPS 0.001
 #define MAX_AGENT_MARKERS 1000
 #define MIN_MARKER_LIFETIME 1.0
 #define MINIMUM_COVARIANCE_MARKERS 0.1
 #define RECALC_DIST 0.5
-#define DEFAULT_AGENT_PART cohan_msgs::msg::TrackedSegmentType::TORSO
 #define NODE_NAME "agent_path_prediction"
-
-// Reconfigurable Parameters
-#define EXTERNAL_PATHS_SUB_TOPIC "~/external_agent_paths"
-#define PREDICTED_GOAL_SUB_TOPIC "~/predicted_goal"
-#define AGENTS_SUB_TOPIC "/tracked_agents"
-#define GET_PLAN_SRV_NAME "/move_base/GlobalPlanner/make_plan"
-#define ROBOT_FRAME_ID "base_footprint"
-#define MAP_FRAME_ID "map"
-#define AGENT_DIST_BEHIND_ROBOT 0.5
-#define AGENT_ANGLE_BEHIND_ROBOT M_PI
 
 namespace agents {
 // Pattern 1 of ROS2 Nodes --> Inherit from rclcpp::Node (Good for Standalone nodes)
@@ -99,7 +98,7 @@ class AgentPathPrediction : public rclcpp::Node {
  public:
   /**
    * @brief  Constructor for AgentPathPrediction class */
-  AgentPathPrediction() : Node(NODE_NAME) {}
+  AgentPathPrediction() : Node(NODE_NAME), cfg_(std::make_shared<AgentPathPredictConfig>()) {}
 
   /**
    * @brief Default destructor for AgentPathPrediction class */
@@ -108,6 +107,9 @@ class AgentPathPrediction : public rclcpp::Node {
   /**
    * @brief Initializes the AgentPathPrediction node and sets up ROS communication */
   void initialize();
+
+  // ROS2 node and helpers
+  std::shared_ptr<AgentPathPredictConfig> cfg_;  //!< Configuration parameters for agent path prediction
 
  private:
   // Structs
@@ -240,102 +242,6 @@ class AgentPathPrediction : public rclcpp::Node {
    */
   static double checkdist(geometry_msgs::msg::Pose agent, geometry_msgs::msg::Pose robot) { return std::hypot(agent.position.x - robot.position.x, agent.position.y - robot.position.y); }
 
-  /**
-   * @brief Sets up parameter declarations and callback for parameter updates
-   */
-  void setupParameterCallback() {
-    // Declare parameters using the generic helper
-    param_helper_.declareStringParam("ns", "", "Namespace for multiple agents");
-    param_helper_.declareFloatParam("velobs_mul", 1.0, 0.001, 10.0, "Multiplier for agent velocities for velocity-obstacle calculation");
-    param_helper_.declareFloatParam("velobs_min_rad", 0.25, 0.0, 10.0, "Minimum radius for velocity-obstacle calculation");
-    param_helper_.declareFloatParam("velobs_max_rad", 0.75, 0.0, 10.0, "Maximum radius for velocity-obstacle calculation");
-    param_helper_.declareFloatParam("velobs_max_rad_time", 4.0, 0.0, 60.0, "Time for maximum radius for velocity-obstacle calculation");
-    param_helper_.declareBoolParam("velobs_use_ang", true, "Whether to use angular velocity for velocity-obstacle calculation");
-    param_helper_.declareBoolParam("publish_markers", true, "Whether to publish visualization markers for predicted agent poses");
-    param_helper_.declareStringParam("robot_frame_id", ROBOT_FRAME_ID, "Frame ID for the robot base");
-    param_helper_.declareStringParam("map_frame_id", MAP_FRAME_ID, "Frame ID for the map");
-    param_helper_.declareFloatParam("agent_dist_behind_robot", AGENT_DIST_BEHIND_ROBOT, 0.0, 10.0, "Distance behind the robot where agents should be positioned");
-    param_helper_.declareFloatParam("agent_angle_behind_robot", AGENT_ANGLE_BEHIND_ROBOT, -M_PI, M_PI, "Angle behind the robot where agents should be positioned (radians)");
-    param_helper_.declareStringParam("tracked_agents_sub_topic", AGENTS_SUB_TOPIC, "Topic name for subscribing to tracked agents");
-    param_helper_.declareStringParam("external_paths_sub_topic", EXTERNAL_PATHS_SUB_TOPIC, "Topic name for subscribing to external agent paths");
-    param_helper_.declareStringParam("predicted_goal_topic", PREDICTED_GOAL_SUB_TOPIC, "Topic name for subscribing to predicted goals");
-    param_helper_.declareStringParam("get_plan_srv_name", GET_PLAN_SRV_NAME, "Service name for path planning");
-    param_helper_.declareIntParam("default_agent_part", DEFAULT_AGENT_PART, 0, 10, "Default agent body part to track");
-
-    // Set up parameter change callback with custom validation
-    param_helper_.setupParameterCallback([this](const std::vector<rclcpp::Parameter>& params) -> bool {
-      // Custom parameter validation logic for this specific node
-      for (const auto& param : params) {
-        const std::string& name = param.get_name();
-
-        // Update internal variables when parameters change
-        if (name == "ns")
-          ns_ = param.as_string();
-        else if (name == "velobs_mul")
-          velobs_mul_ = param.as_double();
-        else if (name == "velobs_min_rad")
-          velobs_min_rad_ = param.as_double();
-        else if (name == "velobs_max_rad")
-          velobs_max_rad_ = param.as_double();
-        else if (name == "velobs_max_rad_time")
-          velobs_max_rad_time_ = param.as_double();
-        else if (name == "velobs_use_ang")
-          velobs_use_ang_ = param.as_bool();
-        else if (name == "publish_markers")
-          publish_markers_ = param.as_bool();
-        else if (name == "robot_frame_id")
-          robot_frame_id_ = param.as_string();
-        else if (name == "map_frame_id")
-          map_frame_id_ = param.as_string();
-        else if (name == "agent_dist_behind_robot")
-          agent_dist_behind_robot_ = param.as_double();
-        else if (name == "agent_angle_behind_robot")
-          agent_angle_behind_robot_ = param.as_double();
-        else if (name == "tracked_agents_sub_topic")
-          tracked_agents_sub_topic_ = param.as_string();
-        else if (name == "external_paths_sub_topic")
-          external_paths_sub_topic_ = param.as_string();
-        else if (name == "predicted_goal_topic")
-          predicted_goal_topic_ = param.as_string();
-        else if (name == "get_plan_srv_name")
-          get_plan_srv_name_ = param.as_string();
-        else if (name == "default_agent_part")
-          default_agent_part_ = param.as_int();
-      }
-      return true;
-    });
-
-    // Load initial parameter values
-    loadParameters();
-  }
-
-  /**
-   * @brief Loads and initializes all parameters from ROS2 parameter server
-   */
-  void loadParameters() {
-    // Get parameter values and store them in member variables
-    ns_ = param_helper_.getParam<std::string>("ns", "");
-    publish_markers_ = param_helper_.getParam<bool>("publish_markers", true);
-    robot_frame_id_ = param_helper_.getParam<std::string>("robot_frame_id", ROBOT_FRAME_ID);
-    map_frame_id_ = param_helper_.getParam<std::string>("map_frame_id", MAP_FRAME_ID);
-    agent_dist_behind_robot_ = param_helper_.getParam<double>("agent_dist_behind_robot", AGENT_DIST_BEHIND_ROBOT);
-    agent_angle_behind_robot_ = param_helper_.getParam<double>("agent_angle_behind_robot", AGENT_ANGLE_BEHIND_ROBOT);
-    tracked_agents_sub_topic_ = param_helper_.getParam<std::string>("tracked_agents_sub_topic", AGENTS_SUB_TOPIC);
-    external_paths_sub_topic_ = param_helper_.getParam<std::string>("external_paths_sub_topic", EXTERNAL_PATHS_SUB_TOPIC);
-    predicted_goal_topic_ = param_helper_.getParam<std::string>("predicted_goal_topic", PREDICTED_GOAL_SUB_TOPIC);
-    get_plan_srv_name_ = param_helper_.getParam<std::string>("get_plan_srv_name", GET_PLAN_SRV_NAME);
-    default_agent_part_ = param_helper_.getParam<int>("default_agent_part", DEFAULT_AGENT_PART);
-    velobs_mul_ = param_helper_.getParam<double>("velobs_mul", 1.0);
-    velobs_min_rad_ = param_helper_.getParam<double>("velobs_min_rad", 0.25);
-    velobs_max_rad_ = param_helper_.getParam<double>("velobs_max_rad", 0.75);
-    velobs_max_rad_time_ = param_helper_.getParam<double>("velobs_max_rad_time", 4.0);
-    velobs_use_ang_ = param_helper_.getParam<bool>("velobs_use_ang", true);
-  }
-
-  // ROS2 node and helpers
-  parameters::ParameterHelper param_helper_;  //!< Helper for managing parameters
-  std::string ns_;                            //!< Namespace for the node
-
   // ROS2 message handlers
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr predicted_agents_pub_;         //!< Publisher for predicted agent paths
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr front_pose_pub_;                    //!< Publisher for front pose information
@@ -364,16 +270,9 @@ class AgentPathPrediction : public rclcpp::Node {
   std::map<uint64_t, size_t> last_prune_indices_;                                 //!< Map storing last pruning indices for each agent
   std::map<uint64_t, int> last_markers_size_map_;                                 //!< Map storing last marker sizes for each agent
   visualization_msgs::msg::MarkerArray predicted_agents_markers_;                 //!< Visualization markers for predicted agent paths
-  std::string tracked_agents_sub_topic_, external_paths_sub_topic_, predict_service_name_, predicted_agents_markers_pub_topic_, get_plan_srv_name_,
-      predicted_goal_topic_;                                                   //!< ROS topic names for subscribers and publishers
-  std::string robot_frame_id_, map_frame_id_;                                  //!< Frame IDs for coordinate transformations
-  double velobs_mul_, velobs_min_rad_, velobs_max_rad_, velobs_max_rad_time_;  //!< Velocity obstacle parameters
-  double agent_dist_behind_robot_, agent_angle_behind_robot_;                  //!< Parameters for agents behind robot detection
-  bool velobs_use_ang_, check_path_;                                           //!< Flags for velocity obstacles and path checking
-  bool publish_markers_, showing_markers_,                                     //!< Flags for marker visualization
-      got_new_agent_paths_, got_external_goal_;                                //!< Flags for path updates
-  int default_agent_part_;                                                     //!< Default body part to track for agents
-  geometry_msgs::msg::Transform behind_pose_;                                  //!< Transform for behind pose calculation
+  bool check_path_;                                                               //!< Flag path checking
+  bool showing_markers_, got_new_agent_paths_, got_external_goal_;                //!< Flags for marker visualization and path updates
+  geometry_msgs::msg::Transform behind_pose_;                                     //!< Transform for behind pose calculation
 };
 }  // namespace agents
 

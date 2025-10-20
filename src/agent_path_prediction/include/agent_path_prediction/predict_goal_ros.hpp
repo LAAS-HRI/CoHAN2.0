@@ -26,6 +26,7 @@
 
 #include <yaml-cpp/yaml.h>
 
+#include <agent_path_prediction/agent_path_prediction_config.hpp>
 #include <agent_path_prediction/msg/predicted_goal.hpp>
 #include <agent_path_prediction/msg/predicted_goals.hpp>
 #include <agent_path_prediction/predict_goal.hpp>
@@ -49,10 +50,9 @@ class PredictGoalROS {
   /**
    *@brief Default constructor, initializes ROS communication
    */
-  explicit PredictGoalROS(std::shared_ptr<rclcpp::Node> node) : node_(node) {
-    param_helper_.initialize(node);
-    // Initialize parameters
-    setupParameterCallback();
+  explicit PredictGoalROS(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<AgentPathPredictConfig> cfg) {
+    node_ = node;
+    cfg_ = cfg;
   }
 
   /**
@@ -79,42 +79,6 @@ class PredictGoalROS {
    */
   bool loadGoals(const std::string& file);
 
-  // Internal Methods
-  /**
-   * @brief Loads and initializes all parameters from ROS2 parameter server
-   */
-  void setupParameterCallback() {
-    // Declare parameters using the generic helper
-    param_helper_.declareStringParam("goals_file", "", "Path to the goals YAML file");
-
-    // Set up parameter change callback with custom validation
-    param_helper_.setupParameterCallback([this](const std::vector<rclcpp::Parameter>& params) -> bool {
-      // Custom parameter validation logic for this specific node
-      for (const auto& param : params) {
-        const std::string& name = param.get_name();
-
-        // Update internal variables when parameters change
-        if (name == "goals_file") {
-          goals_file_ = param.as_string();
-        }
-      }
-      return true;
-    });
-
-    // Load initial parameter values
-    loadParameters();
-  }
-
-  /**
-   * @brief Loads and initializes all parameters from ROS2 parameter server
-   */
-  void loadParameters() {
-    // Get parameter values and store them in member variables
-    ns_ = node_->get_parameter("ns").as_string();
-    tracked_agents_sub_topic_ = node_->get_parameter("tracked_agents_sub_topic").as_string();
-    goals_file_ = node_->get_parameter("goals_file").as_string();
-  }
-
   // ROS
   rclcpp::Subscription<cohan_msgs::msg::TrackedAgents>::SharedPtr agents_sub_;         //!< Subscriber for tracked agents updates
   rclcpp::Publisher<agent_path_prediction::msg::PredictedGoals>::SharedPtr goal_pub_;  //!< Publisher for predicted goals
@@ -129,10 +93,7 @@ class PredictGoalROS {
   // Configuration
   int window_size_;  //!< Size of the sliding window used for predictions
 
-  std::string tracked_agents_sub_topic_, predicted_goal_topic_;  //!< ROS topic names for subscribers and publishers
-  std::string ns_;                                               //!< Namespace for the node
-  std::string goals_file_;                                       //!< File name of the env goals
-  std::shared_ptr<rclcpp::Node> node_;                           //!< ROS2 node handle
-  parameters::ParameterHelper param_helper_;                     //!< Helper for managing parameters
+  std::shared_ptr<rclcpp::Node> node_;           //!< ROS2 node handle
+  std::shared_ptr<AgentPathPredictConfig> cfg_;  //!< Configuration parameters for agent path prediction
 };
 }  // namespace agents
