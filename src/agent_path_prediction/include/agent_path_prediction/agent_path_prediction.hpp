@@ -52,22 +52,14 @@
 #include <tf2/LinearMath/Transform.h>
 #include <tf2/LinearMath/Vector3.h>
 
-#include <agent_path_prediction/msg/agent_pose.hpp>
-#include <agent_path_prediction/msg/predicted_goal.hpp>
 #include <agent_path_prediction/msg/predicted_goals.hpp>
 #include <cohan_msgs/msg/agent_path_array.hpp>
-#include <cohan_msgs/msg/agent_trajectory.hpp>
-#include <cohan_msgs/msg/agent_trajectory_array.hpp>
-#include <cohan_msgs/msg/state_array.hpp>
 #include <cohan_msgs/msg/tracked_agents.hpp>
 #include <cohan_msgs/msg/tracked_segment_type.hpp>
 #include <geometry_msgs/msg/pose.hpp>
-#include <geometry_msgs/msg/pose2_d.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/twist_with_covariance.hpp>
 #include <nav_msgs/msg/path.hpp>
-#include <rcl_interfaces/msg/floating_point_range.hpp>
-#include <rcl_interfaces/msg/parameter_descriptor.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
@@ -78,8 +70,6 @@
 #include <std_srvs/srv/empty.hpp>
 #include <std_srvs/srv/set_bool.hpp>
 #include <std_srvs/srv/trigger.hpp>
-
-// Helepers (inlcude them at last)
 
 // Internal Parameters
 #define ANG_VEL_EPS 0.001
@@ -273,6 +263,8 @@ class AgentPathPrediction : public rclcpp::Node {
   bool check_path_;                                                               //!< Flag path checking
   bool showing_markers_, got_new_agent_paths_, got_external_goal_;                //!< Flags for marker visualization and path updates
   geometry_msgs::msg::Transform behind_pose_;                                     //!< Transform for behind pose calculation
+  std::string tracked_agents_sub_topic_;                                          //!< Topic name for tracked agents subscription
+  std::string get_plan_srv_name_;                                                 //!< Service name for get plan service
 };
 }  // namespace agents
 

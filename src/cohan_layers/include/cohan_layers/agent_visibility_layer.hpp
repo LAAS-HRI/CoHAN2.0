@@ -66,36 +66,15 @@ class AgentVisibilityLayer : public AgentLayer {
   void matchSize() override {}
 
   /**
-   * @brief Reset the layer
+   * @brief Reset the layer - clears all costs
    */
-  void reset() override {}
+  void reset() override { current_ = false; }
 
   /**
    * @brief Check if this layer can be cleared
    * @return true if clearable
    */
-  bool isClearable() override { return false; }
-
- protected:
-  /**
-   * @brief Declares parameters and sets up dynamic reconfiguration
-   */
-  void declareParameters();
-
-  /**
-   * @brief Loads initial parameter values
-   */
-  void loadParameters();
-
-  /**
-   * @brief Callback for dynamic parameter changes
-   */
-  rcl_interfaces::msg::SetParametersResult dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters);
-
-  /**
-   * @brief Callback handle for dynamic parameters
-   */
-  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr dyn_params_handler_;
+  bool isClearable() override { return true; }
 };
 }  // namespace cohan_layers
 

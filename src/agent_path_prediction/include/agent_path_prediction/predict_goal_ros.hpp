@@ -48,7 +48,9 @@ namespace agents {
 class PredictGoalROS {
  public:
   /**
-   *@brief Default constructor, initializes ROS communication
+   *@brief Default constructor, sets node handle and config pointer
+   * @param node Shared pointer to the ROS2 node
+   * @param cfg Shared pointer to the AgentPathPredictConfig
    */
   explicit PredictGoalROS(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<AgentPathPredictConfig> cfg) {
     node_ = node;
@@ -95,5 +97,6 @@ class PredictGoalROS {
 
   std::shared_ptr<rclcpp::Node> node_;           //!< ROS2 node handle
   std::shared_ptr<AgentPathPredictConfig> cfg_;  //!< Configuration parameters for agent path prediction
+  std::string tracked_agents_sub_topic_;         //!< Topic name for subscribing to tracked agents
 };
 }  // namespace agents

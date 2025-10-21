@@ -38,6 +38,7 @@ void AgentPathPrediction::initialize() {
   tf_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
   // Initialize Parameter Server
+  cfg_ = std::make_shared<AgentPathPredictConfig>();
   cfg_->initialize(shared_from_this());
   cfg_->setupParameterCallback();
 
@@ -53,19 +54,21 @@ void AgentPathPrediction::initialize() {
       this->create_service<std_srvs::srv::Empty>("~/reset_prediction_services", std::bind(&AgentPathPrediction::resetPredictionSrvs, this, std::placeholders::_1, std::placeholders::_2));
 
   // Need to remap subscriber properly
-  if (!cfg_->ns_.empty()) {
-    cfg_->tracked_agents_sub_topic_ = "/" + cfg_->ns_ + cfg_->tracked_agents_sub_topic_;
-    cfg_->get_plan_srv_name_ = "/" + cfg_->ns_ + cfg_->get_plan_srv_name_;
+  tracked_agents_sub_topic_ = cfg_->tracked_agents_sub_topic;
+  get_plan_srv_name_ = cfg_->get_plan_srv_name;
+  if (!cfg_->ns.empty()) {
+    tracked_agents_sub_topic_ = "/" + cfg_->ns + tracked_agents_sub_topic_;
+    get_plan_srv_name_ = "/" + cfg_->ns + get_plan_srv_name_;
   }
 
   // Initialize Subscribers
-  tracked_agents_sub_ = this->create_subscription<cohan_msgs::msg::TrackedAgents>(cfg_->tracked_agents_sub_topic_, 1, std::bind(&AgentPathPrediction::trackedAgentsCB, this, std::placeholders::_1));
-  external_paths_sub_ = this->create_subscription<cohan_msgs::msg::AgentPathArray>(cfg_->external_paths_sub_topic_, 1, std::bind(&AgentPathPrediction::externalPathsCB, this, std::placeholders::_1));
+  tracked_agents_sub_ = this->create_subscription<cohan_msgs::msg::TrackedAgents>(tracked_agents_sub_topic_, 1, std::bind(&AgentPathPrediction::trackedAgentsCB, this, std::placeholders::_1));
+  external_paths_sub_ = this->create_subscription<cohan_msgs::msg::AgentPathArray>(cfg_->external_paths_sub_topic, 1, std::bind(&AgentPathPrediction::externalPathsCB, this, std::placeholders::_1));
   predicted_goal_sub_ =
-      this->create_subscription<agent_path_prediction::msg::PredictedGoals>(cfg_->predicted_goal_topic_, 1, std::bind(&AgentPathPrediction::predictedGoalCB, this, std::placeholders::_1));
+      this->create_subscription<agent_path_prediction::msg::PredictedGoals>(cfg_->predicted_goal_topic, 1, std::bind(&AgentPathPrediction::predictedGoalCB, this, std::placeholders::_1));
 
   // Initialize Service clients
-  get_plan_client_ = this->create_client<nav_msgs::srv::GetPlan>(cfg_->get_plan_srv_name_);
+  get_plan_client_ = this->create_client<nav_msgs::srv::GetPlan>(get_plan_srv_name_);
 
   // Initialize properties
   showing_markers_ = false;
@@ -102,7 +105,7 @@ void AgentPathPrediction::predictAgents(const std::shared_ptr<agent_path_predict
       RCLCPP_ERROR(this->get_logger(), "%s: unknown prediction type %d", NODE_NAME, req->type);
       return;
   }
-  if (cfg_->publish_markers_) {
+  if (cfg_->publish_markers) {
     // create new markers
     predicted_agents_markers_.markers.clear();
 
@@ -194,7 +197,7 @@ void AgentPathPrediction::predictAgentsVelObs(const std::shared_ptr<agent_path_p
       continue;
     }
     for (auto segment : agent.segments) {
-      if (segment.type == cfg_->default_agent_part_) {
+      if (segment.type == cfg_->default_agent_part) {
         // calculate future agent poses based on current velocity
         agent_path_prediction::msg::PredictedPoses predicted_poses;
         predicted_poses.id = agent.track_id;
@@ -215,9 +218,9 @@ void AgentPathPrediction::predictAgentsVelObs(const std::shared_ptr<agent_path_p
           rclcpp::Time predicted_time = track_time_rclcpp + rclcpp::Duration::from_seconds(predict_time);
           predicted_pose.header.stamp = predicted_time;
 
-          if (cfg_->velobs_use_ang_ && std::abs(segment.twist.twist.angular.z) > ANG_VEL_EPS) {
+          if (cfg_->velobs_use_ang && std::abs(segment.twist.twist.angular.z) > ANG_VEL_EPS) {
             // velocity multiplier is only applied to linear velocities
-            double r = (std::hypot(linear_vel[0], linear_vel[1]) * cfg_->velobs_mul_) / segment.twist.twist.angular.z;
+            double r = (std::hypot(linear_vel[0], linear_vel[1]) * cfg_->velobs_mul) / segment.twist.twist.angular.z;
             double theta = segment.twist.twist.angular.z * predict_time;
             double crd = r * 2 * std::sin(theta / 2);
             double alpha = std::atan2(linear_vel[1], linear_vel[0]) + (theta / 2);
@@ -227,15 +230,15 @@ void AgentPathPrediction::predictAgentsVelObs(const std::shared_ptr<agent_path_p
             q.setRPY(0, 0, tf2::getYaw(segment.pose.pose.orientation) + theta);
             predicted_pose.pose.pose.orientation = tf2::toMsg(q);
           } else {
-            predicted_pose.pose.pose.position.x = segment.pose.pose.position.x + linear_vel[0] * predict_time * cfg_->velobs_mul_;
-            predicted_pose.pose.pose.position.y = segment.pose.pose.position.y + linear_vel[1] * predict_time * cfg_->velobs_mul_;
+            predicted_pose.pose.pose.position.x = segment.pose.pose.position.x + linear_vel[0] * predict_time * cfg_->velobs_mul;
+            predicted_pose.pose.pose.position.y = segment.pose.pose.position.y + linear_vel[1] * predict_time * cfg_->velobs_mul;
             predicted_pose.pose.pose.orientation = segment.pose.pose.orientation;
           }
 
           // not using velocity multiplier for covariance matrix
           double xy_vel = hypot(linear_vel[0] * predict_time, linear_vel[1] * predict_time);
           // storing only x, y covariance in diagonal matrix
-          predicted_pose.pose.covariance[0] = cfg_->velobs_min_rad_ + (cfg_->velobs_max_rad_ - cfg_->velobs_min_rad_) * (predict_time / cfg_->velobs_max_rad_time_) * xy_vel;
+          predicted_pose.pose.covariance[0] = cfg_->velobs_min_rad + (cfg_->velobs_max_rad - cfg_->velobs_min_rad) * (predict_time / cfg_->velobs_max_rad_time) * xy_vel;
           predicted_pose.pose.covariance[7] = predicted_pose.pose.covariance[0];
           predicted_poses.poses.push_back(predicted_pose);
 
@@ -271,7 +274,7 @@ void AgentPathPrediction::predictAgentsExternal(const std::shared_ptr<agent_path
       for (auto& agent : tracked_agents.agents) {
         if (agent.track_id == path.id) {
           for (auto& segment : agent.segments) {
-            if (segment.type == cfg_->default_agent_part_) {
+            if (segment.type == cfg_->default_agent_part) {
               agent_path_vel.start_vel = segment.twist;
               break;
             }
@@ -297,13 +300,13 @@ void AgentPathPrediction::predictAgentsExternal(const std::shared_ptr<agent_path
     geometry_msgs::msg::TransformStamped agent_to_map_tf;
     bool transforms_found = false;
     try {
-      robot_to_map_tf = tf_buffer_->lookupTransform(cfg_->map_frame_id_, cfg_->robot_frame_id_, tf2::TimePointZero, tf2::durationFromSec(0.5));
+      robot_to_map_tf = tf_buffer_->lookupTransform(cfg_->map_frame_id, cfg_->robot_frame_id, tf2::TimePointZero, tf2::durationFromSec(0.5));
 
       std::string agents_frame = "map";
       if (!tracked_agents.header.frame_id.empty()) {
         agents_frame = tracked_agents.header.frame_id;
       }
-      agent_to_map_tf = tf_buffer_->lookupTransform(cfg_->map_frame_id_, agents_frame, tf2::TimePointZero, tf2::durationFromSec(0.5));
+      agent_to_map_tf = tf_buffer_->lookupTransform(cfg_->map_frame_id, agents_frame, tf2::TimePointZero, tf2::durationFromSec(0.5));
 
       transforms_found = true;
     } catch (tf2::LookupException& ex) {
@@ -339,7 +342,7 @@ void AgentPathPrediction::predictAgentsExternal(const std::shared_ptr<agent_path
 
       // get agent pose
       for (auto& segment : agent.segments) {
-        if (segment.type == cfg_->default_agent_part_) {
+        if (segment.type == cfg_->default_agent_part) {
           geometry_msgs::msg::PoseStamped agent_start;
           agent_start.header.frame_id = tracked_agents.header.frame_id;
           agent_start.header.stamp = now;
@@ -399,12 +402,12 @@ void AgentPathPrediction::predictAgentsExternal(const std::shared_ptr<agent_path
           auto start_path = setFixedPath(start_pose_stamped);
           //(tf2)
 
-          get_plan_srv->start.header.frame_id = cfg_->map_frame_id_;
+          get_plan_srv->start.header.frame_id = cfg_->map_frame_id;
           get_plan_srv->start.header.stamp = now;
           get_plan_srv->start.pose = start_path.poses.back().pose;
           front_pose_pub_->publish(start_path.poses.back());
 
-          get_plan_srv->goal.header.frame_id = cfg_->map_frame_id_;
+          get_plan_srv->goal.header.frame_id = cfg_->map_frame_id;
           get_plan_srv->goal.header.stamp = now;
           get_plan_srv->goal.pose.position.x = ext_goal[agent_start_pose_vel.id].pose.position.x;
           get_plan_srv->goal.pose.position.y = ext_goal[agent_start_pose_vel.id].pose.position.y;
@@ -430,11 +433,11 @@ void AgentPathPrediction::predictAgentsExternal(const std::shared_ptr<agent_path
                 RCLCPP_WARN(this->get_logger(), "Got empty path for agent, start or goal position is probably invalid");
               }
             } else {
-              RCLCPP_WARN(this->get_logger(), "Failed to call %s service", cfg_->get_plan_srv_name_.c_str());
+              RCLCPP_WARN(this->get_logger(), "Failed to call %s service", cfg_->get_plan_srv_name.c_str());
             }
           } else {
-            RCLCPP_WARN(this->get_logger(), "%s service does not exist, re-trying to subscribe", cfg_->get_plan_srv_name_.c_str());
-            get_plan_client_ = this->create_client<nav_msgs::srv::GetPlan>(cfg_->get_plan_srv_name_);
+            RCLCPP_WARN(this->get_logger(), "%s service does not exist, re-trying to subscribe", cfg_->get_plan_srv_name.c_str());
+            get_plan_client_ = this->create_client<nav_msgs::srv::GetPlan>(cfg_->get_plan_srv_name);
           }
         }
       }
@@ -458,12 +461,12 @@ void AgentPathPrediction::predictAgentsBehind(const std::shared_ptr<agent_path_p
   geometry_msgs::msg::TransformStamped agent_to_map_tf;
   bool transforms_found = false;
   try {
-    robot_to_map_tf = tf_buffer_->lookupTransform(cfg_->map_frame_id_, cfg_->robot_frame_id_, tf2::TimePointZero, tf2::durationFromSec(0.5));
+    robot_to_map_tf = tf_buffer_->lookupTransform(cfg_->map_frame_id, cfg_->robot_frame_id, tf2::TimePointZero, tf2::durationFromSec(0.5));
     std::string agents_frame = "map";
     if (!tracked_agents.header.frame_id.empty()) {
       agents_frame = tracked_agents.header.frame_id;
     }
-    agent_to_map_tf = tf_buffer_->lookupTransform(cfg_->map_frame_id_, agents_frame, tf2::TimePointZero, tf2::durationFromSec(0.5));
+    agent_to_map_tf = tf_buffer_->lookupTransform(cfg_->map_frame_id, agents_frame, tf2::TimePointZero, tf2::durationFromSec(0.5));
 
     transforms_found = true;
   } catch (tf2::LookupException& ex) {
@@ -493,7 +496,7 @@ void AgentPathPrediction::predictAgentsBehind(const std::shared_ptr<agent_path_p
 
     // get agent pose
     for (auto& segment : agent.segments) {
-      if (segment.type == cfg_->default_agent_part_) {
+      if (segment.type == cfg_->default_agent_part) {
         geometry_msgs::msg::PoseStamped agent_start;
         agent_start.header.frame_id = tracked_agents.header.frame_id;
         agent_start.header.stamp = now;
@@ -552,7 +555,7 @@ void AgentPathPrediction::predictAgentsBehind(const std::shared_ptr<agent_path_p
         auto start_path = setFixedPath(start_pose_stamped);
         //(tf2)
 
-        get_plan_srv->start.header.frame_id = cfg_->map_frame_id_;
+        get_plan_srv->start.header.frame_id = cfg_->map_frame_id;
         get_plan_srv->start.header.stamp = now;
         get_plan_srv->start.pose = start_path.poses.back().pose;
         front_pose_pub_->publish(start_path.poses.back());
@@ -561,14 +564,14 @@ void AgentPathPrediction::predictAgentsBehind(const std::shared_ptr<agent_path_p
         if (!check_path_) {
           check_path_ = true;
           tf2::Transform behind_tr;
-          behind_tr.setOrigin(tf2::Vector3(-cfg_->agent_dist_behind_robot_, 0.0, 0.0));
-          behind_tr.setRotation(tf2::Quaternion(0, 0, sin(cfg_->agent_angle_behind_robot_ / 2.0), cos(cfg_->agent_angle_behind_robot_ / 2.0)));
+          behind_tr.setOrigin(tf2::Vector3(-cfg_->agent_dist_behind_robot, 0.0, 0.0));
+          behind_tr.setRotation(tf2::Quaternion(0, 0, sin(cfg_->agent_angle_behind_robot / 2.0), cos(cfg_->agent_angle_behind_robot / 2.0)));
           tf2::Transform robot_to_map_transform;
           tf2::fromMsg(robot_to_map_tf.transform, robot_to_map_transform);
           behind_tr = robot_to_map_transform * behind_tr;
           behind_pose_ = tf2::toMsg(behind_tr);
         }
-        get_plan_srv->goal.header.frame_id = cfg_->map_frame_id_;
+        get_plan_srv->goal.header.frame_id = cfg_->map_frame_id;
         get_plan_srv->goal.header.stamp = now;
         get_plan_srv->goal.pose.position.x = behind_pose_.translation.x;
         get_plan_srv->goal.pose.position.y = behind_pose_.translation.y;
@@ -595,11 +598,11 @@ void AgentPathPrediction::predictAgentsBehind(const std::shared_ptr<agent_path_p
               RCLCPP_WARN(this->get_logger(), "Got empty path for agent, start or goal position is probably invalid");
             }
           } else {
-            RCLCPP_WARN(this->get_logger(), "Failed to call %s service", cfg_->get_plan_srv_name_.c_str());
+            RCLCPP_WARN(this->get_logger(), "Failed to call %s service", cfg_->get_plan_srv_name.c_str());
           }
         } else {
-          RCLCPP_WARN(this->get_logger(), "%s service does not exist, re-trying to subscribe", cfg_->get_plan_srv_name_.c_str());
-          get_plan_client_ = this->create_client<nav_msgs::srv::GetPlan>(cfg_->get_plan_srv_name_);
+          RCLCPP_WARN(this->get_logger(), "%s service does not exist, re-trying to subscribe", cfg_->get_plan_srv_name.c_str());
+          get_plan_client_ = this->create_client<nav_msgs::srv::GetPlan>(cfg_->get_plan_srv_name);
         }
       }
     }
@@ -623,12 +626,12 @@ void AgentPathPrediction::predictAgentsGoal(const std::shared_ptr<agent_path_pre
   geometry_msgs::msg::TransformStamped agent_to_map_tf;
   bool transforms_found = false;
   try {
-    robot_to_map_tf = tf_buffer_->lookupTransform(cfg_->map_frame_id_, cfg_->robot_frame_id_, tf2::TimePointZero, tf2::durationFromSec(0.5));
+    robot_to_map_tf = tf_buffer_->lookupTransform(cfg_->map_frame_id, cfg_->robot_frame_id, tf2::TimePointZero, tf2::durationFromSec(0.5));
     std::string agents_frame = "map";
     if (!tracked_agents.header.frame_id.empty()) {
       agents_frame = tracked_agents.header.frame_id;
     }
-    agent_to_map_tf = tf_buffer_->lookupTransform(cfg_->map_frame_id_, agents_frame, tf2::TimePointZero, tf2::durationFromSec(0.5));
+    agent_to_map_tf = tf_buffer_->lookupTransform(cfg_->map_frame_id, agents_frame, tf2::TimePointZero, tf2::durationFromSec(0.5));
 
     transforms_found = true;
   } catch (tf2::LookupException& ex) {
@@ -659,7 +662,7 @@ void AgentPathPrediction::predictAgentsGoal(const std::shared_ptr<agent_path_pre
 
     // get agent pose
     for (auto& segment : agent.segments) {
-      if (segment.type == cfg_->default_agent_part_) {
+      if (segment.type == cfg_->default_agent_part) {
         geometry_msgs::msg::PoseStamped agent_start;
         agent_start.header.frame_id = tracked_agents.header.frame_id;
         agent_start.header.stamp = now;
@@ -720,12 +723,12 @@ void AgentPathPrediction::predictAgentsGoal(const std::shared_ptr<agent_path_pre
         auto start_path = setFixedPath(start_pose_stamped);
         //(tf2)
 
-        get_plan_srv->start.header.frame_id = cfg_->map_frame_id_;
+        get_plan_srv->start.header.frame_id = cfg_->map_frame_id;
         get_plan_srv->start.header.stamp = now;
         get_plan_srv->start.pose = start_path.poses.back().pose;
         front_pose_pub_->publish(start_path.poses.back());
 
-        get_plan_srv->goal.header.frame_id = cfg_->map_frame_id_;
+        get_plan_srv->goal.header.frame_id = cfg_->map_frame_id;
         get_plan_srv->goal.header.stamp = now;
         get_plan_srv->goal.pose = predicted_goals[agent_start_pose_vel.id];
 
@@ -748,11 +751,11 @@ void AgentPathPrediction::predictAgentsGoal(const std::shared_ptr<agent_path_pre
               RCLCPP_WARN(this->get_logger(), "Got empty path for agent, start or goal position is probably invalid");
             }
           } else {
-            RCLCPP_WARN(this->get_logger(), "Failed to call %s service", cfg_->get_plan_srv_name_.c_str());
+            RCLCPP_WARN(this->get_logger(), "Failed to call %s service", cfg_->get_plan_srv_name.c_str());
           }
         } else {
-          RCLCPP_WARN(this->get_logger(), "%s service does not exist, re-trying to subscribe", cfg_->get_plan_srv_name_.c_str());
-          get_plan_client_ = this->create_client<nav_msgs::srv::GetPlan>(cfg_->get_plan_srv_name_);
+          RCLCPP_WARN(this->get_logger(), "%s service does not exist, re-trying to subscribe", cfg_->get_plan_srv_name.c_str());
+          get_plan_client_ = this->create_client<nav_msgs::srv::GetPlan>(cfg_->get_plan_srv_name);
         }
       }
     }
@@ -935,7 +938,7 @@ bool AgentPathPrediction::transformPoseTwist(const cohan_msgs::msg::TrackedAgent
   for (const auto& agent : tracked_agents.agents) {
     if (agent.track_id == agent_id) {
       for (const auto& segment : agent.segments) {
-        if (segment.type == cfg_->default_agent_part_) {
+        if (segment.type == cfg_->default_agent_part) {
           geometry_msgs::msg::PoseStamped pose_ut;
           pose_ut.header.stamp = tracked_agents.header.stamp;
           pose_ut.header.frame_id = tracked_agents.header.frame_id;

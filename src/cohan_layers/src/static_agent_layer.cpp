@@ -39,105 +39,24 @@ void StaticAgentLayer::onInitialize() {
   if (!node) {
     throw std::runtime_error("Failed to lock node");
   }
-
-  declareParameters();
-  loadParameters();
-
-  // Add callback for dynamic parameters
-  dyn_params_handler_ = node->add_on_set_parameters_callback(std::bind(&StaticAgentLayer::dynamicParametersCallback, this, std::placeholders::_1));
-}
-
-void StaticAgentLayer::declareParameters() {
-  auto node = node_.lock();
-  if (!node) {
-    throw std::runtime_error("Failed to lock node");
-  }
-
-  // Declare parameters with descriptions and ranges
-  rcl_interfaces::msg::ParameterDescriptor descriptor;
-  rcl_interfaces::msg::FloatingPointRange range;
-
-  // robot_radius
-  descriptor.description = "Radius of the robot";
-  range.from_value = 0.0;
-  range.to_value = 2.0;
-  range.step = 0.01;
-  descriptor.floating_point_range = {range};
-  declareParameter("robot_radius", rclcpp::ParameterValue(0.47));
-
-  // agent_radius
-  descriptor.description = "Radius of the agent";
-  descriptor.floating_point_range = {range};
-  declareParameter("agent_radius", rclcpp::ParameterValue(0.30));
-
-  // amplitude
-  descriptor.description = "Amplitude of the Gaussian";
-  range.from_value = 0.0;
-  range.to_value = 255.0;
-  descriptor.floating_point_range = {range};
-  declareParameter("amplitude", rclcpp::ParameterValue(255.0));
-
-  // radius
-  descriptor.description = "Radius of the effect";
-  range.from_value = 0.0;
-  range.to_value = 10.0;
-  descriptor.floating_point_range = {range};
-  declareParameter("radius", rclcpp::ParameterValue(2.0));
-}
-
-void StaticAgentLayer::loadParameters() {
-  // Get parameter values and store them in member variables
-  auto node = node_.lock();
-  if (!node) {
-    throw std::runtime_error("Failed to lock node");
-  }
-
-  node->get_parameter(name_ + ".robot_radius", robot_radius_);
-  node->get_parameter(name_ + ".agent_radius", agent_radius_);
-  node->get_parameter(name_ + ".amplitude", amplitude_);
-  node->get_parameter(name_ + ".radius", radius_);
-}
-
-rcl_interfaces::msg::SetParametersResult StaticAgentLayer::dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters) {
-  rcl_interfaces::msg::SetParametersResult result;
-  result.successful = true;
-
-  for (auto parameter : parameters) {
-    const auto& param_type = parameter.get_type();
-    const auto& param_name = parameter.get_name();
-
-    if (param_type == rclcpp::ParameterType::PARAMETER_DOUBLE) {
-      if (param_name == name_ + ".amplitude") {
-        amplitude_ = parameter.as_double();
-      } else if (param_name == name_ + ".radius") {
-        radius_ = parameter.as_double();
-      } else if (param_name == name_ + ".robot_radius") {
-        robot_radius_ = parameter.as_double();
-      } else if (param_name == name_ + ".agent_radius") {
-        agent_radius_ = parameter.as_double();
-      }
-    } else if (param_type == rclcpp::ParameterType::PARAMETER_BOOL) {
-      if (param_name == name_ + ".enabled") {
-        enabled_ = parameter.as_bool();
-      }
-    }
-  }
-
-  return result;
 }
 
 void StaticAgentLayer::updateBoundsFromAgents(double* min_x, double* min_y, double* max_x, double* max_y) {
   for (const auto& agent : transformed_agents_) {
-    *min_x = std::min(*min_x, agent.pose.position.x - radius_);
-    *min_y = std::min(*min_y, agent.pose.position.y - radius_);
-    *max_x = std::max(*max_x, agent.pose.position.x + radius_);
-    *max_y = std::max(*max_y, agent.pose.position.y + radius_);
+    *min_x = std::min(*min_x, agent.pose.position.x - cfg_->radius);
+    *min_y = std::min(*min_y, agent.pose.position.y - cfg_->radius);
+    *max_x = std::max(*max_x, agent.pose.position.x + cfg_->radius);
+    *max_y = std::max(*max_y, agent.pose.position.y + cfg_->radius);
   }
 }
 
 void StaticAgentLayer::updateCosts(nav2_costmap_2d::Costmap2D& /*master_grid*/, int min_i, int min_j, int max_i, int max_j) {
   std::lock_guard<std::recursive_mutex> lock(lock_);
-  if (!enabled_) {
+
+  nav2_costmap_2d::Costmap2D* costmap = layered_costmap_->getCostmap();
+
+  if (!cfg_->enabled) {
+    reset();
     return;
   }
 
@@ -145,7 +64,6 @@ void StaticAgentLayer::updateCosts(nav2_costmap_2d::Costmap2D& /*master_grid*/, 
     return;
   }
 
-  nav2_costmap_2d::Costmap2D* costmap = layered_costmap_->getCostmap();
   double res = costmap->getResolution();
 
   for (uint i = 0; i < transformed_agents_.size(); i++) {
@@ -156,13 +74,13 @@ void StaticAgentLayer::updateCosts(nav2_costmap_2d::Costmap2D& /*master_grid*/, 
     // Check the condition to switch the radius
     bool is_human_still = states_.empty() ? (type == 1) : ((state != 2) && (type == 1));
 
-    unsigned int width = std::max(1, static_cast<int>((2 * radius_) / res));
-    unsigned int height = std::max(1, static_cast<int>((2 * radius_) / res));
+    unsigned int width = std::max(1, static_cast<int>((2 * cfg_->radius) / res));
+    unsigned int height = std::max(1, static_cast<int>((2 * cfg_->radius) / res));
 
     double cx = agent.pose.position.x;
     double cy = agent.pose.position.y;
-    double ox = cx - radius_;
-    double oy = cy - radius_;
+    double ox = cx - cfg_->radius;
+    double oy = cy - cfg_->radius;
 
     int mx;
     int my;
@@ -209,15 +127,15 @@ void StaticAgentLayer::updateCosts(nav2_costmap_2d::Costmap2D& /*master_grid*/, 
     if (is_human_still) {
       bx = ox + (res / 2);
       by = oy + (res / 2);
-      var = radius_;
+      var = cfg_->radius;
       if (state > 2) {
-        rad = agent_radius_;
+        rad = cfg_->agent_radius;
       }
     }
 
     else {
       if (type == 1) {
-        rad = agent_radius_;
+        rad = cfg_->agent_radius;
       } else {
         rad = robot_radius_;
       }
@@ -234,10 +152,10 @@ void StaticAgentLayer::updateCosts(nav2_costmap_2d::Costmap2D& /*master_grid*/, 
           double x = bx + (i * res);
           double y = by + (j * res);
           double val;
-          val = Gaussian2D(x, y, cx, cy, amplitude_, var, var);
-          double rad = sqrt(-2 * var * log(val / amplitude_));
+          val = Gaussian2D(x, y, cx, cy, cfg_->amplitude, var, var);
+          double rad = sqrt(-2 * var * log(val / cfg_->amplitude));
 
-          if (rad > radius_) {
+          if (rad > cfg_->radius) {
             continue;
           }
           auto cvalue = static_cast<unsigned char>(val);

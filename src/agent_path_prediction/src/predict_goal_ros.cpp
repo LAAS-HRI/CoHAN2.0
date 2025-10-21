@@ -29,22 +29,23 @@
 namespace agents {
 
 void PredictGoalROS::initialize() {
-  if (cfg_->goals_file_.empty()) {
+  if (cfg_->goals_file.empty()) {
     RCLCPP_ERROR(node_->get_logger(), "Please provide a valid file path for goals files!");
   }
 
   goal_pub_ = node_->create_publisher<agent_path_prediction::msg::PredictedGoals>("~/predicted_goal", 2);
 
   // Need to remap tracked agents subscriber properly
-  if (!cfg_->ns_.empty()) {
-    cfg_->tracked_agents_sub_topic_ = "/" + cfg_->ns_ + cfg_->tracked_agents_sub_topic_;
+  tracked_agents_sub_topic_ = cfg_->tracked_agents_sub_topic;
+  if (!cfg_->ns.empty()) {
+    tracked_agents_sub_topic_ = "/" + cfg_->ns + cfg_->tracked_agents_sub_topic;
   }
 
   // Initialize Subscribers
-  agents_sub_ = node_->create_subscription<cohan_msgs::msg::TrackedAgents>(cfg_->tracked_agents_sub_topic_, 1, std::bind(&PredictGoalROS::trackedAgentsCB, this, std::placeholders::_1));
+  agents_sub_ = node_->create_subscription<cohan_msgs::msg::TrackedAgents>(tracked_agents_sub_topic_, 1, std::bind(&PredictGoalROS::trackedAgentsCB, this, std::placeholders::_1));
 
   // Load goals file
-  loadGoals(cfg_->goals_file_);
+  loadGoals(cfg_->goals_file);
   predictor_.initialize(goals_, window_size_);
   RCLCPP_INFO(node_->get_logger(), "Goal prediction intialized!");
 }

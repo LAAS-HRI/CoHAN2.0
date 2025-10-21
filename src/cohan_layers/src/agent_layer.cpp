@@ -44,18 +44,20 @@ void AgentLayer::onInitialize() {
     throw std::runtime_error("Failed to lock node");
   }
 
-  declareParameter("enabled", rclcpp::ParameterValue(true));
-  node->get_parameter(name_ + "." + "enabled", enabled_);
+  // Common parameters for all agent layers
+  cfg_ = std::make_shared<AgentLayerConfig>();
+  cfg_->initialize(node, name_);
+  cfg_->setupParameterCallback();
 
-  // Get the namespace from the parameter server
-  ns_ = node->declare_parameter(name_ + ".ns", "");
+  // Get the robot radius costmap parameters
+  robot_radius_ = node->get_parameter("robot_radius").as_double();
 
   // Map the subscriptions properly
   tracked_agents_sub_topic_ = std::string(TRACKED_AGENTS_SUB);
   agents_states_sub_topic_ = std::string(AGENTS_STATES_SUB);
-  if (!ns_.empty()) {
-    tracked_agents_sub_topic_ = "/" + ns_ + tracked_agents_sub_topic_;
-    agents_states_sub_topic_ = "/" + ns_ + agents_states_sub_topic_;
+  if (!cfg_->ns.empty()) {
+    tracked_agents_sub_topic_ = "/" + cfg_->ns + tracked_agents_sub_topic_;
+    agents_states_sub_topic_ = "/" + cfg_->ns + agents_states_sub_topic_;
   }
 
   agents_sub_ = node->create_subscription<cohan_msgs::msg::TrackedAgents>(tracked_agents_sub_topic_, 1, std::bind(&AgentLayer::agentsCB, this, std::placeholders::_1));

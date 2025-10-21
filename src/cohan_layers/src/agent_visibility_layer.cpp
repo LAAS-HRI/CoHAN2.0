@@ -40,87 +40,23 @@ void AgentVisibilityLayer::onInitialize() {
   if (!node) {
     throw std::runtime_error("Failed to lock node");
   }
-
-  declareParameters();
-  loadParameters();
-
-  // Add callback for dynamic parameters
-  dyn_params_handler_ = node->add_on_set_parameters_callback(std::bind(&AgentVisibilityLayer::dynamicParametersCallback, this, std::placeholders::_1));
-}
-
-void AgentVisibilityLayer::declareParameters() {
-  auto node = node_.lock();
-  if (!node) {
-    throw std::runtime_error("Failed to lock node");
-  }
-
-  // Declare parameters with descriptions and ranges
-  rcl_interfaces::msg::ParameterDescriptor descriptor;
-  rcl_interfaces::msg::FloatingPointRange range;
-
-  // amplitude
-  descriptor.description = "Amplitude of the Gaussian";
-  range.from_value = 0.0;
-  range.to_value = 255.0;
-  range.step = 0.01;
-  descriptor.floating_point_range = {range};
-  declareParameter("amplitude", rclcpp::ParameterValue(255.0));
-
-  // radius
-  descriptor.description = "Radius of the effect";
-  range.from_value = 0.0;
-  range.to_value = 10.0;
-  descriptor.floating_point_range = {range};
-  declareParameter("radius", rclcpp::ParameterValue(2.0));
-}
-
-void AgentVisibilityLayer::loadParameters() {
-  // Get parameter values and store them in member variables
-  auto node = node_.lock();
-  if (!node) {
-    throw std::runtime_error("Failed to lock node");
-  }
-
-  node->get_parameter(name_ + ".amplitude", amplitude_);
-  node->get_parameter(name_ + ".radius", radius_);
-}
-
-rcl_interfaces::msg::SetParametersResult AgentVisibilityLayer::dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters) {
-  rcl_interfaces::msg::SetParametersResult result;
-  result.successful = true;
-
-  for (auto parameter : parameters) {
-    const auto& param_type = parameter.get_type();
-    const auto& param_name = parameter.get_name();
-
-    if (param_type == rclcpp::ParameterType::PARAMETER_DOUBLE) {
-      if (param_name == name_ + ".amplitude") {
-        amplitude_ = parameter.as_double();
-      } else if (param_name == name_ + ".radius") {
-        radius_ = parameter.as_double();
-      }
-    } else if (param_type == rclcpp::ParameterType::PARAMETER_BOOL) {
-      if (param_name == name_ + ".enabled") {
-        enabled_ = parameter.as_bool();
-      }
-    }
-  }
-
-  return result;
 }
 
 void AgentVisibilityLayer::updateBoundsFromAgents(double* min_x, double* min_y, double* max_x, double* max_y) {
   for (const auto& agent : transformed_agents_) {
-    *min_x = std::min(*min_x, agent.pose.position.x - radius_);
-    *min_y = std::min(*min_y, agent.pose.position.y - radius_);
-    *max_x = std::max(*max_x, agent.pose.position.x + radius_);
-    *max_y = std::max(*max_y, agent.pose.position.y + radius_);
+    *min_x = std::min(*min_x, agent.pose.position.x - cfg_->radius);
+    *min_y = std::min(*min_y, agent.pose.position.y - cfg_->radius);
+    *max_x = std::max(*max_x, agent.pose.position.x + cfg_->radius);
+    *max_y = std::max(*max_y, agent.pose.position.y + cfg_->radius);
   }
 }
 
 void AgentVisibilityLayer::updateCosts(nav2_costmap_2d::Costmap2D& /*master_grid*/, int min_i, int min_j, int max_i, int max_j) {
   std::lock_guard<std::recursive_mutex> lock(lock_);
-  if (!enabled_) {
+
+  nav2_costmap_2d::Costmap2D* costmap = layered_costmap_->getCostmap();
+  if (!cfg_->enabled) {
+    reset();
     return;
   }
 
@@ -128,7 +64,6 @@ void AgentVisibilityLayer::updateCosts(nav2_costmap_2d::Costmap2D& /*master_grid
     return;
   }
 
-  nav2_costmap_2d::Costmap2D* costmap = layered_costmap_->getCostmap();
   double res = costmap->getResolution();
 
   for (uint i = 0; i < transformed_agents_.size(); i++) {
@@ -144,13 +79,13 @@ void AgentVisibilityLayer::updateCosts(nav2_costmap_2d::Costmap2D& /*master_grid
           continue;
         }
       }
-      unsigned int width = std::max(1, static_cast<int>((2 * radius_) / res));
-      unsigned int height = std::max(1, static_cast<int>((2 * radius_) / res));
+      unsigned int width = std::max(1, static_cast<int>((2 * cfg_->radius) / res));
+      unsigned int height = std::max(1, static_cast<int>((2 * cfg_->radius) / res));
 
       double cx = agent.pose.position.x;
       double cy = agent.pose.position.y;
-      double ox = cx - radius_;
-      double oy = cy - radius_;
+      double ox = cx - cfg_->radius;
+      double oy = cy - cfg_->radius;
 
       int mx;
       int my;
@@ -191,7 +126,7 @@ void AgentVisibilityLayer::updateCosts(nav2_costmap_2d::Costmap2D& /*master_grid
       double bx = ox + (res / 2);
       double by = oy + (res / 2);
 
-      double var = radius_;
+      double var = cfg_->radius;
 
       for (int i = start_x; i < end_x; i++) {
         for (int j = start_y; j < end_y; j++) {
@@ -204,12 +139,12 @@ void AgentVisibilityLayer::updateCosts(nav2_costmap_2d::Costmap2D& /*master_grid
           double y = by + (j * res);
           double val;
 
-          val = Gaussian2D(x, y, cx, cy, amplitude_, var, var);
+          val = Gaussian2D(x, y, cx, cy, cfg_->amplitude, var, var);
 
-          double rad = sqrt(-2 * var * log(val / amplitude_));
+          double rad = sqrt(-2 * var * log(val / cfg_->amplitude));
           Eigen::Vector2d pt_vec(x - cx, y - cy);
 
-          if (rad > radius_) {
+          if (rad > cfg_->radius) {
             continue;
           }
           auto cvalue = static_cast<unsigned char>(val);  // std::min(5*val,254.0);

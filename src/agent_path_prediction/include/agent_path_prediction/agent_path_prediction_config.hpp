@@ -87,39 +87,39 @@ class AgentPathPredictConfig {
 
         // Update internal variables when parameters change
         if (name == "ns")
-          ns_ = param.as_string();
+          ns = param.as_string();
         else if (name == "velobs_mul")
-          velobs_mul_ = param.as_double();
+          velobs_mul = param.as_double();
         else if (name == "velobs_min_rad")
-          velobs_min_rad_ = param.as_double();
+          velobs_min_rad = param.as_double();
         else if (name == "velobs_max_rad")
-          velobs_max_rad_ = param.as_double();
+          velobs_max_rad = param.as_double();
         else if (name == "velobs_max_rad_time")
-          velobs_max_rad_time_ = param.as_double();
+          velobs_max_rad_time = param.as_double();
         else if (name == "velobs_use_ang")
-          velobs_use_ang_ = param.as_bool();
+          velobs_use_ang = param.as_bool();
         else if (name == "publish_markers")
-          publish_markers_ = param.as_bool();
+          publish_markers = param.as_bool();
         else if (name == "robot_frame_id")
-          robot_frame_id_ = param.as_string();
+          robot_frame_id = param.as_string();
         else if (name == "map_frame_id")
-          map_frame_id_ = param.as_string();
+          map_frame_id = param.as_string();
         else if (name == "agent_dist_behind_robot")
-          agent_dist_behind_robot_ = param.as_double();
+          agent_dist_behind_robot = param.as_double();
         else if (name == "agent_angle_behind_robot")
-          agent_angle_behind_robot_ = param.as_double();
+          agent_angle_behind_robot = param.as_double();
         else if (name == "tracked_agents_sub_topic")
-          tracked_agents_sub_topic_ = param.as_string();
+          tracked_agents_sub_topic = param.as_string();
         else if (name == "external_paths_sub_topic")
-          external_paths_sub_topic_ = param.as_string();
+          external_paths_sub_topic = param.as_string();
         else if (name == "predicted_goal_topic")
-          predicted_goal_topic_ = param.as_string();
+          predicted_goal_topic = param.as_string();
         else if (name == "get_plan_srv_name")
-          get_plan_srv_name_ = param.as_string();
+          get_plan_srv_name = param.as_string();
         else if (name == "default_agent_part")
-          default_agent_part_ = param.as_int();
+          default_agent_part = param.as_int();
         else if (name == "goals_file") {
-          goals_file_ = param.as_string();
+          goals_file = param.as_string();
         }
       }
       return true;
@@ -129,62 +129,59 @@ class AgentPathPredictConfig {
     loadParameters();
   }
 
+  // ROS topic names
+  std::string tracked_agents_sub_topic;  //!< Topic for tracked agents subscription
+  std::string external_paths_sub_topic;  //!< Topic for external agent paths subscription
+  std::string get_plan_srv_name;         //!< Service name for getting navigation plan
+  std::string predicted_goal_topic;      //!< Topic for predicted goal subscription
+  std::string goals_file;                //!< File path for goals YAML file
+
+  // Frame IDs
+  std::string robot_frame_id;  //!< Frame ID for robot base coordinate frame
+  std::string map_frame_id;    //!< Frame ID for map coordinate frame
+
+  // Velocity obstacle parameters
+  double velobs_mul;           //!< Velocity obstacle multiplier
+  double velobs_min_rad;       //!< Minimum radius for velocity obstacles
+  double velobs_max_rad;       //!< Maximum radius for velocity obstacles
+  double velobs_max_rad_time;  //!< Maximum time for velocity obstacle radius calculation
+  bool velobs_use_ang;         //!< Flag to use angular velocity in velocity obstacles
+
+  // Agent detection parameters
+  double agent_dist_behind_robot;   //!< Distance behind robot for agent detection
+  double agent_angle_behind_robot;  //!< Angle behind robot for agent detection (radians)
+  int default_agent_part;           //!< Default body part to track for agents
+
+  // Visualization and configuration
+  bool publish_markers;  //!< Flag to enable marker visualization
+  std::string ns;        //!< Namespace for the node
+
  private:
   /**
    * @brief Loads and initializes all parameters from ROS2 parameter server
    */
   void loadParameters() {
     // Get parameter values and store them in member variables
-    ns_ = param_helper_.getParam<std::string>("ns", "");
-    publish_markers_ = param_helper_.getParam<bool>("publish_markers", true);
-    robot_frame_id_ = param_helper_.getParam<std::string>("robot_frame_id", ROBOT_FRAME_ID);
-    map_frame_id_ = param_helper_.getParam<std::string>("map_frame_id", MAP_FRAME_ID);
-    agent_dist_behind_robot_ = param_helper_.getParam<double>("agent_dist_behind_robot", AGENT_DIST_BEHIND_ROBOT);
-    agent_angle_behind_robot_ = param_helper_.getParam<double>("agent_angle_behind_robot", AGENT_ANGLE_BEHIND_ROBOT);
-    tracked_agents_sub_topic_ = param_helper_.getParam<std::string>("tracked_agents_sub_topic", AGENTS_SUB_TOPIC);
-    external_paths_sub_topic_ = param_helper_.getParam<std::string>("external_paths_sub_topic", EXTERNAL_PATHS_SUB_TOPIC);
-    predicted_goal_topic_ = param_helper_.getParam<std::string>("predicted_goal_topic", PREDICTED_GOAL_SUB_TOPIC);
-    get_plan_srv_name_ = param_helper_.getParam<std::string>("get_plan_srv_name", GET_PLAN_SRV_NAME);
-    default_agent_part_ = param_helper_.getParam<int>("default_agent_part", DEFAULT_AGENT_PART);
-    velobs_mul_ = param_helper_.getParam<double>("velobs_mul", 1.0);
-    velobs_min_rad_ = param_helper_.getParam<double>("velobs_min_rad", 0.25);
-    velobs_max_rad_ = param_helper_.getParam<double>("velobs_max_rad", 0.75);
-    velobs_max_rad_time_ = param_helper_.getParam<double>("velobs_max_rad_time", 4.0);
-    velobs_use_ang_ = param_helper_.getParam<bool>("velobs_use_ang", true);
-    goals_file_ = param_helper_.getParam<std::string>("goals_file", "");
+    ns = param_helper_.getParam<std::string>("ns", "");
+    publish_markers = param_helper_.getParam<bool>("publish_markers", true);
+    robot_frame_id = param_helper_.getParam<std::string>("robot_frame_id", ROBOT_FRAME_ID);
+    map_frame_id = param_helper_.getParam<std::string>("map_frame_id", MAP_FRAME_ID);
+    agent_dist_behind_robot = param_helper_.getParam<double>("agent_dist_behind_robot", AGENT_DIST_BEHIND_ROBOT);
+    agent_angle_behind_robot = param_helper_.getParam<double>("agent_angle_behind_robot", AGENT_ANGLE_BEHIND_ROBOT);
+    tracked_agents_sub_topic = param_helper_.getParam<std::string>("tracked_agents_sub_topic", AGENTS_SUB_TOPIC);
+    external_paths_sub_topic = param_helper_.getParam<std::string>("external_paths_sub_topic", EXTERNAL_PATHS_SUB_TOPIC);
+    predicted_goal_topic = param_helper_.getParam<std::string>("predicted_goal_topic", PREDICTED_GOAL_SUB_TOPIC);
+    get_plan_srv_name = param_helper_.getParam<std::string>("get_plan_srv_name", GET_PLAN_SRV_NAME);
+    default_agent_part = param_helper_.getParam<int>("default_agent_part", DEFAULT_AGENT_PART);
+    velobs_mul = param_helper_.getParam<double>("velobs_mul", 1.0);
+    velobs_min_rad = param_helper_.getParam<double>("velobs_min_rad", 0.25);
+    velobs_max_rad = param_helper_.getParam<double>("velobs_max_rad", 0.75);
+    velobs_max_rad_time = param_helper_.getParam<double>("velobs_max_rad_time", 4.0);
+    velobs_use_ang = param_helper_.getParam<bool>("velobs_use_ang", true);
+    goals_file = param_helper_.getParam<std::string>("goals_file", "");
   }
 
   parameters::ParameterHelper param_helper_;  //!< Parameter helper for managing ROS2 parameters
-
- public:
-  // ROS topic names
-  std::string tracked_agents_sub_topic_;            //!< Topic for tracked agents subscription
-  std::string external_paths_sub_topic_;            //!< Topic for external agent paths subscription
-  std::string predict_service_name_;                //!< Service name for prediction
-  std::string predicted_agents_markers_pub_topic_;  //!< Topic for predicted agent markers publication
-  std::string get_plan_srv_name_;                   //!< Service name for getting navigation plan
-  std::string predicted_goal_topic_;                //!< Topic for predicted goal subscription
-  std::string goals_file_;                          //!< File path for goals YAML file
-
-  // Frame IDs
-  std::string robot_frame_id_;  //!< Frame ID for robot base coordinate frame
-  std::string map_frame_id_;    //!< Frame ID for map coordinate frame
-
-  // Velocity obstacle parameters
-  double velobs_mul_;           //!< Velocity obstacle multiplier
-  double velobs_min_rad_;       //!< Minimum radius for velocity obstacles
-  double velobs_max_rad_;       //!< Maximum radius for velocity obstacles
-  double velobs_max_rad_time_;  //!< Maximum time for velocity obstacle radius calculation
-  bool velobs_use_ang_;         //!< Flag to use angular velocity in velocity obstacles
-
-  // Agent detection parameters
-  double agent_dist_behind_robot_;   //!< Distance behind robot for agent detection
-  double agent_angle_behind_robot_;  //!< Angle behind robot for agent detection (radians)
-  int default_agent_part_;           //!< Default body part to track for agents
-
-  // Visualization and configuration
-  bool publish_markers_;  //!< Flag to enable marker visualization
-  std::string ns_;        //!< Namespace for the node
 };
 }  // namespace agents
 

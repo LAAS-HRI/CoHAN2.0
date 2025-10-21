@@ -8,10 +8,12 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_lifecycle REQUIRED)
 find_package(std_msgs REQUIRED)
 
 # Export includes so dependent packages can find your headers
 ament_export_include_directories(include)
+ament_export_dependencies(rclcpp rclcpp_lifecycle std_msgs)
 
 install(
   DIRECTORY include/

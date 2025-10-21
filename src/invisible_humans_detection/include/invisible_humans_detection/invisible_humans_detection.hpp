@@ -43,11 +43,11 @@
 #include <geometry_msgs/msg/pose_array.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
+#include <invisible_humans_detection/invisible_humans_config.hpp>
 #include <map>
 #include <memory>
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <ros2_helpers/parameters.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
 #include <std_msgs/msg/int8.hpp>
 #include <string>
@@ -56,16 +56,6 @@
 #include <vector>
 #include <visualization_msgs/msg/marker.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
-
-// Default parameter values
-#define DEFAULT_SAMPLES 1081
-#define DEFAULT_RANGE_MIN 0.05
-#define DEFAULT_RANGE_MAX 7.0
-#define DEFAULT_ANGLE_MIN -2.358
-#define DEFAULT_ANGLE_MAX 2.358
-#define DEFAULT_SCAN_RESOLUTION 700
-#define DEFAULT_PUBLISH_SCAN true
-#define DEFAULT_HUMAN_RADIUS 0.31
 
 namespace invisible_humans_detection {
 using Coordinates = std::vector<std::pair<double, double>>;
@@ -94,70 +84,6 @@ class InvHumansDetection : public rclcpp::Node {
   ~InvHumansDetection() = default;
 
  private:
-  /**
-   * @brief Sets up parameter declarations and callback for parameter updates
-   */
-  void setupParameterCallback() {
-    // Declare parameters using the generic helper
-    param_helper_.declareStringParam("ns", "", "Namespace for multiple robots");
-    param_helper_.declareIntParam("samples", DEFAULT_SAMPLES, 1, 10000, "Number of samples for scanning");
-    param_helper_.declareFloatParam("range_min", DEFAULT_RANGE_MIN, 0.0, 10.0, "Minimum range for scanning");
-    param_helper_.declareFloatParam("range_max", DEFAULT_RANGE_MAX, 0.1, 100.0, "Maximum range for scanning");
-    param_helper_.declareFloatParam("angle_min", DEFAULT_ANGLE_MIN, -6.3, 6.3, "Minimum angle for scanning (radians)");
-    param_helper_.declareFloatParam("angle_max", DEFAULT_ANGLE_MAX, -6.3, 6.3, "Maximum angle for scanning (radians)");
-    param_helper_.declareIntParam("scan_resolution", DEFAULT_SCAN_RESOLUTION, 1, 10000, "Resolution of the scan");
-    param_helper_.declareBoolParam("publish_scan", DEFAULT_PUBLISH_SCAN, "Whether to publish scan data");
-    param_helper_.declareFloatParam("human_radius", DEFAULT_HUMAN_RADIUS, 0.1, 1.0, "Radius of a human for detection");
-
-    // Set up parameter change callback with custom validation
-    param_helper_.setupParameterCallback([this](const std::vector<rclcpp::Parameter>& params) -> bool {
-      // Custom parameter validation logic for this specific node
-      for (const auto& param : params) {
-        const std::string& name = param.get_name();
-
-        // Update internal variables when parameters change
-        if (name == "ns")
-          ns_ = param.as_string();
-        else if (name == "samples")
-          samples_ = param.as_int();
-        else if (name == "range_min")
-          range_min_ = param.as_double();
-        else if (name == "range_max")
-          range_max_ = param.as_double();
-        else if (name == "angle_min")
-          angle_min_ = param.as_double();
-        else if (name == "angle_max")
-          angle_max_ = param.as_double();
-        else if (name == "scan_resolution")
-          scan_resolution_ = param.as_int();
-        else if (name == "publish_scan")
-          publish_scan_ = param.as_bool();
-        else if (name == "human_radius")
-          human_radius_ = param.as_double();
-      }
-      return true;
-    });
-
-    // Load initial parameter values
-    loadParameters();
-  }
-
-  /**
-   * @brief Loads and initializes all parameters from ROS2 parameter server
-   */
-  void loadParameters() {
-    // Get parameter values and store them in member variables
-    ns_ = param_helper_.getParam<std::string>("ns", "");
-    samples_ = param_helper_.getParam<int>("samples", DEFAULT_SAMPLES);
-    range_min_ = param_helper_.getParam<double>("range_min", DEFAULT_RANGE_MIN);
-    range_max_ = param_helper_.getParam<double>("range_max", DEFAULT_RANGE_MAX);
-    angle_min_ = param_helper_.getParam<double>("angle_min", DEFAULT_ANGLE_MIN);
-    angle_max_ = param_helper_.getParam<double>("angle_max", DEFAULT_ANGLE_MAX);
-    scan_resolution_ = param_helper_.getParam<int>("scan_resolution", DEFAULT_SCAN_RESOLUTION);
-    publish_scan_ = param_helper_.getParam<bool>("publish_scan", DEFAULT_PUBLISH_SCAN);
-    human_radius_ = param_helper_.getParam<double>("human_radius", DEFAULT_HUMAN_RADIUS);
-  }
-
   /**
    * @brief Callback for map updates
    * @param grid The occupancy grid message containing map data
@@ -272,8 +198,8 @@ class InvHumansDetection : public rclcpp::Node {
     return points;
   }
 
-  // ROS2 helpers
-  parameters::ParameterHelper param_helper_;  //!< Helper for managing parameters
+  // ROS2 helpers and configuration
+  std::shared_ptr<InvisibleHumansConfig> cfg_;  //!< Configuration parameters
 
   rclcpp::TimerBase::SharedPtr timer_;                                                           //!< Timer for periodically updating detection
   geometry_msgs::msg::PoseStamped robot_pose_;                                                   //!< Current pose of the robot
@@ -289,21 +215,12 @@ class InvHumansDetection : public rclcpp::Node {
   nav_msgs::msg::OccupancyGrid map_;                                                             //!< Occupancy grid map data
   std::vector<float> ranges_;                                                                    //!< Ranges from sensor data
   std::vector<double> corner_ranges_;                                                            //!< Ranges for detected corners
-  int samples_;                                                                                  //!< Number of samples for scanning
-  int scan_resolution_;                                                                          //!< Resolution of the scan
   int size_x_;                                                                                   //!< Size of the map in the x-direction
   int size_y_;                                                                                   //!< Size of the map in the y-direction
   double origin_x_;                                                                              //!< Origin of the map in the x-direction
   double origin_y_;                                                                              //!< Origin of the map in the y-direction
   double resolution_;                                                                            //!< Resolution of the map
-  double angle_min_;                                                                             //!< Minimum angle for scanning
-  double angle_max_;                                                                             //!< Maximum angle for scanning
-  double range_min_;                                                                             //!< Minimum range for scanning
-  double range_max_;                                                                             //!< Maximum range for scanning
   sensor_msgs::msg::LaserScan scan_msg_;                                                         //!< Laser scan message
-  bool publish_scan_;                                                                            //!< Flag to indicate whether to publish scan data
-  double human_radius_;                                                                          //!< Radius of a human for detection
-  std::string ns_;                                                                               //!< Namespace of the node
   Eigen::Vector2d robot_vec_;                                                                    //!< Unit vector in the direction of the robot
 };
 

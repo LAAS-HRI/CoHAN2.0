@@ -30,6 +30,7 @@
 #include <rcl_interfaces/msg/integer_range.hpp>
 #include <rcl_interfaces/msg/parameter_descriptor.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <string>
 #include <vector>
 
@@ -47,7 +48,16 @@ class ParameterHelper {
    * @param node Shared pointer to the ROS2 node
    */
   explicit ParameterHelper() = default;
-  void initialize(rclcpp::Node::SharedPtr node) { node_ = node; }
+
+  void initialize(rclcpp::Node::SharedPtr node) {
+    node_ = node;
+    is_lifecycle_ = false;
+  }
+
+  void initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node) {
+    lifecycle_node_ = node;
+    is_lifecycle_ = true;
+  }
 
   /**
    * @brief Declare a floating point parameter with range validation
@@ -68,7 +78,11 @@ class ParameterHelper {
     range.step = step;
     descriptor.floating_point_range.push_back(range);
 
-    node_->declare_parameter(name, default_value, descriptor);
+    if (is_lifecycle_) {
+      lifecycle_node_->declare_parameter(name, default_value, descriptor);
+    } else {
+      node_->declare_parameter(name, default_value, descriptor);
+    }
   }
 
   /**
@@ -90,7 +104,11 @@ class ParameterHelper {
     range.step = step;
     descriptor.integer_range.push_back(range);
 
-    node_->declare_parameter(name, default_value, descriptor);
+    if (is_lifecycle_) {
+      lifecycle_node_->declare_parameter(name, default_value, descriptor);
+    } else {
+      node_->declare_parameter(name, default_value, descriptor);
+    }
   }
 
   /**
@@ -102,7 +120,12 @@ class ParameterHelper {
   void declareBoolParam(const std::string& name, bool default_value, const std::string& description) {
     rcl_interfaces::msg::ParameterDescriptor descriptor;
     descriptor.description = description;
-    node_->declare_parameter(name, default_value, descriptor);
+
+    if (is_lifecycle_) {
+      lifecycle_node_->declare_parameter(name, default_value, descriptor);
+    } else {
+      node_->declare_parameter(name, default_value, descriptor);
+    }
   }
 
   /**
@@ -114,7 +137,12 @@ class ParameterHelper {
   void declareStringParam(const std::string& name, const std::string& default_value, const std::string& description) {
     rcl_interfaces::msg::ParameterDescriptor descriptor;
     descriptor.description = description;
-    node_->declare_parameter(name, default_value, descriptor);
+
+    if (is_lifecycle_) {
+      lifecycle_node_->declare_parameter(name, default_value, descriptor);
+    } else {
+      node_->declare_parameter(name, default_value, descriptor);
+    }
   }
 
   /**
@@ -126,8 +154,10 @@ class ParameterHelper {
       rcl_interfaces::msg::SetParametersResult result;
       result.successful = true;
 
+      auto logger = is_lifecycle_ ? lifecycle_node_->get_logger() : node_->get_logger();
+
       for (const auto& param : params) {
-        RCLCPP_DEBUG(node_->get_logger(), "Parameter '%s' changed to: %s", param.get_name().c_str(), param.value_to_string().c_str());
+        RCLCPP_DEBUG(logger, "Parameter '%s' changed to: %s", param.get_name().c_str(), param.value_to_string().c_str());
       }
 
       // If custom callback is provided, use it for additional validation
@@ -141,9 +171,12 @@ class ParameterHelper {
       return result;
     };
 
-    // Store the callback handle to avoid unused result warning
-    auto callback_handle = node_->add_on_set_parameters_callback(callback);
-    (void)callback_handle;  // Mark as intentionally unused
+    // Store the callback handle to keep it alive
+    if (is_lifecycle_) {
+      param_callback_handle_lifecycle_ = lifecycle_node_->add_on_set_parameters_callback(callback);
+    } else {
+      param_callback_handle_ = node_->add_on_set_parameters_callback(callback);
+    }
   }
 
   /**
@@ -155,9 +188,14 @@ class ParameterHelper {
   template <typename T>
   T getParam(const std::string& name, const T& default_value) const {
     try {
-      return node_->get_parameter(name).get_value<T>();
+      if (is_lifecycle_) {
+        return lifecycle_node_->get_parameter(name).get_value<T>();
+      } else {
+        return node_->get_parameter(name).get_value<T>();
+      }
     } catch (const std::exception& e) {
-      RCLCPP_WARN(node_->get_logger(), "Failed to get parameter '%s': %s. Using default value.", name.c_str(), e.what());
+      auto logger = is_lifecycle_ ? lifecycle_node_->get_logger() : node_->get_logger();
+      RCLCPP_WARN(logger, "Failed to get parameter '%s': %s. Using default value.", name.c_str(), e.what());
       return default_value;
     }
   }
@@ -171,16 +209,26 @@ class ParameterHelper {
   template <typename T>
   bool setParam(const std::string& name, const T& value) {
     try {
-      auto result = node_->set_parameter(rclcpp::Parameter(name, value));
+      rcl_interfaces::msg::SetParametersResult result;
+      if (is_lifecycle_) {
+        result = lifecycle_node_->set_parameter(rclcpp::Parameter(name, value));
+      } else {
+        result = node_->set_parameter(rclcpp::Parameter(name, value));
+      }
       return result.successful;
     } catch (const std::exception& e) {
-      RCLCPP_ERROR(node_->get_logger(), "Failed to set parameter '%s': %s", name.c_str(), e.what());
+      auto logger = is_lifecycle_ ? lifecycle_node_->get_logger() : node_->get_logger();
+      RCLCPP_ERROR(logger, "Failed to set parameter '%s': %s", name.c_str(), e.what());
       return false;
     }
   }
 
  private:
   rclcpp::Node::SharedPtr node_;
+  rclcpp_lifecycle::LifecycleNode::SharedPtr lifecycle_node_;
+  bool is_lifecycle_ = false;
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
+  rclcpp_lifecycle::LifecycleNode::OnSetParametersCallbackHandle::SharedPtr param_callback_handle_lifecycle_;
 };
 
 }  // namespace parameters

@@ -29,6 +29,7 @@
 #include <tf2/utils.h>
 
 #include <agent_path_prediction/msg/agents_info.hpp>
+#include <cohan_layers/agent_layer_config.hpp>
 #include <cohan_msgs/msg/state_array.hpp>
 #include <cohan_msgs/msg/tracked_agents.hpp>
 #include <cohan_msgs/msg/tracked_segment_type.hpp>
@@ -184,12 +185,15 @@ class AgentLayer : public nav2_costmap_2d::Layer {
   std::map<int, int> states_;                                       //!< agent_states
   std::vector<AgentPoseVel> transformed_agents_;                    //!< transformed agents
   std::recursive_mutex lock_;
-  bool first_time_, reset_, shutdown_;                                   //!< flags
-  rclcpp::Time last_time_;                                               //!< time checks
-  double last_min_x_, last_min_y_, last_max_x_, last_max_y_;             //!< min and max x and y values for the costmap
+  bool first_time_, reset_, shutdown_;                        //!< flags
+  rclcpp::Time last_time_;                                    //!< time checks
+  double last_min_x_, last_min_y_, last_max_x_, last_max_y_;  //!< min and max x and y values for the costmap
+
+  // Check which ones can be removed later
   double radius_, amplitude_, covar_, cutoff_;                           //!< parameters for the gaussian
   double robot_radius_, agent_radius_;                                   //!< radii for the agents
   std::string ns_, tracked_agents_sub_topic_, agents_states_sub_topic_;  //!< ROS namespace and topic names
+  std::shared_ptr<AgentLayerConfig> cfg_;                                //!< configuration parameters
 };
 }  // namespace cohan_layers
 

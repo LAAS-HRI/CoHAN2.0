@@ -31,14 +31,13 @@
 namespace invisible_humans_detection {
 
 void InvHumansDetection::initialize() {
-  param_helper_.initialize(shared_from_this());
+  cfg_ = std::make_shared<InvisibleHumansConfig>();
+  cfg_->initialize(shared_from_this());
+  cfg_->setupParameterCallback();
 
   // Initialize TF2 buffer and listener
   tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
-
-  // Setup parameter callback
-  setupParameterCallback();
 
   // Timer for corner detection
   timer_ = this->create_wall_timer(std::chrono::milliseconds(20), std::bind(&InvHumansDetection::detectOccludedCorners, this));
@@ -57,11 +56,11 @@ void InvHumansDetection::initialize() {
   passage_detect_pub_ = this->create_publisher<cohan_msgs::msg::PassageType>("~/passage", 1);
 
   // Initialize laser scan msg
-  scan_msg_.angle_min = angle_min_;
-  scan_msg_.angle_max = angle_max_;
-  scan_msg_.angle_increment = (angle_max_ - angle_min_) / samples_;
-  scan_msg_.range_min = range_min_;
-  scan_msg_.range_max = range_max_;
+  scan_msg_.angle_min = cfg_->angle_min;
+  scan_msg_.angle_max = cfg_->angle_max;
+  scan_msg_.angle_increment = (cfg_->angle_max - cfg_->angle_min) / cfg_->samples;
+  scan_msg_.range_min = cfg_->range_min;
+  scan_msg_.range_max = cfg_->range_max;
 
   RCLCPP_INFO(this->get_logger(), "InvHumansDetection initialized");
 }
@@ -118,8 +117,8 @@ void InvHumansDetection::detectOccludedCorners() {
   geometry_msgs::msg::TransformStamped footprint_transform;
   try {
     std::string base_frame = FOOTPRINT_FRAME;
-    if (!ns_.empty()) {
-      base_frame = ns_ + "/" + FOOTPRINT_FRAME;
+    if (!cfg_->ns.empty()) {
+      base_frame = cfg_->ns + "/" + FOOTPRINT_FRAME;
     }
     scan_msg_.header.frame_id = base_frame;
     footprint_transform = tf_buffer_->lookupTransform(MAP_FRAME, base_frame, tf2::TimePointZero);
@@ -134,24 +133,24 @@ void InvHumansDetection::detectOccludedCorners() {
   robot_pose_.pose.orientation = footprint_transform.transform.rotation;
   auto theta = tf2::getYaw(robot_pose_.pose.orientation);
 
-  double ang = angle_min_;
-  double angle_increment = (angle_max_ - angle_min_) / samples_;
-  double increment = range_max_ / scan_resolution_;
+  double ang = cfg_->angle_min;
+  double angle_increment = (cfg_->angle_max - cfg_->angle_min) / cfg_->samples;
+  double increment = cfg_->range_max / cfg_->scan_resolution;
 
   robot_vec_ << cos(theta), sin(theta);
-  ranges_.resize(samples_, 0.0);
+  ranges_.resize(cfg_->samples, 0.0);
 
   // Scan the map using a fake laser at robot's position
-  for (int i = 0; i < samples_; i++) {
+  for (int i = 0; i < cfg_->samples; i++) {
     if (map_.data.empty()) {
       continue;
     }
-    double ray = range_min_;
+    double ray = cfg_->range_min;
     Eigen::Vector2d r_dir{(robot_vec_.x() * cos(ang)) - (robot_vec_.y() * sin(ang)), (+robot_vec_.x() * sin(ang)) + (robot_vec_.y() * cos(ang))};
 
-    ranges_[i] = range_max_;
+    ranges_[i] = cfg_->range_max;
 
-    for (int j = 0; j < scan_resolution_; j++) {
+    for (int j = 0; j < cfg_->scan_resolution; j++) {
       auto rx = robot_pose_.pose.position.x + (ray * r_dir.x());
       auto ry = robot_pose_.pose.position.y + (ray * r_dir.y());
       int mx;
@@ -172,7 +171,7 @@ void InvHumansDetection::detectOccludedCorners() {
   }
 
   // Publish this scan if requried
-  if (publish_scan_) {
+  if (cfg_->publish_scan) {
     scan_msg_.ranges = ranges_;
     scan_pub_->publish(scan_msg_);
   }
@@ -182,8 +181,8 @@ void InvHumansDetection::detectOccludedCorners() {
   Coordinates corner_set2;
   std::vector<char> dir;
 
-  ang = angle_min_;
-  for (int i = 0; i < samples_ - 1; i++) {
+  ang = cfg_->angle_min;
+  for (int i = 0; i < cfg_->samples - 1; i++) {
     if (fabs(ang) < M_PI / 2) {
       double current_x = ranges_[i] * cos(ang);
       double current_y = ranges_[i] * sin(ang);
@@ -224,7 +223,7 @@ bool InvHumansDetection::locateInvHumans(Coordinates c1, Coordinates c2, std::ve
   assert(c1.size() == c2.size());
   int n_corners = c1.size();
 
-  double angle_increment = (angle_max_ - angle_min_) / samples_;
+  double angle_increment = (cfg_->angle_max - cfg_->angle_min) / cfg_->samples;
 
   // Initialize the necessary
   std::vector<Point> centers;
@@ -273,21 +272,21 @@ bool InvHumansDetection::locateInvHumans(Coordinates c1, Coordinates c2, std::ve
       bool remove_detection = false;
 
       // Get the first point on \vec(X1X2)
-      double xt = x1 + (human_radius_ * ux);
-      double yt = y1 + (human_radius_ * uy);
+      double xt = x1 + (cfg_->human_radius * ux);
+      double yt = y1 + (cfg_->human_radius * uy);
 
       while (true) {
         // Find the point pt depeding on the direction of sequence of points
         if (direction[i] == 'p') {
-          pt = getRightPoint(Point(x1, y1), Point(x2, y2), Point(xt, yt), human_radius_);
+          pt = getRightPoint(Point(x1, y1), Point(x2, y2), Point(xt, yt), cfg_->human_radius);
         } else if (direction[i] == 'n') {
-          pt = getLeftPoint(Point(x1, y1), Point(x2, y2), Point(xt, yt), human_radius_);
+          pt = getLeftPoint(Point(x1, y1), Point(x2, y2), Point(xt, yt), cfg_->human_radius);
         }
 
         // Calculate angle \beta
         auto angle = atan2(pt.second, pt.first);
         // Get the index of \beta in the laser ranges
-        int ang_idx = static_cast<int>((angle - angle_min_) / angle_increment);
+        int ang_idx = static_cast<int>((angle - cfg_->angle_min) / angle_increment);
 
         // Check if the given point is inside or outside the polygon; continue if it is inside
         if (ranges_[ang_idx] > std::hypot(pt.first, pt.second)) {
@@ -304,7 +303,7 @@ bool InvHumansDetection::locateInvHumans(Coordinates c1, Coordinates c2, std::ve
 
         for (int ri = 0; ri < n_div; ri++) {
           // Get left and right points of pt
-          auto points = getTwoPoints(Point(xt, yt), pt, ((ri + 1) / n_div) * (1.5 * human_radius_));
+          auto points = getTwoPoints(Point(xt, yt), pt, ((ri + 1) / n_div) * (1.5 * cfg_->human_radius));
 
           // Now do the transforms here
           in_pose_l = tf2::Vector3(points[0].first, points[0].second, 0.0);
@@ -351,7 +350,7 @@ bool InvHumansDetection::locateInvHumans(Coordinates c1, Coordinates c2, std::ve
         yt = yt + alp * uy;
 
         // Condition to reduce false detections
-        if (std::hypot(xt - x1, yt - y1) >= std::hypot(x2 - x1, y2 - y1) || std::hypot(xt, yt) >= range_max_) {
+        if (std::hypot(xt - x1, yt - y1) >= std::hypot(x2 - x1, y2 - y1) || std::hypot(xt, yt) >= cfg_->range_max) {
           remove_detection = true;
           break;
         }
