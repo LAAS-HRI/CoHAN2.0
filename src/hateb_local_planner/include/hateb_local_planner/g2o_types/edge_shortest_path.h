@@ -44,7 +44,6 @@
 #ifndef EDGE_SHORTEST_PATH_H_
 #define EDGE_SHORTEST_PATH_H_
 
-#include <base_local_planner/BaseLocalPlannerConfig.h>
 #include <hateb_local_planner/g2o_types/base_teb_edges.h>
 #include <hateb_local_planner/g2o_types/vertex_pose.h>
 
@@ -69,12 +68,12 @@ class EdgeShortestPath : public BaseTebBinaryEdge<1, double, VertexPose, VertexP
    * @brief Actual cost function
    */
   void computeError() override {
-    ROS_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeShortestPath()");
+    HATEB_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeShortestPath()");
     const auto *pose1 = static_cast<const VertexPose *>(_vertices[0]);
     const auto *pose2 = static_cast<const VertexPose *>(_vertices[1]);
     _error[0] = (pose2->position() - pose1->position()).norm();
 
-    ROS_ASSERT_MSG(std::isfinite(_error[0]), "EdgeShortestPath::computeError() _error[0]=%f\n", _error[0]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[0]), "EdgeShortestPath::computeError() _error[0]=%f\n", _error[0]);
   }
 
  public:

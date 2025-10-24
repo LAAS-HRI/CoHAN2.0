@@ -80,7 +80,7 @@ class EdgeKinematicsDiffDrive : public BaseTebBinaryEdge<2, double, VertexPose, 
    * @brief Actual cost function
    */
   void computeError() override {
-    ROS_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeKinematicsDiffDrive()");
+    HATEB_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeKinematicsDiffDrive()");
     const auto* conf1 = static_cast<const VertexPose*>(_vertices[0]);
     const auto* conf2 = static_cast<const VertexPose*>(_vertices[1]);
 
@@ -94,7 +94,7 @@ class EdgeKinematicsDiffDrive : public BaseTebBinaryEdge<2, double, VertexPose, 
     _error[1] = penaltyBoundFromBelow(delta_s.dot(angle_vec), 0, 0);
     // epsilon=0, otherwise it pushes the first bandpoints away from start
 
-    ROS_ASSERT_MSG(std::isfinite(_error[0]) && std::isfinite(_error[1]), "EdgeKinematicsDiffDrive::computeError() _error[0]=%f _error[1]=%f\n", _error[0], _error[1]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[0]) && std::isfinite(_error[1]), "EdgeKinematicsDiffDrive::computeError() _error[0]=%f _error[1]=%f\n", _error[0], _error[1]);
   }
 
 #ifdef USE_ANALYTIC_JACOBI
@@ -103,7 +103,7 @@ class EdgeKinematicsDiffDrive : public BaseTebBinaryEdge<2, double, VertexPose, 
    * @brief Jacobi matrix of the cost function specified in computeError().
    */
   void linearizeOplus() override {
-    ROS_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeKinematicsDiffDrive()");
+    HATEB_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeKinematicsDiffDrive()");
     const auto* conf1 = static_cast<const VertexPose*>(_vertices[0]);
     const auto* conf2 = static_cast<const VertexPose*>(_vertices[1]);
 
@@ -178,7 +178,7 @@ class EdgeKinematicsCarlike : public BaseTebBinaryEdge<2, double, VertexPose, Ve
    * @brief Actual cost function
    */
   void computeError() override {
-    ROS_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeKinematicsCarlike()");
+    HATEB_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeKinematicsCarlike()");
     const auto* conf1 = static_cast<const VertexPose*>(_vertices[0]);
     const auto* conf2 = static_cast<const VertexPose*>(_vertices[1]);
 
@@ -197,7 +197,7 @@ class EdgeKinematicsCarlike : public BaseTebBinaryEdge<2, double, VertexPose, Ve
       _error[1] = penaltyBoundFromBelow(delta_s.norm() / fabs(angle_diff), cfg_->robot.min_turning_radius, 0.0);
     // This edge is not affected by the epsilon parameter, the user might add an exra margin to the min_turning_radius parameter.
 
-    ROS_ASSERT_MSG(std::isfinite(_error[0]) && std::isfinite(_error[1]), "EdgeKinematicsCarlike::computeError() _error[0]=%f _error[1]=%f\n", _error[0], _error[1]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[0]) && std::isfinite(_error[1]), "EdgeKinematicsCarlike::computeError() _error[0]=%f _error[1]=%f\n", _error[0], _error[1]);
   }
 
  public:

@@ -44,36 +44,17 @@ class AgentLayerConfig {
   }
 
   void setupParameterCallback() {
-    // Declare parameters using the generic helper with layer name prefix
-    param_helper_.declareBoolParam(layer_name_ + ".enabled", true, "Whether to apply this plugin or not");
-    param_helper_.declareFloatParam(layer_name_ + ".amplitude", 150., 0.0, 254.0, "Amplitude of adjustments at peak");
-    param_helper_.declareFloatParam(layer_name_ + ".radius", 1.5, 0.0, 10.0, "Radius of the Gaussian");
-    param_helper_.declareFloatParam(layer_name_ + ".agent_radius", 1.0, 0.0, 10.0, "Radius of the agent");
-    param_helper_.declareStringParam(layer_name_ + ".ns", "", "ROS namespace for topics and services");
+    // Bind all parameters with automatic updates
+    bindParameters();
 
-    // Set up parameter change callback with custom validation
+    // Set up parameter change callback - parameters are auto-updated by bindings
     param_helper_.setupParameterCallback([this](const std::vector<rclcpp::Parameter>& params) -> bool {
-      // Custom parameter validation logic for this specific node
-      for (const auto& param : params) {
-        const std::string& name = param.get_name();
-
-        // Update internal variables when parameters change
-        if (name == layer_name_ + ".enabled")
-          enabled = param.as_bool();
-        else if (name == layer_name_ + ".amplitude")
-          amplitude = param.as_double();
-        else if (name == layer_name_ + ".radius")
-          radius = param.as_double();
-        else if (name == layer_name_ + ".agent_radius")
-          agent_radius = param.as_double();
-        else if (name == layer_name_ + ".ns")
-          ns = param.as_string();
-      }
+      // Parameters are automatically updated by ParameterHelper bindings
       return true;
     });
 
     // Load initial parameter values
-    loadParameters();
+    param_helper_.loadBoundParameters();
   }
 
   bool enabled;         //!< Whether the plugin is enabled
@@ -84,15 +65,22 @@ class AgentLayerConfig {
 
  private:
   /**
-   * @brief Loads and initializes all parameters from ROS2 parameter server
+   * @brief Binds all configuration variables to parameters for auto-update
    */
-  void loadParameters() {
-    // Get parameter values and store them in member variables
-    enabled = param_helper_.getParam<bool>(layer_name_ + ".enabled", true);
-    amplitude = param_helper_.getParam<double>(layer_name_ + ".amplitude", 150.0);
-    radius = param_helper_.getParam<double>(layer_name_ + ".radius", 1.5);
-    agent_radius = param_helper_.getParam<double>(layer_name_ + ".agent_radius", 1.0);
-    ns = param_helper_.getParam<std::string>(layer_name_ + ".ns", "");
+  void bindParameters() {
+    // Set default values for parameters BEFORE binding
+    enabled = true;
+    amplitude = 150.0;
+    radius = 1.5;
+    agent_radius = 1.0;
+    ns = "";
+
+    // Bind parameters with layer name prefix for scoping
+    param_helper_.bindBoolParam(layer_name_ + ".enabled", enabled, "Whether to apply this plugin or not");
+    param_helper_.bindFloatParam(layer_name_ + ".amplitude", amplitude, 0.0, 254.0, "Amplitude of adjustments at peak");
+    param_helper_.bindFloatParam(layer_name_ + ".radius", radius, 0.0, 10.0, "Radius of the Gaussian");
+    param_helper_.bindFloatParam(layer_name_ + ".agent_radius", agent_radius, 0.0, 10.0, "Radius of the agent");
+    param_helper_.bindStringParam(layer_name_ + ".ns", ns, "ROS namespace for topics and services");
   }
 
   parameters::ParameterHelper param_helper_;  //!< Parameter helper for managing ROS2 parameters

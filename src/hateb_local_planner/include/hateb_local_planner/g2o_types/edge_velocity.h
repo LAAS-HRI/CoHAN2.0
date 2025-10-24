@@ -84,7 +84,7 @@ class EdgeVelocity : public BaseTebMultiEdge<2, double> {
    * @brief Actual cost function
    */
   void computeError() override {
-    ROS_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeVelocity()");
+    HATEB_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeVelocity()");
     const auto *conf1 = static_cast<const VertexPose *>(_vertices[0]);
     const auto *conf2 = static_cast<const VertexPose *>(_vertices[1]);
     const auto *delta_t = static_cast<const VertexTimeDiff *>(_vertices[2]);
@@ -114,7 +114,7 @@ class EdgeVelocity : public BaseTebMultiEdge<2, double> {
     _error[0] = penaltyBoundToInterval(vel, -cfg_->robot.max_vel_x_backwards, vel_linear, cfg_->optim.penalty_epsilon);
     _error[1] = penaltyBoundToInterval(omega, vel_theta, cfg_->optim.penalty_epsilon);
 
-    ROS_ASSERT_MSG(std::isfinite(_error[0]), "EdgeVelocity::computeError() _error[0]=%f _error[1]=%f\n", _error[0], _error[1]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[0]), "EdgeVelocity::computeError() _error[0]=%f _error[1]=%f\n", _error[0], _error[1]);
   }
 
   void setParameters(const HATebConfig &cfg, const BaseFootprintModel *robot_model, const int isMode) {
@@ -137,7 +137,7 @@ class EdgeVelocity : public BaseTebMultiEdge<2, double> {
    * @brief Jacobi matrix of the cost function specified in computeError().
    */
   void linearizeOplus() {
-    ROS_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeVelocity()");
+    HATEB_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeVelocity()");
     const VertexPose *conf1 = static_cast<const VertexPose *>(_vertices[0]);
     const VertexPose *conf2 = static_cast<const VertexPose *>(_vertices[1]);
     const VertexTimeDiff *deltaT = static_cast<const VertexTimeDiff *>(_vertices[2]);
@@ -229,7 +229,7 @@ class EdgeVelocityHolonomic : public BaseTebMultiEdge<3, double> {
    * @brief Actual cost function
    */
   void computeError() override {
-    ROS_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeVelocityHolonomic()");
+    HATEB_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeVelocityHolonomic()");
     const auto *conf1 = static_cast<const VertexPose *>(_vertices[0]);
     const auto *conf2 = static_cast<const VertexPose *>(_vertices[1]);
     const auto *delta_t = static_cast<const VertexTimeDiff *>(_vertices[2]);
@@ -261,7 +261,7 @@ class EdgeVelocityHolonomic : public BaseTebMultiEdge<3, double> {
     _error[1] = penaltyBoundToInterval(vy, vel_linear_y, 0.0);  // we do not apply the penalty epsilon here, since the velocity could be close to zero
     _error[2] = penaltyBoundToInterval(omega, vel_theta, cfg_->optim.penalty_epsilon);
 
-    ROS_ASSERT_MSG(std::isfinite(_error[0]) && std::isfinite(_error[1]) && std::isfinite(_error[2]), "EdgeVelocityHolonomic::computeError() _error[0]=%f _error[1]=%f _error[2]=%f\n", _error[0],
+    HATEB_ASSERT_MSG(std::isfinite(_error[0]) && std::isfinite(_error[1]) && std::isfinite(_error[2]), "EdgeVelocityHolonomic::computeError() _error[0]=%f _error[1]=%f _error[2]=%f\n", _error[0],
                    _error[1], _error[2]);
   }
 
@@ -297,7 +297,7 @@ class EdgeVelocityHolonomicAgent : public BaseTebMultiEdge<4, double> {
    * @brief Actual cost function
    */
   void computeError() override {
-    ROS_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeVelocityHolonomic()");
+    HATEB_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeVelocityHolonomic()");
     const auto *conf1 = static_cast<const VertexPose *>(_vertices[0]);
     const auto *conf2 = static_cast<const VertexPose *>(_vertices[1]);
     const auto *delta_t = static_cast<const VertexTimeDiff *>(_vertices[2]);
@@ -325,7 +325,7 @@ class EdgeVelocityHolonomicAgent : public BaseTebMultiEdge<4, double> {
       _error[3] = 0.0;
     }
 
-    ROS_ASSERT_MSG(std::isfinite(_error[0]) && std::isfinite(_error[1]) && std::isfinite(_error[2]), "EdgeVelocityHolonomicAgent::computeError() _error[0]=%f _error[1]=%f _error[2]=%f _error[3]=%f\n",
+    HATEB_ASSERT_MSG(std::isfinite(_error[0]) && std::isfinite(_error[1]) && std::isfinite(_error[2]), "EdgeVelocityHolonomicAgent::computeError() _error[0]=%f _error[1]=%f _error[2]=%f _error[3]=%f\n",
                    _error[0], _error[1], _error[2], _error[3]);
   }
 
@@ -349,7 +349,7 @@ class EdgeVelocityAgent : public BaseTebMultiEdge<3, double> {
   EdgeVelocityAgent() { this->resize(3); }
 
   void computeError() override {
-    ROS_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeVelocityAgent()");
+    HATEB_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeVelocityAgent()");
     const auto *conf1 = static_cast<const VertexPose *>(_vertices[0]);
     const auto *conf2 = static_cast<const VertexPose *>(_vertices[1]);
     const auto *delta_t = static_cast<const VertexTimeDiff *>(_vertices[2]);
@@ -378,7 +378,7 @@ class EdgeVelocityAgent : public BaseTebMultiEdge<3, double> {
       _error[2] = 0.0;
     }
 
-    ROS_ASSERT_MSG(std::isfinite(_error[0]), "EdgeVelocityAgent::computeError() _error[0]=%f _error[1]=%f\n", _error[0], _error[1]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[0]), "EdgeVelocityAgent::computeError() _error[0]=%f _error[1]=%f\n", _error[0], _error[1]);
   }
 
   void setParameters(const HATebConfig &cfg, const double nominal_vel) {

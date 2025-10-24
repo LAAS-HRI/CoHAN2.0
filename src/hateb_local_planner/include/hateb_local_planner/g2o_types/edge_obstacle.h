@@ -76,7 +76,7 @@ class EdgeObstacle : public BaseTebUnaryEdge<1, const Obstacle*, VertexPose> {
    * @brief Actual cost function
    */
   void computeError() override {
-    ROS_ASSERT_MSG(cfg_ && _measurement, "You must call setHATebConfig() on EdgeObstacle()");
+    HATEB_ASSERT_MSG(cfg_ && _measurement, "You must call setHATebConfig() on EdgeObstacle()");
     const auto* bandpt = static_cast<const VertexPose*>(_vertices[0]);
 
     double dist = 0;
@@ -102,7 +102,7 @@ class EdgeObstacle : public BaseTebUnaryEdge<1, const Obstacle*, VertexPose> {
       // _error[0] = penaltyBoundFromBelowExp(dist, cfg_->obstacles.min_obstacle_dist, cfg_->optim.penalty_epsilon,cfg_->obstacles.obstacle_cost_mult);
     }
 
-    ROS_ASSERT_MSG(std::isfinite(_error[0]), "EdgeObstacle::computeError() _error[0]=%f\n", _error[0]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[0]), "EdgeObstacle::computeError() _error[0]=%f\n", _error[0]);
   }
 
 #ifdef USE_ANALYTIC_JACOBI
@@ -112,7 +112,7 @@ class EdgeObstacle : public BaseTebUnaryEdge<1, const Obstacle*, VertexPose> {
    * @brief Jacobi matrix of the cost function specified in computeError().
    */
   void linearizeOplus() {
-    ROS_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgePointObstacle()");
+    HATEB_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgePointObstacle()");
     const VertexPose* bandpt = static_cast<const VertexPose*>(_vertices[0]);
 
     Eigen::Vector2d deltaS = *_measurement - bandpt->position();
@@ -192,7 +192,7 @@ class EdgeInflatedObstacle : public BaseTebUnaryEdge<2, const Obstacle*, VertexP
    * @brief Actual cost function
    */
   void computeError() override {
-    ROS_ASSERT_MSG(cfg_ && _measurement, "You must call setHATebConfig() on EdgeInflatedObstacle()");
+    HATEB_ASSERT_MSG(cfg_ && _measurement, "You must call setHATebConfig() on EdgeInflatedObstacle()");
     const auto* bandpt = static_cast<const VertexPose*>(_vertices[0]);
 
     double dist = 0;
@@ -222,7 +222,7 @@ class EdgeInflatedObstacle : public BaseTebUnaryEdge<2, const Obstacle*, VertexP
     // Additional linear inflation cost
     _error[1] = penaltyBoundFromBelow(dist, cfg_->obstacles.inflation_dist, 0.0);
 
-    ROS_ASSERT_MSG(std::isfinite(_error[0]) && std::isfinite(_error[1]), "EdgeInflatedObstacle::computeError() _error[0]=%f, _error[1]=%f\n", _error[0], _error[1]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[0]) && std::isfinite(_error[1]), "EdgeInflatedObstacle::computeError() _error[0]=%f, _error[1]=%f\n", _error[0], _error[1]);
   }
 
   /**

@@ -27,18 +27,19 @@
 #ifndef BACKOFF_H_
 #define BACKOFF_H_
 
-#include <actionlib/client/simple_action_client.h>
-#include <base_local_planner/costmap_model.h>
-#include <costmap_2d/costmap_2d_ros.h>
-#include <dynamic_reconfigure/server.h>
-#include <geometry_msgs/Pose2D.h>
-#include <nav_msgs/GetPlan.h>
-#include <ros/ros.h>
-#include <std_srvs/SetBool.h>
-#include <std_srvs/Trigger.h>
 #include <tf2/utils.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
+
+#include <geometry_msgs/msg/pose2_d.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <hateb_local_planner/backoff_config.hpp>
+#include <nav2_costmap_2d/costmap_2d_ros.hpp>
+#include <nav2_costmap_2d/costmap_model.hpp>
+#include <nav2_msgs/srv/get_plan.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <std_srvs/srv/set_bool.hpp>
+#include <std_srvs/srv/trigger.hpp>
 
 namespace hateb_local_planner {
 
@@ -55,7 +56,7 @@ class Backoff {
   /**
    * @brief Constructor
    */
-  Backoff(costmap_2d::Costmap2DROS* costmap_ros);
+  Backoff(rclcpp_lifecycle::LifecycleNode::SharedPtr node, nav2_costmap_2d::Costmap2DROS* costmap_ros);
 
   /**
    * @brief Destructor
@@ -66,14 +67,14 @@ class Backoff {
    * @brief Initializes the backoff behavior with a costmap
    * @param costmap_ros Pointer to the costmap ROS wrapper
    */
-  void initialize(costmap_2d::Costmap2DROS* costmap_ros);
+  void initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node, nav2_costmap_2d::Costmap2DROS* costmap_ros);
 
   /**
    * @brief Sets a new backoff goal position
    * @param goal The goal pose to back off to
    * @return True if goal was successfully set
    */
-  bool setbackGoal(geometry_msgs::PoseStamped goal);
+  bool setbackGoal(geometry_msgs::msg::PoseStamped goal);
 
   /**
    * @brief Checks if backoff behavior has timed out
@@ -113,7 +114,7 @@ class Backoff {
     const double left_grid_offsets[4][2] = {{r, r}, {r, -r}, {-r, -r}, {-r, r}};   //{{r, 3 * r}, {r, r}, {-r, r}, {-r, 3 * r}};
 
     for (const auto* offset : right_grid_offsets) {
-      geometry_msgs::Point p;
+      geometry_msgs::msg::Point p;
       p.x = offset[0];
       p.y = offset[1];
       p.z = 0;
@@ -121,7 +122,7 @@ class Backoff {
     }
 
     for (const auto* offset : left_grid_offsets) {
-      geometry_msgs::Point p;
+      geometry_msgs::msg::Point p;
       p.x = offset[0];
       p.y = offset[1];
       p.z = 0;
@@ -134,7 +135,7 @@ class Backoff {
    * @brief Callback for processing new goal messages
    * @param goal Pointer to the received goal message
    */
-  void goalCB(const geometry_msgs::PoseStamped::ConstPtr& goal);
+  void goalCB(const geometry_msgs::msg::PoseStamped::ConstSharedPtr& goal);
 
   /**
    * @brief Normalizes an angle to the range [-π, π]
@@ -147,55 +148,43 @@ class Backoff {
     return angle_radians - (two_pi * std::floor((angle_radians + (M_PI)) / two_pi));
   }
 
-  /**
-   * @brief Loads ROS parameters from the node handle
-   * @param private_nh Private node handle containing parameters
-   */
-  void loadRosParamFromNodeHandle(const ros::NodeHandle& private_nh);
+  rclcpp_lifecycle::LifecycleNode::SharedPtr node_;  //!< ROS2 node pointer
+  std::shared_ptr<BackoffConfig> cfg_;               //!< Configuration parameters for backoff behavior
 
-  std::string map_frame_;           //!< Name of the map frame
-  std::string footprint_frame_;     //!< Name of the robot's footprint frame
-  std::string ns_;                  //!< Namespace for the node
-  std::string publish_goal_topic_;  //!< Topic name for publishing backoff goals
-  std::string current_goal_topic_;  //!< Topic name for current goal
-  std::string get_plan_srv_name_;   //!< Service name for path planning
-  double backoff_timeout_;          //!< Maximum allowed time for backoff maneuver
-
-  geometry_msgs::PoseStamped goal_;      //!< Current navigation goal
-  geometry_msgs::PoseStamped old_goal_;  //!< Previous navigation goal
+  geometry_msgs::msg::PoseStamped goal_;      //!< Current navigation goal
+  geometry_msgs::msg::PoseStamped old_goal_;  //!< Previous navigation goal
 
   // Transform listener
   tf2_ros::Buffer tf_;                                       // TF2 buffer for coordinate transformations
   std::unique_ptr<tf2_ros::TransformListener> tf_listener_;  // TF2 transform listener for coordinate transformations
 
-  costmap_2d::Costmap2DROS* costmap_ros_;  //!< Pointer to the costmap ROS wrapper
-  costmap_2d::Costmap2D* costmap_;         //!< Pointer to the 2D costmap
-  double robot_circumscribed_radius_;      //!< Radius of circle encompassing the robot
+  nav2_costmap_2d::Costmap2DROS* costmap_ros_;  //!< Pointer to the costmap ROS wrapper
+  nav2_costmap_2d::Costmap2D* costmap_;         //!< Pointer to the 2D costmap
+  double robot_circumscribed_radius_;           //!< Radius of circle encompassing the robot
 
   // ROS communication members
-  ros::Publisher goal_pub_;             //!< Publisher for sending backoff goal poses
-  ros::Publisher poly_pub_l_;           //!< Publisher for visualizing left grid points
-  ros::Publisher poly_pub_r_;           //!< Publisher for visualizing right grid points
-  ros::Subscriber goal_sub_;            //!< Subscriber for receiving navigation goals
-  ros::ServiceClient get_plan_client_;  //!< Service client for requesting path plans
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr goal_pub_;       //!< Publisher for sending backoff goal poses
+  rclcpp::Publisher<geometry_msgs::msg::PolygonStamped>::SharedPtr poly_pub_l_;  //!< Publisher for visualizing left grid points
+  rclcpp::Publisher<geometry_msgs::msg::PolygonStamped>::SharedPtr poly_pub_r_;  //!< Publisher for visualizing right grid points
+  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_sub_;    //!< Subscriber for receiving navigation goals
+  rclcpp::Client<nav2_msgs::srv::GetPlan>::SharedPtr get_plan_client_;           //!< Service client for requesting path plans
 
-  geometry_msgs::Transform start_pose_;  //!< Initial robot pose when backoff maneuver starts
-  bool visualize_backoff_;               //!< Enable visualization of backoff grids
-  bool self_published_;                  //!< Whether the goal was published by this node
-  bool new_goal_;                        //!< Whether a new navigation goal was received
+  geometry_msgs::msg::Transform start_pose_;  //!< Initial robot pose when backoff maneuver starts
+  bool self_published_;                       //!< Whether the goal was published by this node
+  bool new_goal_;                             //!< Whether a new navigation goal was received
 
-  ros::Time last_time_;  //!< Time of the last update
-  // ros::Time last_rot_time_;   //!< Time of the last rotation movement
-  // ros::Time last_goal_time_;  //!< Time when the last goal was received
+  rclcpp::Time last_time_;  //!< Time of the last update
+  // rclcpp::Time last_rot_time_;   //!< Time of the last rotation movement
+  // rclcpp::Time last_goal_time_;  //!< Time when the last goal was received
 
   tf2::Transform start_pose_tr_;    //!< Initial pose stored as transform
   tf2::Transform robot_to_map_tf_;  //!< Transform from robot base to map frame
 
-  std::shared_ptr<base_local_planner::CostmapModel> costmap_model_;  //!< Model for collision checking with costmap
-  geometry_msgs::PoseStamped backoff_goal_;                          //!< Goal pose for backoff maneuver
+  std::shared_ptr<nav2_costmap_2d::CostmapModel> costmap_model_;  //!< Model for collision checking with costmap
+  geometry_msgs::msg::PoseStamped backoff_goal_;                  //!< Goal pose for backoff maneuver
 
-  std::vector<geometry_msgs::Point> left_grid_;   //!< Grid points for left obstacle checks
-  std::vector<geometry_msgs::Point> right_grid_;  //!< Grid points for right obstacle checks
+  std::vector<geometry_msgs::msg::Point> left_grid_;   //!< Grid points for left obstacle checks
+  std::vector<geometry_msgs::msg::Point> right_grid_;  //!< Grid points for right obstacle checks
 };
 
 }  // namespace hateb_local_planner

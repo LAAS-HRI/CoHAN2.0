@@ -72,12 +72,12 @@ class EdgeViaPoint : public BaseTebUnaryEdge<1, const Eigen::Vector2d*, VertexPo
    * @brief Actual cost function
    */
   void computeError() override {
-    ROS_ASSERT_MSG(cfg_ && _measurement, "You must call setHATebConfig(), setViaPoint() on EdgeViaPoint()");
+    HATEB_ASSERT_MSG(cfg_ && _measurement, "You must call setHATebConfig(), setViaPoint() on EdgeViaPoint()");
     const auto* bandpt = static_cast<const VertexPose*>(_vertices[0]);
 
     _error[0] = (bandpt->position() - *_measurement).norm();
 
-    ROS_ASSERT_MSG(std::isfinite(_error[0]), "EdgeViaPoint::computeError() _error[0]=%f\n", _error[0]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[0]), "EdgeViaPoint::computeError() _error[0]=%f\n", _error[0]);
   }
 
   /**

@@ -41,9 +41,6 @@
 #ifndef OBSTACLES_H
 #define OBSTACLES_H
 
-#include <geometry_msgs/Polygon.h>
-#include <geometry_msgs/QuaternionStamped.h>
-#include <geometry_msgs/TwistWithCovariance.h>
 #include <hateb_local_planner/distance_calculations.h>
 
 #include <Eigen/Core>
@@ -52,6 +49,9 @@
 #include <boost/pointer_cast.hpp>
 #include <boost/shared_ptr.hpp>
 #include <complex>
+#include <geometry_msgs/msg/polygon.hpp>
+#include <geometry_msgs/msg/quaternion_stamped.hpp>
+#include <geometry_msgs/msg/twist_with_covariance.hpp>
 #include <utility>
 
 namespace hateb_local_planner {
@@ -201,10 +201,10 @@ class Obstacle {
   /**
    * @brief Set the 2d velocity (vx, vy) of the obstacle w.r.t to the centroid
    * @remarks Setting the velocity using this function marks the obstacle as dynamic (@see isDynamic)
-   * @param velocity geometry_msgs::TwistWithCovariance containing the velocity of the obstacle
-   * @param orientation geometry_msgs::QuaternionStamped containing the orientation of the obstacle
+   * @param velocity geometry_msgs::msg::TwistWithCovariance containing the velocity of the obstacle
+   * @param orientation geometry_msgs::msg::QuaternionStamped containing the orientation of the obstacle
    */
-  void setCentroidVelocity(const geometry_msgs::TwistWithCovariance& velocity, const geometry_msgs::Quaternion& orientation) {
+  void setCentroidVelocity(const geometry_msgs::msg::TwistWithCovariance& velocity, const geometry_msgs::msg::Quaternion& orientation) {
     // Set velocity, if obstacle is moving
     Eigen::Vector2d vel;
     vel.coeffRef(0) = velocity.twist.linear.x;
@@ -217,7 +217,7 @@ class Obstacle {
     setCentroidVelocity(vel);
   }
 
-  void setCentroidVelocity(const geometry_msgs::TwistWithCovariance& velocity, const geometry_msgs::QuaternionStamped& orientation) { setCentroidVelocity(velocity, orientation.quaternion); }
+  void setCentroidVelocity(const geometry_msgs::msg::TwistWithCovariance& velocity, const geometry_msgs::msg::QuaternionStamped& orientation) { setCentroidVelocity(velocity, orientation.quaternion); }
 
   /**
    * @brief Get the obstacle velocity (vx, vy) (w.r.t. to the centroid)
@@ -238,9 +238,9 @@ class Obstacle {
    * and polygons might are implictly closed such that the start vertex must not be repeated.
    * @param[out] polygon the polygon message
    */
-  virtual void toPolygonMsg(geometry_msgs::Polygon& polygon) = 0;
+  virtual void toPolygonMsg(geometry_msgs::msg::Polygon& polygon) = 0;
 
-  virtual void toTwistWithCovarianceMsg(geometry_msgs::TwistWithCovariance& twistWithCovariance) {
+  virtual void toTwistWithCovarianceMsg(geometry_msgs::msg::TwistWithCovariance& twistWithCovariance) {
     if (dynamic_) {
       twistWithCovariance.twist.linear.x = centroid_velocity_(0);
       twistWithCovariance.twist.linear.y = centroid_velocity_(1);
@@ -362,7 +362,7 @@ class PointObstacle : public Obstacle {
   const double& y() const { return pos_.coeffRef(1); }      //!< Return the current y-coordinate of the obstacle (read-only)
 
   // implements toPolygonMsg() of the base class
-  void toPolygonMsg(geometry_msgs::Polygon& polygon) override {
+  void toPolygonMsg(geometry_msgs::msg::Polygon& polygon) override {
     polygon.points.resize(1);
     polygon.points.front().x = pos_.x();
     polygon.points.front().y = pos_.y();
@@ -473,7 +473,7 @@ class CircularObstacle : public Obstacle {
   const double& radius() const { return radius_; }          //!< Return the current radius of the obstacle
 
   // implements toPolygonMsg() of the base class
-  void toPolygonMsg(geometry_msgs::Polygon& polygon) override {
+  void toPolygonMsg(geometry_msgs::msg::Polygon& polygon) override {
     // TODO(roesmann): the polygon message type cannot describe a "perfect" circle
     //                 We could switch to ObstacleMsg if required somewhere...
     polygon.points.resize(1);
@@ -593,7 +593,7 @@ class LineObstacle : public Obstacle {
   }
 
   // implements toPolygonMsg() of the base class
-  void toPolygonMsg(geometry_msgs::Polygon& polygon) override {
+  void toPolygonMsg(geometry_msgs::msg::Polygon& polygon) override {
     polygon.points.resize(2);
     polygon.points.front().x = start_.x();
     polygon.points.front().y = start_.y();
@@ -740,7 +740,7 @@ class PolygonObstacle : public Obstacle {
   }
 
   // implements toPolygonMsg() of the base class
-  void toPolygonMsg(geometry_msgs::Polygon& polygon) override;
+  void toPolygonMsg(geometry_msgs::msg::Polygon& polygon) override;
 
   /** @name Define the polygon */
   ///@{

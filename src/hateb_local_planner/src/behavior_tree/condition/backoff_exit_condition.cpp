@@ -39,7 +39,7 @@ BackoffExitCondition::BackoffExitCondition(const std::string& condition_name, co
 
 BackoffExitCondition::~BackoffExitCondition() {
   // ROS_INFO in destructor
-  ROS_INFO("Shutting downd the BackoffExitCondition BT Node");
+  BT_INFO(name_, "Shutting down the Node");
 }
 
 BT::NodeStatus BackoffExitCondition::tick() {

@@ -65,18 +65,19 @@ class EdgeAgentAgentSafety : public BaseTebBinaryEdge<1, double, VertexPose, Ver
    * The error is stored in _error[0].
    */
   void computeError() override {
-    ROS_ASSERT_MSG(cfg_, "You must call setHATebConfig() on EdgeAgentAgentSafety()");
-    const auto *agent1_bandpt = static_cast<const VertexPose *>(_vertices[0]);
-    const auto *agent2_bandpt = static_cast<const VertexPose *>(_vertices[1]);
+    HATEB_ASSERT_MSG(cfg_, "You must call setHATebConfig() on EdgeAgentAgentSafety()");
+    const auto* agent1_bandpt = static_cast<const VertexPose*>(_vertices[0]);
+    const auto* agent2_bandpt = static_cast<const VertexPose*>(_vertices[1]);
 
     double agent_radius = cfg_->human_model->getCircumscribedRadius();
     // Get the distance
     double dist = std::hypot(agent1_bandpt->x() - agent2_bandpt->x(), agent1_bandpt->y() - agent2_bandpt->y()) - (2 * agent_radius);
 
-    ROS_DEBUG_THROTTLE(0.5, "agent agent external dist = %f", dist);
+    // ROS2: RCLCPP_DEBUG_THROTTLE requires clock parameter - comment out for now as this is not critical
+    // RCLCPP_DEBUG_THROTTLE(rclcpp::get_logger("hateb_local_planner"), *clock, 500, "agent agent external dist = %f", dist);
     _error[0] = penaltyBoundFromBelowQuad(dist, cfg_->hateb.min_agent_agent_dist, cfg_->optim.penalty_epsilon);
 
-    ROS_ASSERT_MSG(std::isfinite(_error[0]), "EdgeAgentAgentSafety::computeError() _error[0]=%f\n", _error[0]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[0]), "EdgeAgentAgentSafety::computeError() _error[0]=%f\n", _error[0]);
   }
 
  public:

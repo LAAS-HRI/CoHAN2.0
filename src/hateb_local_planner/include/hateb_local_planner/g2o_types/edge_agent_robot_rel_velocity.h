@@ -63,7 +63,7 @@ class EdgeAgentRobotRelVelocity : public BaseTebMultiEdge<1, double> {
    * The error is stored in _error[0].
    */
   void computeError() override {
-    ROS_ASSERT_MSG(cfg_, "You must call setHATebConfig() on EdgeAgentRobotRelVelocity()");
+    HATEB_ASSERT_MSG(cfg_, "You must call setHATebConfig() on EdgeAgentRobotRelVelocity()");
     const auto *robot_bandpt = static_cast<const VertexPose *>(_vertices[0]);
     const auto *robot_bandpt_nxt = static_cast<const VertexPose *>(_vertices[1]);
     const auto *dt_robot = static_cast<const VertexTimeDiff *>(_vertices[2]);
@@ -86,7 +86,7 @@ class EdgeAgentRobotRelVelocity : public BaseTebMultiEdge<1, double> {
 
     _error[0] = penaltyBoundFromAbove(rel_vel_cost, cfg_->hateb.rel_vel_cost_threshold, cfg_->optim.penalty_epsilon);
 
-    ROS_ASSERT_MSG(std::isfinite(_error[0]), "EdgeAgentRobot::computeError() _error[0]=%f\n", _error[0]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[0]), "EdgeAgentRobot::computeError() _error[0]=%f\n", _error[0]);
   }
 
  public:

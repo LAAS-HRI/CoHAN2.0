@@ -62,7 +62,7 @@ class EdgeAgentRobotVisibility : public BaseTebBinaryEdge<1, double, VertexPose,
    * The error is stored in _error[0].
    */
   void computeError() override {
-    ROS_ASSERT_MSG(cfg_, "You must call setParameters() on EdgeAgentRobotVisibility()");
+    HATEB_ASSERT_MSG(cfg_, "You must call setParameters() on EdgeAgentRobotVisibility()");
     const auto *robot_bandpt = static_cast<const VertexPose *>(_vertices[0]);
     const auto *agent_bandpt = static_cast<const VertexPose *>(_vertices[1]);
 
@@ -88,7 +88,7 @@ class EdgeAgentRobotVisibility : public BaseTebBinaryEdge<1, double, VertexPose,
 
     _error[0] = penaltyBoundFromAbove(c_visibility, cfg_->hateb.visibility_cost_threshold, cfg_->optim.penalty_epsilon);
 
-    ROS_ASSERT_MSG(std::isfinite(_error[0]), "EdgeAgentRobotVisibility::computeError() _error[0]=%f\n", _error[0]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[0]), "EdgeAgentRobotVisibility::computeError() _error[0]=%f\n", _error[0]);
   }
 
  public:

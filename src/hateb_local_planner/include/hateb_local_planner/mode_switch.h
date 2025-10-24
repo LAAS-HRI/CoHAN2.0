@@ -28,18 +28,20 @@
 #define MODE_SWITCH_HH_
 
 #include <agent_path_prediction/agents_class.h>
-#include <ros/ros.h>
+
+#include <rclcpp/rclcpp.hpp>
 
 #include "behaviortree_cpp/bt_factory.h"
 
 // Messages
-#include <actionlib_msgs/GoalStatusArray.h>
-#include <agent_path_prediction/AgentsInfo.h>
-#include <cohan_msgs/PassageType.h>
-#include <geometry_msgs/Pose.h>
-#include <hateb_local_planner/PlanningMode.h>
-#include <move_base_msgs/MoveBaseActionGoal.h>
-#include <move_base_msgs/MoveBaseActionResult.h>
+#include <action_msgs/msg/goal_status_array.hpp>
+#include <agent_path_prediction/msg/agents_info.hpp>
+#include <cohan_msgs/msg/passage_type.hpp>
+#include <geometry_msgs/msg/pose.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <hateb_local_planner/msg/planning_mode.hpp>
+#include <nav2_msgs/action/navigate_to_pose.hpp>
+#include <std_srvs/srv/trigger.hpp>
 
 // BT Nodes
 #include <hateb_local_planner/behavior_tree/action/set_mode.h>
@@ -83,12 +85,12 @@ class ModeSwitch {
 
   /**
    * @brief Initializes the mode switch with required components
-   * @param nh ROS node handle
+   * @param node ROS 2 node shared pointer
    * @param xml_path Path to the behavior tree XML description
    * @param agents_ptr Pointer to the agents management class
    * @param backoff_ptr Pointer to the backoff behavior handler
    */
-  void initialize(ros::NodeHandle& nh, std::string& xml_path, std::shared_ptr<agents::Agents>& agents_ptr, std::shared_ptr<Backoff>& backoff_ptr);
+  void initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node, std::string& xml_path, std::shared_ptr<agents::Agents>& agents_ptr, std::shared_ptr<Backoff>& backoff_ptr);
 
   /**
    * @brief Executes one tick of the behavior tree
@@ -111,7 +113,7 @@ class ModeSwitch {
    * @brief Ticks the behavior tree and returns the resulting planning mode
    * @return The selected planning mode after the tree evaluation
    */
-  hateb_local_planner::PlanningMode tickAndGetMode();
+  hateb_local_planner::msg::PlanningMode tickAndGetMode();
 
  private:
   /**
@@ -123,25 +125,25 @@ class ModeSwitch {
    * @brief Callback for processing agent information updates
    * @param info_msg Message containing updated agent information
    */
-  void agentsInfoCB(const agent_path_prediction::AgentsInfo& info_msg);
+  void agentsInfoCB(const agent_path_prediction::msg::AgentsInfo::SharedPtr info_msg);
 
   /**
    * @brief Callback for processing new navigation goals
    * @param goal_msg Message containing the new goal
    */
-  void goalMoveBaseCB(const move_base_msgs::MoveBaseActionGoal& goal_msg);
+  void goalNavigateToPoseCB(const nav2_msgs::action::NavigateToPose::Goal::SharedPtr goal_msg);
 
   /**
    * @brief Callback for processing navigation results
    * @param result_msg Message containing the navigation result
    */
-  void resultMoveBaseCB(const move_base_msgs::MoveBaseActionResult& result_msg);
+  void resultNavigateToPoseCB(const action_msgs::msg::GoalStatusArray::SharedPtr result_msg);
 
   /**
    * @brief Callback for processing passage type information
    * @param passage_msg Message containing passage classification
    */
-  void passageCB(const cohan_msgs::PassageType& passage_msg);
+  void passageCB(const cohan_msgs::msg::PassageType::SharedPtr passage_msg);
 
   /**
    * @brief Updates the current planning mode
@@ -166,18 +168,18 @@ class ModeSwitch {
   bool goal_update_;   //!< Flag indicating if goal was updated
 
   // ROS communication members
-  ros::NodeHandle nh_;                  //!< ROS node handle
-  ros::Subscriber agents_info_sub_;     //!< Subscriber for agent information
-  ros::Subscriber goal_sub_;            //!< Subscriber for navigation goals
-  ros::Subscriber result_sub_;          //!< Subscriber for navigation results
-  ros::Subscriber passage_detect_sub_;  //!< Subscriber for passage detection
-  ros::Publisher planning_mode_pub_;    //!< Publisher for current planning mode
-  ros::ServiceServer backoff_srv_;      //!< Service server for backoff requests
+  rclcpp_lifecycle::LifecycleNode::SharedPtr node_;                                          //!< ROS 2 node shared pointer
+  rclcpp::Subscription<agent_path_prediction::msg::AgentsInfo>::SharedPtr agents_info_sub_;  //!< Subscriber for agent information
+  rclcpp::Subscription<nav2_msgs::action::NavigateToPose::Goal>::SharedPtr goal_sub_;        //!< Subscriber for navigation goals
+  rclcpp::Subscription<action_msgs::msg::GoalStatusArray>::SharedPtr result_sub_;            //!< Subscriber for navigation results
+  rclcpp::Subscription<cohan_msgs::msg::PassageType>::SharedPtr passage_detect_sub_;         //!< Subscriber for passage detection
+  rclcpp::Publisher<hateb_local_planner::msg::PlanningMode>::SharedPtr planning_mode_pub_;   //!< Publisher for current planning mode
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr backoff_srv_;                           //!< Service server for backoff requests
 
   // State information
-  geometry_msgs::PoseStamped goal_;                //!< Current navigation goal
-  agent_path_prediction::AgentsInfo agents_info_;  //!< Current agent information
-  actionlib_msgs::GoalStatusArray result_msg_;     //!< Latest navigation result
+  geometry_msgs::msg::PoseStamped goal_;                //!< Current navigation goal
+  agent_path_prediction::msg::AgentsInfo agents_info_;  //!< Current agent information
+  action_msgs::msg::GoalStatusArray result_msg_;        //!< Latest navigation result
 
   // Behavior Tree components
   BT::BehaviorTreeFactory bhv_factory_;  //!< Factory for creating BT nodes
@@ -185,9 +187,9 @@ class ModeSwitch {
 
   std::mutex pub_mutex_;  //!< Mutex for thread-safe publishing
 
-  std::string name_;                             //!< Name of this node
-  hateb_local_planner::PlanningMode plan_mode_;  //!< Current planning mode
-  ModeInfo mode_info_;                           //!< Detailed mode information
+  std::string name_;                                  //!< Name of this node
+  hateb_local_planner::msg::PlanningMode plan_mode_;  //!< Current planning mode
+  ModeInfo mode_info_;                                //!< Detailed mode information
 
   std::shared_ptr<Backoff> backoff_ptr_;  //!< Pointer to backoff behavior handler
 

@@ -24,8 +24,9 @@
  * Author: Phani Teja Singamaneni
  *********************************************************************************/
 
-#include <ros/ros.h>
 #include <tf2/utils.h>
+
+#include <rclcpp/rclcpp.hpp>
 
 // New
 #include <agent_path_prediction/AgentsInfo.h>
@@ -72,7 +73,7 @@ class DualBandExitCondition : public BT::ConditionNode {
    */
   static BT::PortsList providedPorts() {
     // This action has a single input port called "agents_info"
-    return {BT::InputPort<agent_path_prediction::AgentsInfo>("agents_info"), BT::InputPort<double>("dist_threshold"), BT::InputPort<geometry_msgs::PoseStamped>("nav_goal")};
+    return {BT::InputPort<agent_path_prediction::msg::AgentsInfo>("agents_info"), BT::InputPort<double>("dist_threshold"), BT::InputPort<geometry_msgs::msg::PoseStamped>("nav_goal")};
   }
 
  private:
@@ -83,13 +84,13 @@ class DualBandExitCondition : public BT::ConditionNode {
   bool isRobotStuck();
 
   // Blackboard entries
-  agent_path_prediction::AgentsInfo agents_info_;  //!< Information about agents in the environment
-  geometry_msgs::PoseStamped goal_;                //!< Current navigation goal
-  double dist_threshold_;                          //!< Distance threshold for dual band mode
+  agent_path_prediction::msg::AgentsInfo agents_info_;  //!< Information about agents in the environment
+  geometry_msgs::msg::PoseStamped goal_;                //!< Current navigation goal
+  double dist_threshold_;                               //!< Distance threshold for dual band mode
 
   // Class Variables
-  double goal_dist_;        //!< Distance to goal for progress tracking
-  ros::Time stopped_time_;  //!< Time when robot was last detected as stopped
+  double goal_dist_;           //!< Distance to goal for progress tracking
+  rclcpp::Time stopped_time_;  //!< Time when robot was last detected as stopped
 
   std::string name_;  //!< Name of the node
 };

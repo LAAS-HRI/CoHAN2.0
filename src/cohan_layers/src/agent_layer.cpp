@@ -112,10 +112,10 @@ void AgentLayer::updateBounds(double /*origin_x*/, double /*origin_y*/, double /
   std::string global_frame = layered_costmap_->getGlobalFrameID();
   transformed_agents_.clear();
 
-  if ((node->now() - last_time_).seconds() > 1.0) {
-    reset_ = true;
-    states_.clear();
-  }
+  // if ((node->now() - last_time_).seconds() > 1.0) {
+  //   reset_ = true;
+  //   states_.clear();
+  // }
 
   for (auto& agent : agents_.agents) {
     if ((node->now() - rclcpp::Time(agents_.header.stamp, node->get_clock()->get_clock_type())).seconds() > 0.1) {
@@ -123,47 +123,48 @@ void AgentLayer::updateBounds(double /*origin_x*/, double /*origin_y*/, double /
     }
     for (auto& segment : agent.segments) {
       if ((segment.type == DEFAULT_AGENT_PART) && !reset_) {
-        if (!states_.empty() && !shutdown_) {
-          if (states_[agent.track_id] != 0) {
-            AgentPoseVel agent_pose_vel;
-            agent_pose_vel.track_id = agent.track_id;
-            agent_pose_vel.type = static_cast<int>(agent.type);
-            agent_pose_vel.state = states_[agent.track_id];
-            agent_pose_vel.header.frame_id = agents_.header.frame_id;
-            agent_pose_vel.header.stamp = agents_.header.stamp;
-            geometry_msgs::msg::PoseStamped before_pose;
-            geometry_msgs::msg::PoseStamped after_pose;
+        // if (!states_.empty() && !shutdown_) {
+        if (!shutdown_) {
+          // if (states_[agent.track_id] != 0) {
+          AgentPoseVel agent_pose_vel;
+          agent_pose_vel.track_id = agent.track_id;
+          agent_pose_vel.type = static_cast<int>(agent.type);
+          agent_pose_vel.state = states_[agent.track_id];
+          agent_pose_vel.header.frame_id = agents_.header.frame_id;
+          agent_pose_vel.header.stamp = agents_.header.stamp;
+          geometry_msgs::msg::PoseStamped before_pose;
+          geometry_msgs::msg::PoseStamped after_pose;
 
-            try {
-              before_pose.pose = segment.pose.pose;
-              before_pose.header.frame_id = agents_.header.frame_id;
-              before_pose.header.stamp = agents_.header.stamp;
-              tf_->transform(before_pose, after_pose, global_frame, tf2::durationFromSec(0.5));
-              agent_pose_vel.pose = after_pose.pose;
+          try {
+            before_pose.pose = segment.pose.pose;
+            before_pose.header.frame_id = agents_.header.frame_id;
+            before_pose.header.stamp = agents_.header.stamp;
+            tf_->transform(before_pose, after_pose, global_frame, tf2::durationFromSec(0.5));
+            agent_pose_vel.pose = after_pose.pose;
 
-              before_pose.pose.position.x += segment.twist.twist.linear.x;
-              before_pose.pose.position.y += segment.twist.twist.linear.y;
-              auto hb_yaw = tf2::getYaw(before_pose.pose.orientation);
-              tf2::Quaternion quat;
-              quat.setRPY(0.0, 0.0, segment.twist.twist.angular.z + hb_yaw);
-              before_pose.pose.orientation = tf2::toMsg(quat);
-              tf_->transform(before_pose, after_pose, global_frame, tf2::durationFromSec(0.5));
-              agent_pose_vel.velocity.linear.x = after_pose.pose.position.x - agent_pose_vel.pose.position.x;
-              agent_pose_vel.velocity.linear.y = after_pose.pose.position.y - agent_pose_vel.pose.position.y;
-              agent_pose_vel.velocity.angular.z = angles::shortest_angular_distance(tf2::getYaw(after_pose.pose.orientation), tf2::getYaw(agent_pose_vel.pose.orientation));
+            before_pose.pose.position.x += segment.twist.twist.linear.x;
+            before_pose.pose.position.y += segment.twist.twist.linear.y;
+            auto hb_yaw = tf2::getYaw(before_pose.pose.orientation);
+            tf2::Quaternion quat;
+            quat.setRPY(0.0, 0.0, segment.twist.twist.angular.z + hb_yaw);
+            before_pose.pose.orientation = tf2::toMsg(quat);
+            tf_->transform(before_pose, after_pose, global_frame, tf2::durationFromSec(0.5));
+            agent_pose_vel.velocity.linear.x = after_pose.pose.position.x - agent_pose_vel.pose.position.x;
+            agent_pose_vel.velocity.linear.y = after_pose.pose.position.y - agent_pose_vel.pose.position.y;
+            agent_pose_vel.velocity.angular.z = angles::shortest_angular_distance(tf2::getYaw(after_pose.pose.orientation), tf2::getYaw(agent_pose_vel.pose.orientation));
 
-              transformed_agents_.push_back(agent_pose_vel);
-            } catch (tf2::LookupException& ex) {
-              RCLCPP_ERROR(node->get_logger(), "No Transform available Error: %s", ex.what());
-              continue;
-            } catch (tf2::ConnectivityException& ex) {
-              RCLCPP_ERROR(node->get_logger(), "Connectivity Error: %s", ex.what());
-              continue;
-            } catch (tf2::ExtrapolationException& ex) {
-              RCLCPP_ERROR(node->get_logger(), "Extrapolation Error: %s", ex.what());
-              continue;
-            }
+            transformed_agents_.push_back(agent_pose_vel);
+          } catch (tf2::LookupException& ex) {
+            RCLCPP_ERROR(node->get_logger(), "No Transform available Error: %s", ex.what());
+            continue;
+          } catch (tf2::ConnectivityException& ex) {
+            RCLCPP_ERROR(node->get_logger(), "Connectivity Error: %s", ex.what());
+            continue;
+          } catch (tf2::ExtrapolationException& ex) {
+            RCLCPP_ERROR(node->get_logger(), "Extrapolation Error: %s", ex.what());
+            continue;
           }
+          // }
         }
       } else if (reset_ && !shutdown_) {
         AgentPoseVel agent_pose_vel;

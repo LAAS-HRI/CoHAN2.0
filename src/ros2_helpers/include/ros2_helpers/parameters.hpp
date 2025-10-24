@@ -32,6 +32,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace parameters {
@@ -40,6 +41,40 @@ namespace parameters {
  * @brief Generic parameter utility class for ROS2 nodes
  * This class provides a reusable way to declare parameters with validation
  * and set up parameter change callbacks
+ *
+ * Usage Example with Auto-binding:
+ * @code
+ * class MyConfig {
+ *   double max_vel;
+ *   int num_samples;
+ *   bool enable_feature;
+ *   std::string robot_name;
+ *
+ *   parameters::ParameterHelper param_helper_;
+ *
+ *   void initialize(rclcpp::Node::SharedPtr node) {
+ *     param_helper_.initialize(node);
+ *
+ *     // Bind parameters - they will auto-update when changed
+ *     param_helper_.bindFloatParam("max_vel", max_vel, 0.0, 10.0, "Maximum velocity");
+ *     param_helper_.bindIntParam("num_samples", num_samples, 1, 100, "Number of samples");
+ *     param_helper_.bindBoolParam("enable_feature", enable_feature, "Enable feature flag");
+ *     param_helper_.bindStringParam("robot_name", robot_name, "Robot name");
+ *
+ *     // Set up callback for validation (optional)
+ *     param_helper_.setupParameterCallback([this](const auto& params) {
+ *       // Custom validation logic here
+ *       if (max_vel > 5.0) {
+ *         RCLCPP_WARN(..., "High velocity!");
+ *       }
+ *       return true;  // Accept changes
+ *     });
+ *
+ *     // Load initial values
+ *     param_helper_.loadBoundParameters();
+ *   }
+ * };
+ * @endcode
  */
 class ParameterHelper {
  public:
@@ -146,6 +181,84 @@ class ParameterHelper {
   }
 
   /**
+   * @brief Bind a floating point parameter to a member variable (declare + auto-update on change)
+   * @param name Parameter name
+   * @param variable Reference to the variable to bind
+   * @param min Minimum allowed value
+   * @param max Maximum allowed value
+   * @param description Parameter description
+   * @param step Step size for the parameter (default: 0.001)
+   */
+  void bindFloatParam(const std::string& name, double& variable, double min, double max, const std::string& description, double step = 0.001) {
+    declareFloatParam(name, variable, min, max, description, step);
+
+    // Store the binding for automatic updates
+    param_bindings_[name] = [&variable](const rclcpp::Parameter& param) { variable = param.as_double(); };
+  }
+
+  /**
+   * @brief Bind an integer parameter to a member variable (declare + auto-update on change)
+   * @param name Parameter name
+   * @param variable Reference to the variable to bind
+   * @param min Minimum allowed value
+   * @param max Maximum allowed value
+   * @param description Parameter description
+   * @param step Step size for the parameter (default: 1)
+   */
+  void bindIntParam(const std::string& name, int& variable, int min, int max, const std::string& description, int step = 1) {
+    declareIntParam(name, variable, min, max, description, step);
+
+    // Store the binding for automatic updates
+    param_bindings_[name] = [&variable](const rclcpp::Parameter& param) { variable = static_cast<int>(param.as_int()); };
+  }
+
+  /**
+   * @brief Bind a boolean parameter to a member variable (declare + auto-update on change)
+   * @param name Parameter name
+   * @param variable Reference to the variable to bind
+   * @param description Parameter description
+   */
+  void bindBoolParam(const std::string& name, bool& variable, const std::string& description) {
+    declareBoolParam(name, variable, description);
+
+    // Store the binding for automatic updates
+    param_bindings_[name] = [&variable](const rclcpp::Parameter& param) { variable = param.as_bool(); };
+  }
+
+  /**
+   * @brief Bind a string parameter to a member variable (declare + auto-update on change)
+   * @param name Parameter name
+   * @param variable Reference to the variable to bind
+   * @param description Parameter description
+   */
+  void bindStringParam(const std::string& name, std::string& variable, const std::string& description) {
+    declareStringParam(name, variable, description);
+
+    // Store the binding for automatic updates
+    param_bindings_[name] = [&variable](const rclcpp::Parameter& param) { variable = param.as_string(); };
+  }
+
+  /**
+   * @brief Load all bound parameters from the parameter server (call after all bindings are set up)
+   */
+  void loadBoundParameters() {
+    for (const auto& [name, updater] : param_bindings_) {
+      try {
+        rclcpp::Parameter param;
+        if (is_lifecycle_) {
+          param = lifecycle_node_->get_parameter(name);
+        } else {
+          param = node_->get_parameter(name);
+        }
+        updater(param);
+      } catch (const std::exception& e) {
+        auto logger = is_lifecycle_ ? lifecycle_node_->get_logger() : node_->get_logger();
+        RCLCPP_WARN(logger, "Failed to load bound parameter '%s': %s", name.c_str(), e.what());
+      }
+    }
+  }
+
+  /**
    * @brief Set up parameter change callback with optional custom validation
    * @param custom_callback Optional custom callback function for parameter validation/handling
    */
@@ -156,8 +269,22 @@ class ParameterHelper {
 
       auto logger = is_lifecycle_ ? lifecycle_node_->get_logger() : node_->get_logger();
 
+      // First, update all bound parameters automatically
       for (const auto& param : params) {
         RCLCPP_DEBUG(logger, "Parameter '%s' changed to: %s", param.get_name().c_str(), param.value_to_string().c_str());
+
+        // Check if this parameter has a binding
+        auto it = param_bindings_.find(param.get_name());
+        if (it != param_bindings_.end()) {
+          try {
+            it->second(param);  // Execute the binding to update the variable
+          } catch (const std::exception& e) {
+            RCLCPP_ERROR(logger, "Failed to update bound parameter '%s': %s", param.get_name().c_str(), e.what());
+            result.successful = false;
+            result.reason = "Failed to update bound parameter: " + std::string(e.what());
+            return result;
+          }
+        }
       }
 
       // If custom callback is provided, use it for additional validation
@@ -229,6 +356,9 @@ class ParameterHelper {
   bool is_lifecycle_ = false;
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
   rclcpp_lifecycle::LifecycleNode::OnSetParametersCallbackHandle::SharedPtr param_callback_handle_lifecycle_;
+
+  // Storage for parameter bindings (parameter name -> update function)
+  std::unordered_map<std::string, std::function<void(const rclcpp::Parameter&)>> param_bindings_;
 };
 
 }  // namespace parameters

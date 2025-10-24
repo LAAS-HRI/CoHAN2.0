@@ -38,389 +38,255 @@
  * Author: Christoph Rösmann
  *********************************************************************/
 
-#include <hateb_local_planner/hateb_config.h>
+#include <hateb_local_planner/hateb_config.hpp>
 
 namespace hateb_local_planner {
 
-void HATebConfig::loadRosParamFromNodeHandle(const ros::NodeHandle& nh) {
-  nh.param("ns", ns_, std::string(""));
-  nh.param("odom_topic", odom_topic, odom_topic);
-  nh.param("map_frame", map_frame, map_frame);
-  nh.param("planning_mode", planning_mode, planning_mode);
+void HATebConfig::setupParameterCallback() {
+  // Bind all parameters with automatic updates
+  bindParameters();
 
-  // Trajectory
-  nh.param("teb_autosize", trajectory.teb_autosize, trajectory.teb_autosize);
-  nh.param("dt_ref", trajectory.dt_ref, trajectory.dt_ref);
-  nh.param("dt_hysteresis", trajectory.dt_hysteresis, trajectory.dt_hysteresis);
-  nh.param("min_samples", trajectory.min_samples, trajectory.min_samples);
-  nh.param("max_samples", trajectory.max_samples, trajectory.max_samples);
-  nh.param("agent_min_samples", trajectory.agent_min_samples, trajectory.agent_min_samples);
-  nh.param("global_plan_overwrite_orientation", trajectory.global_plan_overwrite_orientation, trajectory.global_plan_overwrite_orientation);
-  nh.param("allow_init_with_backwards_motion", trajectory.allow_init_with_backwards_motion, trajectory.allow_init_with_backwards_motion);
-  nh.getParam("global_plan_via_point_sep", trajectory.global_plan_viapoint_sep);  // deprecated, see checkDeprecated()
-  if (!nh.param("global_plan_viapoint_sep", trajectory.global_plan_viapoint_sep, trajectory.global_plan_viapoint_sep)) {
-    nh.setParam("global_plan_viapoint_sep", trajectory.global_plan_viapoint_sep);  // write deprecated value to param server
-  }
-  nh.param("via_points_ordered", trajectory.via_points_ordered, trajectory.via_points_ordered);
-  nh.param("max_global_plan_lookahead_dist", trajectory.max_global_plan_lookahead_dist, trajectory.max_global_plan_lookahead_dist);
-  nh.param("global_plan_prune_distance", trajectory.global_plan_prune_distance, trajectory.global_plan_prune_distance);
-  nh.param("exact_arc_length", trajectory.exact_arc_length, trajectory.exact_arc_length);
-  nh.param("force_reinit_new_goal_dist", trajectory.force_reinit_new_goal_dist, trajectory.force_reinit_new_goal_dist);
-  nh.param("force_reinit_new_goal_angular", trajectory.force_reinit_new_goal_angular, trajectory.force_reinit_new_goal_angular);
-  nh.param("feasibility_check_no_poses", trajectory.feasibility_check_no_poses, trajectory.feasibility_check_no_poses);
-  nh.param("publish_feedback", trajectory.publish_feedback, trajectory.publish_feedback);
-  nh.param("min_resolution_collision_check_angular", trajectory.min_resolution_collision_check_angular, trajectory.min_resolution_collision_check_angular);
-  nh.param("control_look_ahead_poses", trajectory.control_look_ahead_poses, trajectory.control_look_ahead_poses);
-  nh.param("teb_init_skip_dist", trajectory.teb_init_skip_dist, trajectory.teb_init_skip_dist);
-  // Robot
-  nh.param("type", robot.type, robot.type);
-  nh.param("max_vel_x", robot.max_vel_x, robot.max_vel_x);
-  nh.param("max_vel_x_backwards", robot.max_vel_x_backwards, robot.max_vel_x_backwards);
-  nh.param("max_vel_y", robot.max_vel_y, robot.max_vel_y);
-  nh.param("max_vel_theta", robot.max_vel_theta, robot.max_vel_theta);
-  nh.param("acc_lim_x", robot.acc_lim_x, robot.acc_lim_x);
-  nh.param("acc_lim_y", robot.acc_lim_y, robot.acc_lim_y);
-  nh.param("acc_lim_theta", robot.acc_lim_theta, robot.acc_lim_theta);
-  nh.param("min_turning_radius", robot.min_turning_radius, robot.min_turning_radius);
-  nh.param("wheelbase", robot.wheelbase, robot.wheelbase);
-  nh.param("cmd_angle_instead_rotvel", robot.cmd_angle_instead_rotvel, robot.cmd_angle_instead_rotvel);
-  nh.param("is_footprint_dynamic", robot.is_footprint_dynamic, robot.is_footprint_dynamic);
-  nh.param("is_real", robot.is_real, robot.is_real);
+  // Set up parameter change callback with custom validation and thread safety
+  param_helper_.setupParameterCallback([this](const std::vector<rclcpp::Parameter>& params) -> bool {
+    std::lock_guard<std::mutex> lock(config_mutex_);  // Thread-safe parameter updates
+    // Parameters are automatically updated by ParameterHelper bindings
+    // Just do validation here
+    checkParameters();
+    return true;
+  });
 
-  // Agent
-  nh.param("agent_radius", agent.radius, agent.radius);
-  nh.param("max_agent_vel_x", agent.max_vel_x, agent.max_vel_x);
-  nh.param("max_agent_vel_y", agent.max_vel_y, agent.max_vel_y);
-  nh.param("max_agent_vel_x_backwards", agent.max_vel_x_backwards, agent.max_vel_x_backwards);
-  nh.param("max_agent_vel_theta", agent.max_vel_theta, agent.max_vel_theta);
-  nh.param("agent_acc_lim_x", agent.acc_lim_x, agent.acc_lim_x);
-  nh.param("agent_acc_lim_y", agent.acc_lim_y, agent.acc_lim_y);
-  nh.param("agent_acc_lim_theta", agent.acc_lim_theta, agent.acc_lim_theta);
-  nh.param("num_moving_avg", agent.num_moving_avg, agent.num_moving_avg);
-
-  // GoalTolerance
-  nh.param("xy_goal_tolerance", goal_tolerance.xy_goal_tolerance, goal_tolerance.xy_goal_tolerance);
-  nh.param("yaw_goal_tolerance", goal_tolerance.yaw_goal_tolerance, goal_tolerance.yaw_goal_tolerance);
-  nh.param("free_goal_vel", goal_tolerance.free_goal_vel, goal_tolerance.free_goal_vel);
-  nh.param("complete_global_plan", goal_tolerance.complete_global_plan, goal_tolerance.complete_global_plan);
-
-  // Obstacles
-  nh.param("min_obstacle_dist", obstacles.min_obstacle_dist, obstacles.min_obstacle_dist);
-  nh.param("inflation_dist", obstacles.inflation_dist, obstacles.inflation_dist);
-  nh.param("dynamic_obstacle_inflation_dist", obstacles.dynamic_obstacle_inflation_dist, obstacles.dynamic_obstacle_inflation_dist);
-  nh.param("include_dynamic_obstacles", obstacles.include_dynamic_obstacles, obstacles.include_dynamic_obstacles);
-  nh.param("include_costmap_obstacles", obstacles.include_costmap_obstacles, obstacles.include_costmap_obstacles);
-  nh.param("costmap_obstacles_behind_robot_dist", obstacles.costmap_obstacles_behind_robot_dist, obstacles.costmap_obstacles_behind_robot_dist);
-  nh.param("obstacle_poses_affected", obstacles.obstacle_poses_affected, obstacles.obstacle_poses_affected);
-  nh.param("legacy_obstacle_association", obstacles.legacy_obstacle_association, obstacles.legacy_obstacle_association);
-  nh.param("obstacle_association_force_inclusion_factor", obstacles.obstacle_association_force_inclusion_factor, obstacles.obstacle_association_force_inclusion_factor);
-  nh.param("obstacle_association_cutoff_factor", obstacles.obstacle_association_cutoff_factor, obstacles.obstacle_association_cutoff_factor);
-  nh.param("costmap_converter_plugin", obstacles.costmap_converter_plugin, obstacles.costmap_converter_plugin);
-  nh.param("costmap_converter_spin_thread", obstacles.costmap_converter_spin_thread, obstacles.costmap_converter_spin_thread);
-
-  // Optimization
-  nh.param("no_inner_iterations", optim.no_inner_iterations, optim.no_inner_iterations);
-  nh.param("no_outer_iterations", optim.no_outer_iterations, optim.no_outer_iterations);
-  nh.param("optimization_activate", optim.optimization_activate, optim.optimization_activate);
-  nh.param("optimization_verbose", optim.optimization_verbose, optim.optimization_verbose);
-  nh.param("penalty_epsilon", optim.penalty_epsilon, optim.penalty_epsilon);
-  nh.param("time_penalty_epsilon", optim.time_penalty_epsilon, optim.time_penalty_epsilon);
-  nh.param("cap_optimaltime_penalty", optim.cap_optimaltime_penalty, optim.cap_optimaltime_penalty);
-  nh.param("weight_max_vel_x", optim.weight_max_vel_x, optim.weight_max_vel_x);
-  nh.param("weight_max_vel_y", optim.weight_max_vel_y, optim.weight_max_vel_y);
-  nh.param("weight_max_vel_theta", optim.weight_max_vel_theta, optim.weight_max_vel_theta);
-  nh.param("weight_acc_lim_x", optim.weight_acc_lim_x, optim.weight_acc_lim_x);
-  nh.param("weight_acc_lim_y", optim.weight_acc_lim_y, optim.weight_acc_lim_y);
-  nh.param("weight_acc_lim_theta", optim.weight_acc_lim_theta, optim.weight_acc_lim_theta);
-  nh.param("weight_kinematics_nh", optim.weight_kinematics_nh, optim.weight_kinematics_nh);
-  nh.param("weight_kinematics_forward_drive", optim.weight_kinematics_forward_drive, optim.weight_kinematics_forward_drive);
-  nh.param("weight_kinematics_turning_radius", optim.weight_kinematics_turning_radius, optim.weight_kinematics_turning_radius);
-  nh.param("weight_optimaltime", optim.weight_optimaltime, optim.weight_optimaltime);
-  nh.param("weight_shortest_path", optim.weight_shortest_path, optim.weight_shortest_path);
-  nh.param("weight_obstacle", optim.weight_obstacle, optim.weight_obstacle);
-  nh.param("weight_inflation", optim.weight_inflation, optim.weight_inflation);
-  nh.param("weight_dynamic_obstacle", optim.weight_dynamic_obstacle, optim.weight_dynamic_obstacle);
-  nh.param("weight_dynamic_obstacle_inflation", optim.weight_dynamic_obstacle_inflation, optim.weight_dynamic_obstacle_inflation);
-  nh.param("weight_viapoint", optim.weight_viapoint, optim.weight_viapoint);
-  nh.param("weight_prefer_rotdir", optim.weight_prefer_rotdir, optim.weight_prefer_rotdir);
-  nh.param("weight_adapt_factor", optim.weight_adapt_factor, optim.weight_adapt_factor);
-  nh.param("obstacle_cost_exponent", optim.obstacle_cost_exponent, optim.obstacle_cost_exponent);
-
-  nh.param("weight_max_agent_vel_x", optim.weight_max_agent_vel_x, optim.weight_max_agent_vel_x);
-  nh.param("weight_max_agent_vel_y", optim.weight_max_agent_vel_y, optim.weight_max_agent_vel_y);
-  nh.param("weight_nominal_agent_vel_x", optim.weight_nominal_agent_vel_x, optim.weight_nominal_agent_vel_x);
-  nh.param("weight_max_agent_vel_theta", optim.weight_max_agent_vel_theta, optim.weight_max_agent_vel_theta);
-  nh.param("weight_agent_acc_lim_x", optim.weight_acc_lim_x, optim.weight_agent_acc_lim_x);
-  nh.param("weight_agent_acc_lim_y", optim.weight_acc_lim_y, optim.weight_agent_acc_lim_y);
-  nh.param("weight_agent_acc_lim_theta", optim.weight_acc_lim_theta, optim.weight_agent_acc_lim_theta);
-  nh.param("weight_agent_optimaltime", optim.weight_agent_optimaltime, optim.weight_agent_optimaltime);
-  nh.param("weight_agent_viapoint", optim.weight_agent_viapoint, optim.weight_agent_viapoint);
-  nh.param("weight_agent_robot_safety", optim.weight_agent_robot_safety, optim.weight_agent_robot_safety);
-  nh.param("weight_agent_agent_safety", optim.weight_agent_agent_safety, optim.weight_agent_agent_safety);
-  nh.param("weight_agent_robot_rel_vel", optim.weight_agent_robot_rel_vel, optim.weight_agent_robot_rel_vel);
-  nh.param("weight_agent_robot_visibility", optim.weight_agent_robot_visibility, optim.weight_agent_robot_visibility);
-  nh.param("disable_warm_start", optim.disable_warm_start, optim.disable_warm_start);
-  nh.param("disable_rapid_omega_chage", optim.disable_rapid_omega_chage, optim.disable_rapid_omega_chage);
-  nh.param("omega_chage_time_seperation", optim.omega_chage_time_seperation, optim.omega_chage_time_seperation);
-
-  // Hateb
-  nh.param("use_agent_robot_safety_c", hateb.use_agent_robot_safety_c, hateb.use_agent_robot_safety_c);
-  nh.param("use_agent_agent_safety_c", hateb.use_agent_agent_safety_c, hateb.use_agent_agent_safety_c);
-  nh.param("use_agent_robot_rel_vel_c", hateb.use_agent_robot_rel_vel_c, hateb.use_agent_robot_rel_vel_c);
-  nh.param("add_invisible_humans", hateb.add_invisible_humans, hateb.add_invisible_humans);
-  nh.param("use_agent_robot_visi_c", hateb.use_agent_robot_visi_c, hateb.use_agent_robot_visi_c);
-  nh.param("use_agent_elastic_vel", hateb.use_agent_elastic_vel, hateb.use_agent_elastic_vel);
-  nh.param("min_agent_robot_dist", hateb.min_agent_robot_dist, hateb.min_agent_robot_dist);
-  nh.param("min_agent_agent_dist", hateb.min_agent_agent_dist, hateb.min_agent_agent_dist);
-  nh.param("agent_pose_prediction_reset_time", hateb.pose_prediction_reset_time, hateb.pose_prediction_reset_time);
-  nh.param("rel_vel_cost_threshold", hateb.rel_vel_cost_threshold, hateb.rel_vel_cost_threshold);
-  nh.param("invisible_human_threshold", hateb.invisible_human_threshold, hateb.invisible_human_threshold);
-
-  // Recovery
-  nh.param("shrink_horizon_backup", recovery.shrink_horizon_backup, recovery.shrink_horizon_backup);
-  nh.param("shrink_horizon_min_duration", recovery.shrink_horizon_min_duration, recovery.shrink_horizon_min_duration);
-  nh.param("oscillation_recovery", recovery.oscillation_recovery, recovery.oscillation_recovery);
-  nh.param("oscillation_v_eps", recovery.oscillation_v_eps, recovery.oscillation_v_eps);
-  nh.param("oscillation_omega_eps", recovery.oscillation_omega_eps, recovery.oscillation_omega_eps);
-  nh.param("oscillation_recovery_min_duration", recovery.oscillation_recovery_min_duration, recovery.oscillation_recovery_min_duration);
-  nh.param("oscillation_filter_duration", recovery.oscillation_filter_duration, recovery.oscillation_filter_duration);
-
-  // Visualization
-  nh.param("publish_robot_global_plan", visualization.publish_robot_global_plan, visualization.publish_robot_global_plan);
-  nh.param("publish_robot_local_plan", visualization.publish_robot_local_plan, visualization.publish_robot_local_plan);
-  nh.param("publish_robot_local_plan_poses", visualization.publish_robot_local_plan_poses, visualization.publish_robot_local_plan_poses);
-  nh.param("publish_robot_local_plan_fp_poses", visualization.publish_robot_local_plan_fp_poses, visualization.publish_robot_local_plan_fp_poses);
-  nh.param("publish_agents_global_plans", visualization.publish_agents_global_plans, visualization.publish_agents_global_plans);
-  nh.param("publish_agents_local_plans", visualization.publish_agents_local_plans, visualization.publish_agents_local_plans);
-  nh.param("publish_agents_local_plan_poses", visualization.publish_agents_local_plan_poses, visualization.publish_agents_local_plan_poses);
-  nh.param("publish_agents_local_plan_fp_poses", visualization.publish_agents_local_plan_fp_poses, visualization.publish_agents_local_plan_fp_poses);
-  nh.param("pose_array_z_scale", visualization.pose_array_z_scale, visualization.pose_array_z_scale);
-
-  checkParameters();
-  checkDeprecated(nh);
+  // Load initial parameter values
+  param_helper_.loadBoundParameters();
 }
 
-void HATebConfig::reconfigure(HATebLocalPlannerReconfigureConfig& cfg) {
-  boost::mutex::scoped_lock l(config_mutex_);
+void HATebConfig::bindParameters() {
+  // Helper lambda to add plugin name prefix to parameter names
+  auto param_name = [this](const std::string& name) -> std::string { return plugin_name_.empty() ? name : plugin_name_ + "." + name; };
 
-  planning_mode = cfg.planning_mode;
+  // General parameters
+  param_helper_.bindStringParam(param_name("ns"), ns_, "Namespace of the planner");
+  param_helper_.bindStringParam(param_name("odom_topic"), odom_topic, "Odometry topic");
+  param_helper_.bindStringParam(param_name("map_frame"), map_frame, "Map frame ID");
+  param_helper_.bindIntParam(param_name("planning_mode"), planning_mode, 0, 10, "Planning mode");
 
-  // Trajectory
-  trajectory.teb_autosize = cfg.teb_autosize;
-  trajectory.dt_ref = cfg.dt_ref;
-  trajectory.dt_hysteresis = cfg.dt_hysteresis;
-  trajectory.global_plan_overwrite_orientation = cfg.global_plan_overwrite_orientation;
-  trajectory.allow_init_with_backwards_motion = cfg.allow_init_with_backwards_motion;
-  trajectory.global_plan_viapoint_sep = cfg.global_plan_viapoint_sep;
-  trajectory.via_points_ordered = cfg.via_points_ordered;
-  trajectory.max_global_plan_lookahead_dist = cfg.max_global_plan_lookahead_dist;
-  trajectory.exact_arc_length = cfg.exact_arc_length;
-  trajectory.force_reinit_new_goal_dist = cfg.force_reinit_new_goal_dist;
-  trajectory.force_reinit_new_goal_angular = cfg.force_reinit_new_goal_angular;
-  trajectory.feasibility_check_no_poses = cfg.feasibility_check_no_poses;
-  trajectory.publish_feedback = cfg.publish_feedback;
-  trajectory.teb_init_skip_dist = cfg.teb_init_skip_dist;
+  // Trajectory parameters
+  param_helper_.bindBoolParam(param_name("teb_autosize"), trajectory.teb_autosize, "Enable TEB autosize");
+  param_helper_.bindFloatParam(param_name("dt_ref"), trajectory.dt_ref, 0.01, 10.0, "Reference time step");
+  param_helper_.bindFloatParam(param_name("dt_hysteresis"), trajectory.dt_hysteresis, 0.0, 1.0, "Time step hysteresis");
+  param_helper_.bindIntParam(param_name("min_samples"), trajectory.min_samples, 2, 1000, "Minimum trajectory samples");
+  param_helper_.bindIntParam(param_name("max_samples"), trajectory.max_samples, 3, 10000, "Maximum trajectory samples");
+  param_helper_.bindIntParam(param_name("agent_min_samples"), trajectory.agent_min_samples, 2, 1000, "Minimum agent trajectory samples");
+  param_helper_.bindBoolParam(param_name("global_plan_overwrite_orientation"), trajectory.global_plan_overwrite_orientation, "Overwrite orientation from global plan");
+  param_helper_.bindBoolParam(param_name("allow_init_with_backwards_motion"), trajectory.allow_init_with_backwards_motion, "Allow initialization with backwards motion");
+  param_helper_.bindFloatParam(param_name("global_plan_viapoint_sep"), trajectory.global_plan_viapoint_sep, -1.0, 100.0, "Global plan viapoint separation");
+  param_helper_.bindBoolParam(param_name("via_points_ordered"), trajectory.via_points_ordered, "Respect viapoint order");
+  param_helper_.bindFloatParam(param_name("max_global_plan_lookahead_dist"), trajectory.max_global_plan_lookahead_dist, 0.0, 100.0, "Max global plan lookahead distance");
+  param_helper_.bindFloatParam(param_name("global_plan_prune_distance"), trajectory.global_plan_prune_distance, 0.0, 10.0, "Global plan prune distance");
+  param_helper_.bindBoolParam(param_name("exact_arc_length"), trajectory.exact_arc_length, "Use exact arc length");
+  param_helper_.bindFloatParam(param_name("force_reinit_new_goal_dist"), trajectory.force_reinit_new_goal_dist, 0.0, 10.0, "Force reinit distance threshold");
+  param_helper_.bindFloatParam(param_name("force_reinit_new_goal_angular"), trajectory.force_reinit_new_goal_angular, 0.0, 6.3, "Force reinit angular threshold");
+  param_helper_.bindIntParam(param_name("feasibility_check_no_poses"), trajectory.feasibility_check_no_poses, 0, 100, "Number of poses for feasibility check");
+  param_helper_.bindBoolParam(param_name("publish_feedback"), trajectory.publish_feedback, "Publish planner feedback");
+  param_helper_.bindFloatParam(param_name("min_resolution_collision_check_angular"), trajectory.min_resolution_collision_check_angular, 0.0, 6.3, "Min angular resolution for collision check");
+  param_helper_.bindIntParam(param_name("control_look_ahead_poses"), trajectory.control_look_ahead_poses, 0, 100, "Control look ahead poses");
+  param_helper_.bindFloatParam(param_name("teb_init_skip_dist"), trajectory.teb_init_skip_dist, 0.0, 10.0, "TEB init skip distance");
+  param_helper_.bindFloatParam(param_name("visualize_with_time_as_z_axis_scale"), trajectory.visualize_with_time_as_z_axis_scale, 0.0, 100.0, "Visualization time as z-axis scale");
 
-  // Robot
-  robot.is_real = cfg.is_real;
-  robot.max_vel_x = cfg.max_vel_x;
-  robot.max_vel_x_backwards = cfg.max_vel_x_backwards;
-  robot.max_vel_y = cfg.max_vel_y;
-  robot.max_vel_theta = cfg.max_vel_theta;
-  robot.acc_lim_x = cfg.acc_lim_x;
-  robot.acc_lim_y = cfg.acc_lim_y;
-  robot.acc_lim_theta = cfg.acc_lim_theta;
-  robot.min_turning_radius = cfg.min_turning_radius;
-  robot.wheelbase = cfg.wheelbase;
-  robot.cmd_angle_instead_rotvel = cfg.cmd_angle_instead_rotvel;
+  // Robot parameters
+  param_helper_.bindIntParam(param_name("type"), robot.type, 0, 10, "Robot type");
+  param_helper_.bindFloatParam(param_name("max_vel_x"), robot.max_vel_x, 0.0, 10.0, "Max forward velocity");
+  param_helper_.bindFloatParam(param_name("max_vel_x_backwards"), robot.max_vel_x_backwards, 0.0, 10.0, "Max backward velocity");
+  param_helper_.bindFloatParam(param_name("max_vel_y"), robot.max_vel_y, 0.0, 10.0, "Max strafing velocity");
+  param_helper_.bindFloatParam(param_name("max_vel_theta"), robot.max_vel_theta, 0.0, 10.0, "Max angular velocity");
+  param_helper_.bindFloatParam(param_name("acc_lim_x"), robot.acc_lim_x, 0.0, 10.0, "Max forward acceleration");
+  param_helper_.bindFloatParam(param_name("acc_lim_y"), robot.acc_lim_y, 0.0, 10.0, "Max strafing acceleration");
+  param_helper_.bindFloatParam(param_name("acc_lim_theta"), robot.acc_lim_theta, 0.0, 10.0, "Max angular acceleration");
+  param_helper_.bindFloatParam(param_name("min_turning_radius"), robot.min_turning_radius, 0.0, 100.0, "Min turning radius");
+  param_helper_.bindFloatParam(param_name("wheelbase"), robot.wheelbase, 0.0, 10.0, "Wheelbase length");
+  param_helper_.bindBoolParam(param_name("cmd_angle_instead_rotvel"), robot.cmd_angle_instead_rotvel, "Command angle instead of rotational velocity");
+  param_helper_.bindBoolParam(param_name("is_footprint_dynamic"), robot.is_footprint_dynamic, "Is footprint dynamic");
+  param_helper_.bindBoolParam(param_name("is_real"), robot.is_real, "Is real robot");
 
-  // Agent
-  agent.max_vel_x = cfg.max_agent_vel_x;
-  agent.max_vel_y = cfg.max_agent_vel_y;
-  agent.max_vel_x_backwards = cfg.max_agent_vel_x_backwards;
-  agent.max_vel_theta = cfg.max_agent_vel_theta;
-  agent.acc_lim_x = cfg.agent_acc_lim_x;
-  agent.acc_lim_y = cfg.agent_acc_lim_y;
-  agent.acc_lim_theta = cfg.agent_acc_lim_theta;
-  agent.fov = cfg.fov;
-  agent.num_moving_avg = cfg.num_moving_avg;
+  // Agent parameters
+  param_helper_.bindFloatParam(param_name("agent_radius"), agent.radius, 0.0, 10.0, "Agent radius");
+  param_helper_.bindFloatParam(param_name("max_agent_vel_x"), agent.max_vel_x, 0.0, 10.0, "Max agent forward velocity");
+  param_helper_.bindFloatParam(param_name("max_agent_vel_y"), agent.max_vel_y, 0.0, 10.0, "Max agent strafing velocity");
+  param_helper_.bindFloatParam(param_name("max_agent_vel_x_backwards"), agent.max_vel_x_backwards, -10.0, 10.0, "Max agent backward velocity");
+  param_helper_.bindFloatParam(param_name("max_agent_vel_theta"), agent.max_vel_theta, 0.0, 10.0, "Max agent angular velocity");
+  param_helper_.bindFloatParam(param_name("agent_acc_lim_x"), agent.acc_lim_x, 0.0, 10.0, "Max agent forward acceleration");
+  param_helper_.bindFloatParam(param_name("agent_acc_lim_y"), agent.acc_lim_y, 0.0, 10.0, "Max agent strafing acceleration");
+  param_helper_.bindFloatParam(param_name("agent_acc_lim_theta"), agent.acc_lim_theta, 0.0, 10.0, "Max agent angular acceleration");
+  param_helper_.bindFloatParam(param_name("agent_fov"), agent.fov, 0.0, 6.3, "Agent field of view");
+  param_helper_.bindIntParam(param_name("num_moving_avg"), agent.num_moving_avg, 1, 100, "Number of samples for moving average");
 
-  // GoalTolerance
-  goal_tolerance.xy_goal_tolerance = cfg.xy_goal_tolerance;
-  goal_tolerance.yaw_goal_tolerance = cfg.yaw_goal_tolerance;
-  goal_tolerance.complete_global_plan = cfg.complete_global_plan;
-  goal_tolerance.free_goal_vel = cfg.free_goal_vel;
+  // Goal tolerance parameters
+  param_helper_.bindFloatParam(param_name("xy_goal_tolerance"), goal_tolerance.xy_goal_tolerance, 0.0, 10.0, "XY goal tolerance");
+  param_helper_.bindFloatParam(param_name("yaw_goal_tolerance"), goal_tolerance.yaw_goal_tolerance, 0.0, 6.3, "Yaw goal tolerance");
+  param_helper_.bindBoolParam(param_name("free_goal_vel"), goal_tolerance.free_goal_vel, "Allow non-zero goal velocity");
+  param_helper_.bindBoolParam(param_name("complete_global_plan"), goal_tolerance.complete_global_plan, "Complete global plan");
 
-  // Obstacles
-  obstacles.min_obstacle_dist = cfg.min_obstacle_dist;
-  obstacles.inflation_dist = cfg.inflation_dist;
-  obstacles.legacy_obstacle_association = cfg.legacy_obstacle_association;
-  obstacles.obstacle_association_force_inclusion_factor = cfg.obstacle_association_force_inclusion_factor;
-  obstacles.obstacle_association_cutoff_factor = cfg.obstacle_association_cutoff_factor;
-  obstacles.use_nonlinear_obstacle_penalty = cfg.use_nonlinear_obstacle_penalty;
-  obstacles.obstacle_cost_mult = cfg.obstacle_cost_mult;
-  obstacles.dynamic_obstacle_inflation_dist = cfg.dynamic_obstacle_inflation_dist;
-  obstacles.include_dynamic_obstacles = cfg.include_dynamic_obstacles;
-  obstacles.include_costmap_obstacles = cfg.include_costmap_obstacles;
-  obstacles.costmap_obstacles_behind_robot_dist = cfg.costmap_obstacles_behind_robot_dist;
-  obstacles.obstacle_poses_affected = cfg.obstacle_poses_affected;
+  // Obstacle parameters
+  param_helper_.bindFloatParam(param_name("min_obstacle_dist"), obstacles.min_obstacle_dist, 0.0, 10.0, "Minimum obstacle distance");
+  param_helper_.bindFloatParam(param_name("inflation_dist"), obstacles.inflation_dist, 0.0, 10.0, "Inflation distance");
+  param_helper_.bindBoolParam(param_name("use_nonlinear_obstacle_penalty"), obstacles.use_nonlinear_obstacle_penalty, "Use nonlinear obstacle penalty");
+  param_helper_.bindFloatParam(param_name("obstacle_cost_mult"), obstacles.obstacle_cost_mult, 0.0, 100.0, "Obstacle cost multiplier");
+  param_helper_.bindFloatParam(param_name("dynamic_obstacle_inflation_dist"), obstacles.dynamic_obstacle_inflation_dist, 0.0, 10.0, "Dynamic obstacle inflation distance");
+  param_helper_.bindBoolParam(param_name("include_dynamic_obstacles"), obstacles.include_dynamic_obstacles, "Include dynamic obstacles");
+  param_helper_.bindBoolParam(param_name("include_costmap_obstacles"), obstacles.include_costmap_obstacles, "Include costmap obstacles");
+  param_helper_.bindFloatParam(param_name("costmap_obstacles_behind_robot_dist"), obstacles.costmap_obstacles_behind_robot_dist, 0.0, 10.0, "Costmap obstacles behind robot distance");
+  param_helper_.bindIntParam(param_name("obstacle_poses_affected"), obstacles.obstacle_poses_affected, 0, 100, "Obstacle poses affected");
+  param_helper_.bindBoolParam(param_name("legacy_obstacle_association"), obstacles.legacy_obstacle_association, "Use legacy obstacle association");
+  param_helper_.bindFloatParam(param_name("obstacle_association_force_inclusion_factor"), obstacles.obstacle_association_force_inclusion_factor, 0.0, 100.0,
+                               "Obstacle association force inclusion factor");
+  param_helper_.bindFloatParam(param_name("obstacle_association_cutoff_factor"), obstacles.obstacle_association_cutoff_factor, 0.0, 100.0, "Obstacle association cutoff factor");
+  param_helper_.bindStringParam(param_name("costmap_converter_plugin"), obstacles.costmap_converter_plugin, "Costmap converter plugin");
+  param_helper_.bindBoolParam(param_name("costmap_converter_spin_thread"), obstacles.costmap_converter_spin_thread, "Costmap converter spin thread");
+  param_helper_.bindIntParam(param_name("costmap_converter_rate"), obstacles.costmap_converter_rate, 1, 100, "Costmap converter rate");
 
-  // Optimization
-  optim.no_inner_iterations = cfg.no_inner_iterations;
-  optim.no_outer_iterations = cfg.no_outer_iterations;
-  optim.optimization_activate = cfg.optimization_activate;
-  optim.optimization_verbose = cfg.optimization_verbose;
-  optim.penalty_epsilon = cfg.penalty_epsilon;
-  optim.time_penalty_epsilon = cfg.time_penalty_epsilon;
-  optim.cap_optimaltime_penalty = cfg.cap_optimaltime_penalty;
-  optim.weight_max_vel_x = cfg.weight_max_vel_x;
-  optim.weight_max_vel_y = cfg.weight_max_vel_y;
-  optim.weight_max_vel_theta = cfg.weight_max_vel_theta;
-  optim.weight_acc_lim_x = cfg.weight_acc_lim_x;
-  optim.weight_acc_lim_y = cfg.weight_acc_lim_y;
-  optim.weight_acc_lim_theta = cfg.weight_acc_lim_theta;
-  optim.weight_kinematics_nh = cfg.weight_kinematics_nh;
-  optim.weight_kinematics_forward_drive = cfg.weight_kinematics_forward_drive;
-  optim.weight_kinematics_turning_radius = cfg.weight_kinematics_turning_radius;
-  optim.weight_optimaltime = cfg.weight_optimaltime;
-  optim.weight_shortest_path = cfg.weight_shortest_path;
-  optim.weight_obstacle = cfg.weight_obstacle;
-  optim.weight_inflation = cfg.weight_inflation;
-  optim.weight_dynamic_obstacle = cfg.weight_dynamic_obstacle;
-  optim.weight_dynamic_obstacle_inflation = cfg.weight_dynamic_obstacle_inflation;
-  optim.weight_viapoint = cfg.weight_viapoint;
-  optim.weight_adapt_factor = cfg.weight_adapt_factor;
-  optim.obstacle_cost_exponent = cfg.obstacle_cost_exponent;
-  optim.weight_max_agent_vel_x = cfg.weight_max_agent_vel_x;
-  optim.weight_max_agent_vel_y = cfg.weight_max_agent_vel_y;
-  optim.weight_nominal_agent_vel_x = cfg.weight_nominal_agent_vel_x;
-  optim.weight_max_agent_vel_theta = cfg.weight_max_agent_vel_theta;
-  optim.weight_agent_acc_lim_x = cfg.weight_agent_acc_lim_x;
-  optim.weight_agent_acc_lim_y = cfg.weight_agent_acc_lim_y;
-  optim.weight_agent_acc_lim_theta = cfg.weight_agent_acc_lim_theta;
-  optim.weight_agent_optimaltime = cfg.weight_agent_optimaltime;
-  optim.weight_agent_viapoint = cfg.weight_agent_viapoint;
-  optim.weight_agent_robot_safety = cfg.weight_agent_robot_safety;
-  optim.weight_agent_agent_safety = cfg.weight_agent_agent_safety;
-  optim.weight_agent_robot_rel_vel = cfg.weight_agent_robot_rel_vel;
-  optim.weight_invisible_human = cfg.weight_invisible_human;
-  optim.weight_agent_robot_visibility = cfg.weight_agent_robot_visibility;
-  optim.disable_warm_start = cfg.disable_warm_start;
-  optim.disable_rapid_omega_chage = cfg.disable_rapid_omega_chage;
-  optim.omega_chage_time_seperation = cfg.omega_chage_time_seperation;
+  // Optimization parameters
+  param_helper_.bindIntParam(param_name("no_inner_iterations"), optim.no_inner_iterations, 1, 100, "Number of inner iterations");
+  param_helper_.bindIntParam(param_name("no_outer_iterations"), optim.no_outer_iterations, 1, 100, "Number of outer iterations");
+  param_helper_.bindBoolParam(param_name("optimization_activate"), optim.optimization_activate, "Activate optimization");
+  param_helper_.bindBoolParam(param_name("optimization_verbose"), optim.optimization_verbose, "Verbose optimization output");
+  param_helper_.bindFloatParam(param_name("penalty_epsilon"), optim.penalty_epsilon, 0.0, 1.0, "Penalty epsilon");
+  param_helper_.bindFloatParam(param_name("time_penalty_epsilon"), optim.time_penalty_epsilon, 0.0, 1.0, "Time penalty epsilon");
+  param_helper_.bindBoolParam(param_name("cap_optimaltime_penalty"), optim.cap_optimaltime_penalty, "Cap optimal time penalty");
+  param_helper_.bindFloatParam(param_name("weight_max_vel_x"), optim.weight_max_vel_x, 0.0, 1000.0, "Weight max vel x");
+  param_helper_.bindFloatParam(param_name("weight_max_vel_y"), optim.weight_max_vel_y, 0.0, 1000.0, "Weight max vel y");
+  param_helper_.bindFloatParam(param_name("weight_max_vel_theta"), optim.weight_max_vel_theta, 0.0, 1000.0, "Weight max vel theta");
+  param_helper_.bindFloatParam(param_name("weight_acc_lim_x"), optim.weight_acc_lim_x, 0.0, 1000.0, "Weight acc lim x");
+  param_helper_.bindFloatParam(param_name("weight_acc_lim_y"), optim.weight_acc_lim_y, 0.0, 1000.0, "Weight acc lim y");
+  param_helper_.bindFloatParam(param_name("weight_acc_lim_theta"), optim.weight_acc_lim_theta, 0.0, 1000.0, "Weight acc lim theta");
+  param_helper_.bindFloatParam(param_name("weight_kinematics_nh"), optim.weight_kinematics_nh, 0.0, 10000.0, "Weight kinematics non-holonomic");
+  param_helper_.bindFloatParam(param_name("weight_kinematics_forward_drive"), optim.weight_kinematics_forward_drive, 0.0, 1000.0, "Weight kinematics forward drive");
+  param_helper_.bindFloatParam(param_name("weight_kinematics_turning_radius"), optim.weight_kinematics_turning_radius, 0.0, 1000.0, "Weight kinematics turning radius");
+  param_helper_.bindFloatParam(param_name("weight_optimaltime"), optim.weight_optimaltime, 0.0, 1000.0, "Weight optimal time");
+  param_helper_.bindFloatParam(param_name("weight_shortest_path"), optim.weight_shortest_path, 0.0, 1000.0, "Weight shortest path");
+  param_helper_.bindFloatParam(param_name("weight_obstacle"), optim.weight_obstacle, 0.0, 1000.0, "Weight obstacle");
+  param_helper_.bindFloatParam(param_name("weight_inflation"), optim.weight_inflation, 0.0, 100.0, "Weight inflation");
+  param_helper_.bindFloatParam(param_name("weight_dynamic_obstacle"), optim.weight_dynamic_obstacle, 0.0, 1000.0, "Weight dynamic obstacle");
+  param_helper_.bindFloatParam(param_name("weight_dynamic_obstacle_inflation"), optim.weight_dynamic_obstacle_inflation, 0.0, 100.0, "Weight dynamic obstacle inflation");
+  param_helper_.bindFloatParam(param_name("weight_viapoint"), optim.weight_viapoint, 0.0, 1000.0, "Weight viapoint");
+  param_helper_.bindFloatParam(param_name("weight_prefer_rotdir"), optim.weight_prefer_rotdir, 0.0, 1000.0, "Weight prefer rotation direction");
+  param_helper_.bindFloatParam(param_name("weight_adapt_factor"), optim.weight_adapt_factor, 1.0, 10.0, "Weight adaptation factor");
+  param_helper_.bindFloatParam(param_name("obstacle_cost_exponent"), optim.obstacle_cost_exponent, 0.1, 10.0, "Obstacle cost exponent");
+  param_helper_.bindFloatParam(param_name("weight_max_agent_vel_x"), optim.weight_max_agent_vel_x, 0.0, 1000.0, "Weight max agent vel x");
+  param_helper_.bindFloatParam(param_name("weight_max_agent_vel_y"), optim.weight_max_agent_vel_y, 0.0, 1000.0, "Weight max agent vel y");
+  param_helper_.bindFloatParam(param_name("weight_nominal_agent_vel_x"), optim.weight_nominal_agent_vel_x, 0.0, 1000.0, "Weight nominal agent vel x");
+  param_helper_.bindFloatParam(param_name("weight_max_agent_vel_theta"), optim.weight_max_agent_vel_theta, 0.0, 1000.0, "Weight max agent vel theta");
+  param_helper_.bindFloatParam(param_name("weight_agent_acc_lim_x"), optim.weight_agent_acc_lim_x, 0.0, 1000.0, "Weight agent acc lim x");
+  param_helper_.bindFloatParam(param_name("weight_agent_acc_lim_y"), optim.weight_agent_acc_lim_y, 0.0, 1000.0, "Weight agent acc lim y");
+  param_helper_.bindFloatParam(param_name("weight_agent_acc_lim_theta"), optim.weight_agent_acc_lim_theta, 0.0, 1000.0, "Weight agent acc lim theta");
+  param_helper_.bindFloatParam(param_name("weight_agent_optimaltime"), optim.weight_agent_optimaltime, 0.0, 1000.0, "Weight agent optimal time");
+  param_helper_.bindFloatParam(param_name("weight_agent_viapoint"), optim.weight_agent_viapoint, 0.0, 1000.0, "Weight agent viapoint");
+  param_helper_.bindFloatParam(param_name("weight_invisible_human"), optim.weight_invisible_human, 0.0, 1000.0, "Weight invisible human");
+  param_helper_.bindFloatParam(param_name("weight_agent_robot_safety"), optim.weight_agent_robot_safety, 0.0, 1000.0, "Weight agent robot safety");
+  param_helper_.bindFloatParam(param_name("weight_agent_agent_safety"), optim.weight_agent_agent_safety, 0.0, 1000.0, "Weight agent agent safety");
+  param_helper_.bindFloatParam(param_name("weight_agent_robot_rel_vel"), optim.weight_agent_robot_rel_vel, 0.0, 1000.0, "Weight agent robot relative velocity");
+  param_helper_.bindFloatParam(param_name("weight_agent_robot_visibility"), optim.weight_agent_robot_visibility, 0.0, 1000.0, "Weight agent robot visibility");
+  param_helper_.bindBoolParam(param_name("disable_warm_start"), optim.disable_warm_start, "Disable warm start");
+  param_helper_.bindBoolParam(param_name("disable_rapid_omega_chage"), optim.disable_rapid_omega_chage, "Disable rapid omega change");
+  param_helper_.bindFloatParam(param_name("omega_chage_time_seperation"), optim.omega_chage_time_seperation, 0.0, 10.0, "Omega change time separation");
 
-  // Hateb
-  hateb.use_agent_robot_safety_c = cfg.use_agent_robot_safety_c;
-  hateb.use_agent_agent_safety_c = cfg.use_agent_agent_safety_c;
-  hateb.use_agent_robot_rel_vel_c = cfg.use_agent_robot_rel_vel_c;
-  hateb.add_invisible_humans = cfg.add_invisible_humans;
-  hateb.use_agent_robot_visi_c = cfg.use_agent_robot_visi_c;
-  hateb.use_agent_elastic_vel = cfg.use_agent_elastic_vel;
-  hateb.min_agent_robot_dist = cfg.min_agent_robot_dist;
-  hateb.min_agent_agent_dist = cfg.min_agent_agent_dist;
-  hateb.rel_vel_cost_threshold = cfg.rel_vel_cost_threshold;
-  hateb.invisible_human_threshold = cfg.invisible_human_threshold;
-  hateb.visibility_cost_threshold = cfg.visibility_cost_threshold;
-  hateb.pose_prediction_reset_time = cfg.agent_pose_prediction_reset_time;
+  // HATEB parameters
+  param_helper_.bindBoolParam(param_name("use_agent_robot_safety_c"), hateb.use_agent_robot_safety_c, "Use agent robot safety constraint");
+  param_helper_.bindBoolParam(param_name("use_agent_agent_safety_c"), hateb.use_agent_agent_safety_c, "Use agent agent safety constraint");
+  param_helper_.bindBoolParam(param_name("use_agent_robot_rel_vel_c"), hateb.use_agent_robot_rel_vel_c, "Use agent robot relative velocity constraint");
+  param_helper_.bindBoolParam(param_name("add_invisible_humans"), hateb.add_invisible_humans, "Add invisible humans");
+  param_helper_.bindBoolParam(param_name("use_agent_robot_visi_c"), hateb.use_agent_robot_visi_c, "Use agent robot visibility constraint");
+  param_helper_.bindBoolParam(param_name("use_agent_elastic_vel"), hateb.use_agent_elastic_vel, "Use agent elastic velocity");
+  param_helper_.bindFloatParam(param_name("pose_prediction_reset_time"), hateb.pose_prediction_reset_time, 0.0, 100.0, "Pose prediction reset time");
+  param_helper_.bindFloatParam(param_name("min_agent_robot_dist"), hateb.min_agent_robot_dist, 0.0, 10.0, "Minimum agent robot distance");
+  param_helper_.bindFloatParam(param_name("min_agent_agent_dist"), hateb.min_agent_agent_dist, 0.0, 10.0, "Minimum agent agent distance");
+  param_helper_.bindFloatParam(param_name("rel_vel_cost_threshold"), hateb.rel_vel_cost_threshold, 0.0, 100.0, "Relative velocity cost threshold");
+  param_helper_.bindFloatParam(param_name("invisible_human_threshold"), hateb.invisible_human_threshold, 0.0, 100.0, "Invisible human threshold");
+  param_helper_.bindFloatParam(param_name("visibility_cost_threshold"), hateb.visibility_cost_threshold, 0.0, 100.0, "Visibility cost threshold");
 
-  // Recovery
-  recovery.shrink_horizon_backup = cfg.shrink_horizon_backup;
-  recovery.oscillation_recovery = cfg.oscillation_recovery;
+  // Recovery parameters
+  param_helper_.bindBoolParam(param_name("shrink_horizon_backup"), recovery.shrink_horizon_backup, "Shrink horizon backup");
+  param_helper_.bindFloatParam(param_name("shrink_horizon_min_duration"), recovery.shrink_horizon_min_duration, 0.0, 100.0, "Shrink horizon min duration");
+  param_helper_.bindBoolParam(param_name("oscillation_recovery"), recovery.oscillation_recovery, "Oscillation recovery");
+  param_helper_.bindFloatParam(param_name("oscillation_v_eps"), recovery.oscillation_v_eps, 0.0, 10.0, "Oscillation velocity epsilon");
+  param_helper_.bindFloatParam(param_name("oscillation_omega_eps"), recovery.oscillation_omega_eps, 0.0, 10.0, "Oscillation omega epsilon");
+  param_helper_.bindFloatParam(param_name("oscillation_recovery_min_duration"), recovery.oscillation_recovery_min_duration, 0.0, 100.0, "Oscillation recovery min duration");
+  param_helper_.bindFloatParam(param_name("oscillation_filter_duration"), recovery.oscillation_filter_duration, 0.0, 100.0, "Oscillation filter duration");
 
-  // Visualization
-  visualization.publish_robot_global_plan = cfg.publish_robot_global_plan;
-  visualization.publish_robot_local_plan = cfg.publish_robot_local_plan;
-  visualization.publish_robot_local_plan_poses = cfg.publish_robot_local_plan_poses;
-  visualization.publish_robot_local_plan_fp_poses = cfg.publish_robot_local_plan_fp_poses;
-  visualization.publish_agents_global_plans = cfg.publish_agents_global_plans;
-  visualization.publish_agents_local_plans = cfg.publish_agents_local_plans;
-  visualization.publish_agents_local_plan_poses = cfg.publish_agents_local_plan_poses;
-  visualization.publish_agents_local_plan_fp_poses = cfg.publish_agents_local_plan_fp_poses;
-  visualization.pose_array_z_scale = cfg.pose_array_z_scale;
-
-  checkParameters();
+  // Visualization parameters
+  param_helper_.bindBoolParam(param_name("publish_robot_global_plan"), visualization.publish_robot_global_plan, "Publish robot global plan");
+  param_helper_.bindBoolParam(param_name("publish_robot_local_plan"), visualization.publish_robot_local_plan, "Publish robot local plan");
+  param_helper_.bindBoolParam(param_name("publish_robot_local_plan_poses"), visualization.publish_robot_local_plan_poses, "Publish robot local plan poses");
+  param_helper_.bindBoolParam(param_name("publish_robot_local_plan_fp_poses"), visualization.publish_robot_local_plan_fp_poses, "Publish robot local plan footprint poses");
+  param_helper_.bindBoolParam(param_name("publish_agents_global_plans"), visualization.publish_agents_global_plans, "Publish agents global plans");
+  param_helper_.bindBoolParam(param_name("publish_agents_local_plans"), visualization.publish_agents_local_plans, "Publish agents local plans");
+  param_helper_.bindBoolParam(param_name("publish_agents_local_plan_poses"), visualization.publish_agents_local_plan_poses, "Publish agents local plan poses");
+  param_helper_.bindBoolParam(param_name("publish_agents_local_plan_fp_poses"), visualization.publish_agents_local_plan_fp_poses, "Publish agents local plan footprint poses");
+  param_helper_.bindFloatParam(param_name("pose_array_z_scale"), visualization.pose_array_z_scale, 0.0, 100.0, "Pose array z-axis scale");
 }
 
 void HATebConfig::checkParameters() const {
+  auto node = node_.lock();
+  if (!node) {
+    return;
+  }
+
   // positive backward velocity?
   if (robot.max_vel_x_backwards <= 0) {
-    ROS_WARN("HATebLocalPlannerROS() Param Warning: Do not choose max_vel_x_backwards to be <=0. Disable backwards driving by increasing the optimization weight for penalyzing backwards driving.");
+    RCLCPP_WARN(node->get_logger(),
+                "HATebLocalPlanner Param Warning: Do not choose max_vel_x_backwards to be <=0. Disable backwards driving by increasing the optimization weight for penalizing backwards driving.");
   }
   // bounds smaller than penalty epsilon
   if (robot.max_vel_x <= optim.penalty_epsilon) {
-    ROS_WARN("HATebLocalPlannerROS() Param Warning: max_vel_x <= penalty_epsilon. The resulting bound is negative. Undefined behavior... Change at least one of them!");
+    RCLCPP_WARN(node->get_logger(), "HATebLocalPlanner Param Warning: max_vel_x <= penalty_epsilon. The resulting bound is negative. Undefined behavior... Change at least one of them!");
   }
   if (robot.max_vel_x_backwards <= optim.penalty_epsilon) {
-    ROS_WARN("HATebLocalPlannerROS() Param Warning: max_vel_x_backwards <= penalty_epsilon. The resulting bound is negative. Undefined behavior... Change at least one of them!");
+    RCLCPP_WARN(node->get_logger(), "HATebLocalPlanner Param Warning: max_vel_x_backwards <= penalty_epsilon. The resulting bound is negative. Undefined behavior... Change at least one of them!");
   }
   if (robot.max_vel_theta <= optim.penalty_epsilon) {
-    ROS_WARN("HATebLocalPlannerROS() Param Warning: max_vel_theta <= penalty_epsilon. The resulting bound is negative. Undefined behavior... Change at least one of them!");
+    RCLCPP_WARN(node->get_logger(), "HATebLocalPlanner Param Warning: max_vel_theta <= penalty_epsilon. The resulting bound is negative. Undefined behavior... Change at least one of them!");
   }
   if (robot.acc_lim_x <= optim.penalty_epsilon) {
-    ROS_WARN("HATebLocalPlannerROS() Param Warning: acc_lim_x <= penalty_epsilon. The resulting bound is negative. Undefined behavior... Change at least one of them!");
+    RCLCPP_WARN(node->get_logger(), "HATebLocalPlanner Param Warning: acc_lim_x <= penalty_epsilon. The resulting bound is negative. Undefined behavior... Change at least one of them!");
   }
   if (robot.acc_lim_theta <= optim.penalty_epsilon) {
-    ROS_WARN("HATebLocalPlannerROS() Param Warning: acc_lim_theta <= penalty_epsilon. The resulting bound is negative. Undefined behavior... Change at least one of them!");
+    RCLCPP_WARN(node->get_logger(), "HATebLocalPlanner Param Warning: acc_lim_theta <= penalty_epsilon. The resulting bound is negative. Undefined behavior... Change at least one of them!");
   }
   // dt_ref and dt_hyst
   if (trajectory.dt_ref <= trajectory.dt_hysteresis) {
-    ROS_WARN("HATebLocalPlannerROS() Param Warning: dt_ref <= dt_hysteresis. The hysteresis is not allowed to be greater or equal!. Undefined behavior... Change at least one of them!");
+    RCLCPP_WARN(node->get_logger(),
+                "HATebLocalPlanner Param Warning: dt_ref <= dt_hysteresis. The hysteresis is not allowed to be greater or equal!. Undefined behavior... Change at least one of them!");
   }
   // min number of samples
   if (trajectory.min_samples < 3) {
-    ROS_WARN("HATebLocalPlannerROS() Param Warning: parameter min_samples is smaller than 3! Sorry, I haven't enough degrees of freedom to plan a trajectory for you. Please increase ...");
+    RCLCPP_WARN(node->get_logger(),
+                "HATebLocalPlanner Param Warning: parameter min_samples is smaller than 3! Sorry, I haven't enough degrees of freedom to plan a trajectory for you. Please increase ...");
   }
   // costmap obstacle behind robot
   if (obstacles.costmap_obstacles_behind_robot_dist < 0) {
-    ROS_WARN("HATebLocalPlannerROS() Param Warning: parameter 'costmap_obstacles_behind_robot_dist' should be positive or zero.");
+    RCLCPP_WARN(node->get_logger(), "HATebLocalPlanner Param Warning: parameter 'costmap_obstacles_behind_robot_dist' should be positive or zero.");
   }
 
   // carlike
   if (robot.cmd_angle_instead_rotvel && robot.wheelbase == 0) {
-    ROS_WARN("HATebLocalPlannerROS() Param Warning: parameter cmd_angle_instead_rotvel is non-zero but wheelbase is set to zero: undesired behavior.");
+    RCLCPP_WARN(node->get_logger(), "HATebLocalPlanner Param Warning: parameter cmd_angle_instead_rotvel is non-zero but wheelbase is set to zero: undesired behavior.");
   }
   if (robot.cmd_angle_instead_rotvel && robot.min_turning_radius == 0) {
-    ROS_WARN(
-        "HATebLocalPlannerROS() Param Warning: parameter cmd_angle_instead_rotvel is non-zero but min_turning_radius is set to zero: undesired behavior. You are mixing a carlike and a diffdrive "
-        "robot");
+    RCLCPP_WARN(
+        node->get_logger(),
+        "HATebLocalPlanner Param Warning: parameter cmd_angle_instead_rotvel is non-zero but min_turning_radius is set to zero: undesired behavior. You are mixing a carlike and a diffdrive robot");
   }
 
   // positive weight_adapt_factor
   if (optim.weight_adapt_factor < 1.0) {
-    ROS_WARN("HATebLocalPlannerROS() Param Warning: parameter weight_adapt_factor shoud be >= 1.0");
+    RCLCPP_WARN(node->get_logger(), "HATebLocalPlanner Param Warning: parameter weight_adapt_factor should be >= 1.0");
   }
 
   if (recovery.oscillation_filter_duration < 0) {
-    ROS_WARN("HATebLocalPlannerROS() Param Warning: parameter oscillation_filter_duration must be >= 0");
+    RCLCPP_WARN(node->get_logger(), "HATebLocalPlanner Param Warning: parameter oscillation_filter_duration must be >= 0");
   }
 
   // weights
   if (optim.weight_optimaltime <= 0) {
-    ROS_WARN("HATebLocalPlannerROS() Param Warning: parameter weight_optimaltime shoud be > 0 (even if weight_shortest_path is in use)");
-  }
-}
-
-void HATebConfig::checkDeprecated(const ros::NodeHandle& nh) const {
-  if (nh.hasParam("line_obstacle_poses_affected") || nh.hasParam("polygon_obstacle_poses_affected")) {
-    ROS_WARN(
-        "HATebLocalPlannerROS() Param Warning: 'line_obstacle_poses_affected' and 'polygon_obstacle_poses_affected' are deprecated. They share now the common parameter 'obstacle_poses_affected'.");
-  }
-  if (nh.hasParam("weight_point_obstacle") || nh.hasParam("weight_line_obstacle") || nh.hasParam("weight_poly_obstacle")) {
-    ROS_WARN(
-        "HATebLocalPlannerROS() Param Warning: 'weight_point_obstacle', 'weight_line_obstacle' and 'weight_poly_obstacle' are deprecated. They are replaced by the single param 'weight_obstacle'.");
-  }
-  if (nh.hasParam("costmap_obstacles_front_only")) {
-    ROS_WARN(
-        "HATebLocalPlannerROS() Param Warning: 'costmap_obstacles_front_only' is deprecated. It is replaced by 'costmap_obstacles_behind_robot_dist' to define the actual area taken into account.");
-  }
-  if (nh.hasParam("costmap_emergency_stop_dist")) {
-    ROS_WARN("HATebLocalPlannerROS() Param Warning: 'costmap_emergency_stop_dist' is deprecated. You can safely remove it from your parameter config.");
-  }
-  if (nh.hasParam("alternative_time_cost")) {
-    ROS_WARN("HATebLocalPlannerROS() Param Warning: 'alternative_time_cost' is deprecated. It has been replaced by 'selection_alternative_time_cost'.");
-  }
-  if (nh.hasParam("global_plan_via_point_sep")) {
-    ROS_WARN("HATebLocalPlannerROS() Param Warning: 'global_plan_via_point_sep' is deprecated. It has been replaced by 'global_plan_viapoint_sep' due to consistency reasons.");
+    RCLCPP_WARN(node->get_logger(), "HATebLocalPlanner Param Warning: parameter weight_optimaltime should be > 0 (even if weight_shortest_path is in use)");
   }
 }
 

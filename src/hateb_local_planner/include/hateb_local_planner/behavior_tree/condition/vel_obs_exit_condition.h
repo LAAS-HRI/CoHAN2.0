@@ -24,8 +24,9 @@
  * Author: Phani Teja Singamaneni
  *********************************************************************************/
 
-#include <ros/ros.h>
 #include <tf2/utils.h>
+
+#include <rclcpp/rclcpp.hpp>
 
 // New
 #include <agent_path_prediction/AgentsInfo.h>
@@ -71,7 +72,7 @@ class VelObsExitCondition : public BT::ConditionNode {
    */
   static BT::PortsList providedPorts() {
     // This action has a single input port called "agents_info"
-    return {BT::InputPort<agent_path_prediction::AgentsInfo>("agents_info"), BT::InputPort<std::shared_ptr<agents::Agents>>("agents_ptr"), BT::OutputPort<int>("stuck_agent")};
+    return {BT::InputPort<agent_path_prediction::msg::AgentsInfo>("agents_info"), BT::InputPort<std::shared_ptr<agents::Agents>>("agents_ptr"), BT::OutputPort<int>("stuck_agent")};
   }
 
  private:
@@ -84,8 +85,8 @@ class VelObsExitCondition : public BT::ConditionNode {
   // bool isHumanPlaying(); // Add this later
 
   // Blackboard entries
-  agent_path_prediction::AgentsInfo agents_info_;  //!< Current information about all agents in the environment
-  std::shared_ptr<agents::Agents> agents_ptr_;     //!< Pointer to the agents management class
+  agent_path_prediction::msg::AgentsInfo agents_info_;  //!< Current information about all agents in the environment
+  std::shared_ptr<agents::Agents> agents_ptr_;          //!< Pointer to the agents management class
 
   std::string name_;         //!< Name of this behavior tree node
   int nearest_human_id_;     //!< ID of the nearest human agent

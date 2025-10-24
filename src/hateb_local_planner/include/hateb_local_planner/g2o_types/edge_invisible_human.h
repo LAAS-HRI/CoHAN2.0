@@ -72,7 +72,7 @@ class EdgeInvisibleHuman : public BaseTebMultiEdge<1, const Obstacle*> {
    * The error is stored in _error[0].
    */
   void computeError() override {
-    ROS_ASSERT_MSG(cfg_ && _measurement, "You must call setHATebConfig() on EdgeInvisibleHuman()");
+    HATEB_ASSERT_MSG(cfg_ && _measurement, "You must call setHATebConfig() on EdgeInvisibleHuman()");
     const auto* bandpt = static_cast<const VertexPose*>(_vertices[0]);
     const auto* bandpt_nxt = static_cast<const VertexPose*>(_vertices[1]);
     const auto* dt = static_cast<const VertexTimeDiff*>(_vertices[2]);
@@ -88,7 +88,7 @@ class EdgeInvisibleHuman : public BaseTebMultiEdge<1, const Obstacle*> {
     }
     _error[0] = penaltyBoundFromBelow(cost, cfg_->hateb.invisible_human_threshold, cfg_->optim.penalty_epsilon);
 
-    ROS_ASSERT_MSG(std::isfinite(_error[0]), "EdgeInvisibleHuman::computeError() _error[0]=%f\n", _error[0]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[0]), "EdgeInvisibleHuman::computeError() _error[0]=%f\n", _error[0]);
   }
 
   /**

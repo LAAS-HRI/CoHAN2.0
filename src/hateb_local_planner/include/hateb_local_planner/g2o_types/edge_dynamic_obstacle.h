@@ -85,7 +85,7 @@ class EdgeDynamicObstacle : public BaseTebUnaryEdge<2, const Obstacle*, VertexPo
    * @brief Actual cost function
    */
   void computeError() override {
-    ROS_ASSERT_MSG(cfg_ && _measurement, "You must call setHATebConfig() on EdgeDynamicObstacle()");
+    HATEB_ASSERT_MSG(cfg_ && _measurement, "You must call setHATebConfig() on EdgeDynamicObstacle()");
     const auto* bandpt = static_cast<const VertexPose*>(_vertices[0]);
 
     double dist = 0;
@@ -101,7 +101,7 @@ class EdgeDynamicObstacle : public BaseTebUnaryEdge<2, const Obstacle*, VertexPo
     _error[0] = penaltyBoundFromBelow(dist, cfg_->obstacles.min_obstacle_dist, cfg_->optim.penalty_epsilon);
     _error[1] = penaltyBoundFromBelow(dist, cfg_->obstacles.dynamic_obstacle_inflation_dist, 0.0);
 
-    ROS_ASSERT_MSG(std::isfinite(_error[0]), "EdgeDynamicObstacle::computeError() _error[0]=%f\n", _error[0]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[0]), "EdgeDynamicObstacle::computeError() _error[0]=%f\n", _error[0]);
   }
 
   /**

@@ -35,7 +35,7 @@
  * utilities for creating and managing ROS-integrated behavior tree nodes.
  */
 
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 
 #include "behaviortree_cpp/bt_factory.h"
 
@@ -94,11 +94,11 @@ class StatefulActionNodeROS : public BT::StatefulActionNode {
  protected:
   /**
    * @brief Constructor initializes the node with ROS and BT configurations
-   * @param nh ROS node handle for communication
+   * @param node ROS2 node shared pointer for communication
    * @param name Name of the behavior tree node
    * @param conf Configuration for the behavior tree node
    */
-  StatefulActionNodeROS(ros::NodeHandle& nh, const std::string& name, const BT::NodeConfiguration& conf) : BT::StatefulActionNode(name, conf), node_(nh) {}
+  StatefulActionNodeROS(::SharedPtr node, const std::string& name, const BT::NodeConfiguration& conf) : BT::StatefulActionNode(name, conf), node_(node) {}
 
  public:
   // using BaseClass = StatefulActionNodeROS<ActionT>;
@@ -132,7 +132,7 @@ class StatefulActionNodeROS : public BT::StatefulActionNode {
   void onHalted() override = 0;
 
  protected:
-  ros::NodeHandle& node_;  // ROS node handle for communication
+  ::SharedPtr node_;  // ROS2 node shared pointer for communication
 };
 
 /**
@@ -143,11 +143,11 @@ class StatefulActionNodeROS : public BT::StatefulActionNode {
  *
  * @param factory The behavior tree factory to register with
  * @param registration_ID Unique identifier for the node type
- * @param node_handle ROS node handle for communication
+ * @param node ROS2 node shared pointer for communication
  */
 template <class DerivedT>
-static void RegisterStatefulActionNodeROS(BT::BehaviorTreeFactory& factory, const std::string& registration_ID, ros::NodeHandle& node_handle) {
-  BT::NodeBuilder builder = [&node_handle](const std::string& name, const BT::NodeConfiguration& config) { return std::make_unique<DerivedT>(node_handle, name, config); };
+static void RegisterStatefulActionNodeROS(BT::BehaviorTreeFactory& factory, const std::string& registration_ID, ::SharedPtr node) {
+  BT::NodeBuilder builder = [node](const std::string& name, const BT::NodeConfiguration& config) { return std::make_unique<DerivedT>(node, name, config); };
 
   BT::TreeNodeManifest manifest;
   manifest.type = BT::getType<DerivedT>();

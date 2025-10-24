@@ -24,8 +24,9 @@
  * Author: Phani Teja Singamaneni
  *********************************************************************************/
 
-#include <ros/ros.h>
 #include <tf2/utils.h>
+
+#include <rclcpp/rclcpp.hpp>
 
 // New
 #include <agent_path_prediction/AgentsInfo.h>
@@ -73,8 +74,8 @@ class BackoffExitCondition : public BT::ConditionNode {
    *         and recovery status as output
    */
   static BT::PortsList providedPorts() {
-    return {BT::InputPort<agent_path_prediction::AgentsInfo>("agents_info"), BT::InputPort<std::shared_ptr<Backoff>>("backoff_ptr"), BT::BidirectionalPort<geometry_msgs::PoseStamped>("nav_goal"),
-            BT::InputPort<std::shared_ptr<agents::Agents>>("agents_ptr"), BT::OutputPort<bool>("recovery")};
+    return {BT::InputPort<agent_path_prediction::msg::AgentsInfo>("agents_info"), BT::InputPort<std::shared_ptr<Backoff>>("backoff_ptr"),
+            BT::BidirectionalPort<geometry_msgs::msg::PoseStamped>("nav_goal"), BT::InputPort<std::shared_ptr<agents::Agents>>("agents_ptr"), BT::OutputPort<bool>("recovery")};
   }
 
  private:
@@ -85,8 +86,8 @@ class BackoffExitCondition : public BT::ConditionNode {
   bool isRecoveryComplete();
 
   // Blackboard entries
-  agent_path_prediction::AgentsInfo agents_info_;         //!< Information about agents in the environment
-  geometry_msgs::PoseStamped current_goal_;               //!< Current navigation goal
+  agent_path_prediction::msg::AgentsInfo agents_info_;    //!< Information about agents in the environment
+  geometry_msgs::msg::PoseStamped current_goal_;          //!< Current navigation goal
   std::shared_ptr<Backoff> backoff_ptr_ = nullptr;        //!< Pointer to backoff behavior handler
   std::shared_ptr<agents::Agents> agents_ptr_ = nullptr;  //!< Pointer to agents manager
   int stuck_agent_;                                       //!< ID of the agent that is stuck

@@ -45,25 +45,26 @@
 #include <boost/shared_ptr.hpp>
 
 // ros
-#include <base_local_planner/costmap_model.h>
+#include <nav2_costmap_2d/costmap_model.hpp>
+#include <rclcpp/rclcpp.hpp>
 
 // this package
 #include <hateb_local_planner/pose_se2.h>
 
 // messages
-#include <cohan_msgs/AgentPath.h>
-#include <cohan_msgs/Trajectory.h>
-#include <geometry_msgs/PoseArray.h>
-#include <geometry_msgs/PoseStamped.h>
-#include <geometry_msgs/TwistStamped.h>
-#include <hateb_local_planner/OptimizationCostArray.h>
+#include <cohan_msgs/msg/agent_path.hpp>
+#include <cohan_msgs/msg/trajectory.hpp>
+#include <geometry_msgs/msg/pose_array.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/twist_stamped.hpp>
+#include <hateb_local_planner/msg/optimization_cost_array.hpp>
 
 namespace hateb_local_planner {
 
 using PlanStartVelGoalVel = struct {
-  std::vector<geometry_msgs::PoseStamped> plan;
-  geometry_msgs::Twist start_vel;
-  geometry_msgs::Twist goal_vel;
+  std::vector<geometry_msgs::msg::PoseStamped> plan;
+  geometry_msgs::msg::Twist start_vel;
+  geometry_msgs::msg::Twist goal_vel;
   double nominal_vel;
   int isMode;
 };
@@ -93,14 +94,14 @@ class PlannerInterface {
    *
    * Provide this method to create and optimize a trajectory that is initialized
    * according to an initial reference plan (given as a container of poses).
-   * @param initial_plan vector of geometry_msgs::PoseStamped
+   * @param initial_plan vector of geometry_msgs::msg::PoseStamped
    * @param start_vel Current start velocity (e.g. the velocity of the robot, only linear.x and angular.z are used)
    * @param free_goal_vel if \c true, a nonzero final velocity at the goal pose is allowed,
    *        otherwise the final velocity will be zero (default: false)
    * @return \c true if planning was successful, \c false otherwise
    */
-  virtual bool plan(const std::vector<geometry_msgs::PoseStamped>& initial_plan, const geometry_msgs::Twist* start_vel = nullptr, bool free_goal_vel = false,
-                    const AgentPlanVelMap* initial_agent_plan_vels = nullptr, hateb_local_planner::OptimizationCostArray* op_costs = nullptr, double dt_ref = 0.4, double dt_hyst = 0.1,
+  virtual bool plan(const std::vector<geometry_msgs::msg::PoseStamped>& initial_plan, const geometry_msgs::msg::Twist* start_vel = nullptr, bool free_goal_vel = false,
+                    const AgentPlanVelMap* initial_agent_plan_vels = nullptr, hateb_local_planner::msg::OptimizationCostArray* op_costs = nullptr, double dt_ref = 0.4, double dt_hyst = 0.1,
                     int Mode = 0) = 0;
 
   /**
@@ -114,8 +115,8 @@ class PlannerInterface {
    *        otherwise the final velocity will be zero (default: false)
    * @return \c true if planning was successful, \c false otherwise
    */
-  virtual bool plan(const PoseSE2& start, const PoseSE2& goal, const geometry_msgs::Twist* start_vel = nullptr, bool free_goal_vel = false, double pre_plan_time = 0.0,
-                    hateb_local_planner::OptimizationCostArray* op_costs = nullptr, double dt_ref = 0.4, double dt_hyst = 0.1, int Mode = 0) = 0;
+  virtual bool plan(const PoseSE2& start, const PoseSE2& goal, const geometry_msgs::msg::Twist* start_vel = nullptr, bool free_goal_vel = false, double pre_plan_time = 0.0,
+                    hateb_local_planner::msg::OptimizationCostArray* op_costs = nullptr, double dt_ref = 0.4, double dt_hyst = 0.1, int Mode = 0) = 0;
 
   /**
    * @brief Get the velocity command from a previously optimized plan to control the robot at the current sampling interval.
@@ -143,7 +144,7 @@ class PlannerInterface {
    * Initial means that the penalty is applied only to the first few poses of the trajectory.
    * @param dir This parameter might be RotType::left (prefer left), RotType::right (prefer right) or RotType::none (prefer none)
    */
-  virtual void setPreferredTurningDir(RotType dir) { ROS_WARN("setPreferredTurningDir() not implemented for this planner."); }
+  virtual void setPreferredTurningDir(RotType dir) { RCLCPP_WARN(rclcpp::get_logger("PlannerInterface"), "setPreferredTurningDir() not implemented for this planner."); }
 
   /**
    * @brief Visualize planner specific stuff.
@@ -164,25 +165,24 @@ class PlannerInterface {
    * @return \c true, if the robot footprint along the first part of the trajectory intersects with
    *         any obstacle in the costmap, \c false otherwise.
    */
-  virtual bool isTrajectoryFeasible(base_local_planner::CostmapModel* costmap_model, const std::vector<geometry_msgs::Point>& footprint_spec, double inscribed_radius = 0.0,
-                                    double circumscribed_radius = 0.0, int look_ahead_idx = -1) = 0;
-
-  /**
-   * Compute and return the cost of the current optimization graph (supports multiple trajectories)
-   * @param[out] cost current cost value for each trajectory
-   *                  [for a planner with just a single trajectory: size=1, vector will not be cleared]
-   * @param obst_cost_scale Specify extra scaling for obstacle costs
-   * @param alternative_time_cost Replace the cost for the time optimal objective by the actual (weighted) transition time
-   */
+  virtual bool isTrajectoryFeasible(nav2_costmap_2d::CostmapModel* costmap_model, const std::vector<geometry_msgs::msg::Point>& footprint_spec, double inscribed_radius = 0.0,
+                                    double circumscribed_radius = 0.0,
+                                    int look_ahead_idx = -1) = 0; /**
+                                                                   * Compute and return the cost of the current optimization graph (supports multiple trajectories)
+                                                                   * @param[out] cost current cost value for each trajectory
+                                                                   *                  [for a planner with just a single trajectory: size=1, vector will not be cleared]
+                                                                   * @param obst_cost_scale Specify extra scaling for obstacle costs
+                                                                   * @param alternative_time_cost Replace the cost for the time optimal objective by the actual (weighted) transition time
+                                                                   */
   virtual void computeCurrentCost(std::vector<double>& cost, double obst_cost_scale = 1.0, bool alternative_time_cost = false) {}
-  virtual cohan_msgs::Trajectory getFullTrajectory() const = 0;
-  virtual cohan_msgs::Trajectory getFullAgentTrajectory(uint64_t agent_id) = 0;
+  virtual cohan_msgs::msg::Trajectory getFullTrajectory() const = 0;
+  virtual cohan_msgs::msg::Trajectory getFullAgentTrajectory(uint64_t agent_id) = 0;
 
   double local_weight_optimaltime_;
 };
 
 //! Abbrev. for shared instances of PlannerInterface or it's subclasses
-using PlannerInterfacePtr = boost::shared_ptr<PlannerInterface>;
+using PlannerInterfacePtr = std::shared_ptr<PlannerInterface>;
 
 }  // namespace hateb_local_planner
 

@@ -49,6 +49,22 @@
 #include <g2o/core/base_unary_edge.h>
 #include <hateb_local_planner/hateb_config.h>
 
+#include <cassert>
+#include <rclcpp/logging.hpp>
+
+// ROS2 compatible assertion macro - equivalent to ROS1's HATEB_ASSERT_MSG
+#ifndef NDEBUG
+#define HATEB_ASSERT_MSG(condition, ...)                                    \
+  do {                                                                      \
+    if (!(condition)) {                                                     \
+      RCLCPP_FATAL(rclcpp::get_logger("hateb_local_planner"), __VA_ARGS__); \
+      assert(condition);                                                    \
+    }                                                                       \
+  } while (0)
+#else
+#define HATEB_ASSERT_MSG(condition, ...) ((void)0)
+#endif
+
 namespace hateb_local_planner {
 
 /**

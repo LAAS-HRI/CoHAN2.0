@@ -42,10 +42,9 @@
 #ifndef RECOVERY_BEHAVIORS_H__
 #define RECOVERY_BEHAVIORS_H__
 
-#include <geometry_msgs/Twist.h>
-#include <ros/ros.h>
-
 #include <boost/circular_buffer.hpp>
+#include <geometry_msgs/msg/twist.hpp>
+#include <rclcpp/rclcpp.hpp>
 
 namespace hateb_local_planner {
 
@@ -76,14 +75,14 @@ class FailureDetector {
 
   /**
    * @brief Add a new twist measurement to the internal buffer and compute a new decision
-   * @param twist geometry_msgs::Twist velocity information
+   * @param twist geometry_msgs::msg::Twist velocity information
    * @param v_max maximum forward translational velocity
    * @param v_backwards_max maximum backward translational velocity
    * @param omega_max maximum angular velocity
    * @param v_eps Threshold for the average normalized linear velocity in (0,1) that must not be exceded (e.g. 0.1)
    * @param omega_eps Threshold for the average normalized angular velocity in (0,1) that must not be exceded (e.g. 0.1)
    */
-  void update(const geometry_msgs::Twist& twist, double v_max, double v_backwards_max, double omega_max, double v_eps, double omega_eps);
+  void update(const geometry_msgs::msg::Twist& twist, double v_max, double v_backwards_max, double omega_max, double v_eps, double omega_eps);
 
   /**
    * @brief Check if the robot got stucked

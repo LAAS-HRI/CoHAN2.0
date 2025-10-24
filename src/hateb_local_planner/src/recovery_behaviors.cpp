@@ -38,13 +38,12 @@
 
 #include <g2o/stuff/misc.h>
 #include <hateb_local_planner/recovery_behaviors.h>
-#include <ros/ros.h>
 
 namespace hateb_local_planner {
 
 // ============== FailureDetector Implementation ===================
 
-void FailureDetector::update(const geometry_msgs::Twist& twist, double v_max, double v_backwards_max, double omega_max, double v_eps, double omega_eps) {
+void FailureDetector::update(const geometry_msgs::msg::Twist& twist, double v_max, double v_backwards_max, double omega_max, double v_eps, double omega_eps) {
   if (buffer_.capacity() == 0) {
     return;
   }

@@ -44,7 +44,6 @@
 #ifndef EDGE_TIMEOPTIMAL_H_
 #define EDGE_TIMEOPTIMAL_H_
 
-#include <base_local_planner/BaseLocalPlannerConfig.h>
 #include <hateb_local_planner/g2o_types/base_teb_edges.h>
 #include <hateb_local_planner/g2o_types/penalties.h>
 #include <hateb_local_planner/g2o_types/vertex_timediff.h>
@@ -76,12 +75,12 @@ class EdgeTimeOptimal : public BaseTebUnaryEdge<1, double, VertexTimeDiff> {
    * @brief Actual cost function
    */
   void computeError() override {
-    ROS_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeTimeOptimal()");
+    HATEB_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeTimeOptimal()");
     const auto* timediff = static_cast<const VertexTimeDiff*>(_vertices[0]);
 
     _error[0] = timediff->dt();
 
-    ROS_ASSERT_MSG(std::isfinite(_error[0]), "EdgeTimeOptimal::computeError() _error[0]=%f\n", _error[0]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[0]), "EdgeTimeOptimal::computeError() _error[0]=%f\n", _error[0]);
   }
 
 #ifdef USE_ANALYTIC_JACOBI
@@ -89,7 +88,7 @@ class EdgeTimeOptimal : public BaseTebUnaryEdge<1, double, VertexTimeDiff> {
    * @brief Jacobi matrix of the cost function specified in computeError().
    */
   void linearizeOplus() override {
-    ROS_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeTimeOptimal()");
+    HATEB_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeTimeOptimal()");
     _jacobianOplusXi(0, 0) = 1;
   }
 #endif

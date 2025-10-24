@@ -34,6 +34,97 @@
 
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
+#define RCLCPP_ASSERT(expr)                                                           \
+  if (!(expr)) {                                                                      \
+    RCLCPP_FATAL(rclcpp::get_logger("rclcpp_assert"), "Assertion failed: %s", #expr); \
+    throw std::runtime_error("Assertion failed: " #expr);                             \
+  }
+
+#define RCLCPP_ASSERT_MSG(expr, msg, ...)                                  \
+  if (!(expr)) {                                                           \
+    RCLCPP_FATAL(rclcpp::get_logger("rclcpp_assert"), msg, ##__VA_ARGS__); \
+    throw std::runtime_error("Assertion failed: " msg);                    \
+  }
+
+// Conditional logging macros (ROS2 doesn't have _COND variants)
+#define RCLCPP_DEBUG_COND(cond, logger, ...) \
+  if (cond) {                                \
+    RCLCPP_DEBUG(logger, __VA_ARGS__);       \
+  }
+
+#define RCLCPP_INFO_COND(cond, logger, ...) \
+  if (cond) {                               \
+    RCLCPP_INFO(logger, __VA_ARGS__);       \
+  }
+
+#define RCLCPP_WARN_COND(cond, logger, ...) \
+  if (cond) {                               \
+    RCLCPP_WARN(logger, __VA_ARGS__);       \
+  }
+
+#define RCLCPP_ERROR_COND(cond, logger, ...) \
+  if (cond) {                                \
+    RCLCPP_ERROR(logger, __VA_ARGS__);       \
+  }
+
+// Stream-based conditional logging macros
+#define RCLCPP_DEBUG_STREAM_COND(cond, logger, stream_arg) \
+  if (cond) {                                              \
+    RCLCPP_DEBUG_STREAM(logger, stream_arg);               \
+  }
+
+#define RCLCPP_INFO_STREAM_COND(cond, logger, stream_arg) \
+  if (cond) {                                             \
+    RCLCPP_INFO_STREAM(logger, stream_arg);               \
+  }
+
+#define RCLCPP_WARN_STREAM_COND(cond, logger, stream_arg) \
+  if (cond) {                                             \
+    RCLCPP_WARN_STREAM(logger, stream_arg);               \
+  }
+
+#define RCLCPP_ERROR_STREAM_COND(cond, logger, stream_arg) \
+  if (cond) {                                              \
+    RCLCPP_ERROR_STREAM(logger, stream_arg);               \
+  }
+
+// ONCE logging macros (print message only once)
+#define RCLCPP_DEBUG_ONCE(logger, ...)   \
+  do {                                   \
+    static bool __once = false;          \
+    if (!__once) {                       \
+      __once = true;                     \
+      RCLCPP_DEBUG(logger, __VA_ARGS__); \
+    }                                    \
+  } while (0)
+
+#define RCLCPP_INFO_ONCE(logger, ...)   \
+  do {                                  \
+    static bool __once = false;         \
+    if (!__once) {                      \
+      __once = true;                    \
+      RCLCPP_INFO(logger, __VA_ARGS__); \
+    }                                   \
+  } while (0)
+
+#define RCLCPP_WARN_ONCE(logger, ...)   \
+  do {                                  \
+    static bool __once = false;         \
+    if (!__once) {                      \
+      __once = true;                    \
+      RCLCPP_WARN(logger, __VA_ARGS__); \
+    }                                   \
+  } while (0)
+
+#define RCLCPP_ERROR_ONCE(logger, ...)   \
+  do {                                   \
+    static bool __once = false;          \
+    if (!__once) {                       \
+      __once = true;                     \
+      RCLCPP_ERROR(logger, __VA_ARGS__); \
+    }                                    \
+  } while (0)
+
 /**
  * @brief Strips leading slash from frame ID if present
  * @param frame_id The frame ID string
@@ -63,6 +154,7 @@ std::string strip_leading_slash(const std::string& frame_id) {
  * @param averaging_interval Time interval over which to average the twist
  * @param[out] twist The resulting twist message containing linear and angular velocities
  */
+
 void lookupTwist(const std::string& tracking_frame, const std::string& observation_frame, const std::string& reference_frame, const tf2::Vector3& reference_point,
                  const std::string& reference_point_frame, const rclcpp::Time& time, const rclcpp::Duration& averaging_interval, geometry_msgs::msg::Twist& twist,
                  std::shared_ptr<tf2_ros::Buffer> tf_) {

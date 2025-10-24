@@ -43,10 +43,10 @@
 
 #include <hateb_local_planner/obstacles.h>
 #include <hateb_local_planner/pose_se2.h>
-#include <visualization_msgs/Marker.h>
 
 #include <algorithm>
 #include <utility>
+#include <visualization_msgs/msg/marker.hpp>
 
 namespace hateb_local_planner {
 
@@ -96,7 +96,7 @@ class BaseFootprintModel {
    * @param[out] markers container of marker messages describing the robot/human shape
    * @param color Color of the footprint
    */
-  virtual void visualizeModel(const PoseSE2& current_pose, std::vector<visualization_msgs::Marker>& markers, const std_msgs::ColorRGBA& color) const {}
+  virtual void visualizeModel(const PoseSE2& current_pose, std::vector<visualization_msgs::msg::Marker>& markers, const std_msgs::msg::ColorRGBA& color) const {}
 
   /**
    * @brief Compute the inscribed radius of the footprint model
@@ -185,11 +185,11 @@ class PointFootprint : public BaseFootprintModel {
    * @param[out] markers container of marker messages describing the robot/human shape
    * @param color Color of the footprint
    */
-  void visualizeModel(const PoseSE2& current_pose, std::vector<visualization_msgs::Marker>& markers, const std_msgs::ColorRGBA& color) const override {
+  void visualizeModel(const PoseSE2& current_pose, std::vector<visualization_msgs::msg::Marker>& markers, const std_msgs::msg::ColorRGBA& color) const override {
     // point footprint
     markers.emplace_back();
-    visualization_msgs::Marker& marker = markers.back();
-    marker.type = visualization_msgs::Marker::POINTS;
+    visualization_msgs::msg::Marker& marker = markers.back();
+    marker.type = visualization_msgs::msg::Marker::POINTS;
     current_pose.toPoseMsg(marker.pose);  // all points are transformed into the robot/human frame!
     marker.points.emplace_back();
     marker.scale.x = 0.025;
@@ -201,8 +201,8 @@ class PointFootprint : public BaseFootprintModel {
 
     // footprint with min_obstacle_dist
     markers.emplace_back();
-    visualization_msgs::Marker& marker2 = markers.back();
-    marker2.type = visualization_msgs::Marker::LINE_STRIP;
+    visualization_msgs::msg::Marker& marker2 = markers.back();
+    marker2.type = visualization_msgs::msg::Marker::LINE_STRIP;
     marker2.scale.x = 0.025;
     marker2.color = color;
     current_pose.toPoseMsg(marker2.pose);  // all points are transformed into the robot/human frame!
@@ -210,7 +210,7 @@ class PointFootprint : public BaseFootprintModel {
     const double n = 9;
     const double r = min_obstacle_dist_;
     for (double theta = 0; theta <= 2 * M_PI; theta += M_PI / n) {
-      geometry_msgs::Point pt;
+      geometry_msgs::msg::Point pt;
       pt.x = r * cos(theta);
       pt.y = r * sin(theta);
       marker2.points.push_back(pt);
@@ -273,10 +273,10 @@ class CircularFootprint : public BaseFootprintModel {
    * @param[out] markers container of marker messages describing the robot/human shape
    * @param color Color of the footprint
    */
-  void visualizeModel(const PoseSE2& current_pose, std::vector<visualization_msgs::Marker>& markers, const std_msgs::ColorRGBA& color) const override {
+  void visualizeModel(const PoseSE2& current_pose, std::vector<visualization_msgs::msg::Marker>& markers, const std_msgs::msg::ColorRGBA& color) const override {
     markers.resize(1);
-    visualization_msgs::Marker& marker = markers.back();
-    marker.type = visualization_msgs::Marker::CYLINDER;
+    visualization_msgs::msg::Marker& marker = markers.back();
+    marker.type = visualization_msgs::msg::Marker::CYLINDER;
     current_pose.toPoseMsg(marker.pose);
     marker.scale.x = marker.scale.y = 2 * radius_;  // scale = diameter
     marker.scale.z = 0.05;
@@ -367,12 +367,12 @@ class TwoCirclesFootprint : public BaseFootprintModel {
    * @param[out] markers container of marker messages describing the robot/human shape
    * @param color Color of the footprint
    */
-  void visualizeModel(const PoseSE2& current_pose, std::vector<visualization_msgs::Marker>& markers, const std_msgs::ColorRGBA& color) const override {
+  void visualizeModel(const PoseSE2& current_pose, std::vector<visualization_msgs::msg::Marker>& markers, const std_msgs::msg::ColorRGBA& color) const override {
     Eigen::Vector2d dir = current_pose.orientationUnitVec();
     if (front_radius_ > 0) {
       markers.emplace_back();
-      visualization_msgs::Marker& marker1 = markers.front();
-      marker1.type = visualization_msgs::Marker::CYLINDER;
+      visualization_msgs::msg::Marker& marker1 = markers.front();
+      marker1.type = visualization_msgs::msg::Marker::CYLINDER;
       current_pose.toPoseMsg(marker1.pose);
       marker1.pose.position.x += front_offset_ * dir.x();
       marker1.pose.position.y += front_offset_ * dir.y();
@@ -382,8 +382,8 @@ class TwoCirclesFootprint : public BaseFootprintModel {
     }
     if (rear_radius_ > 0) {
       markers.emplace_back();
-      visualization_msgs::Marker& marker2 = markers.back();
-      marker2.type = visualization_msgs::Marker::CYLINDER;
+      visualization_msgs::msg::Marker& marker2 = markers.back();
+      marker2.type = visualization_msgs::msg::Marker::CYLINDER;
       current_pose.toPoseMsg(marker2.pose);
       marker2.pose.position.x -= rear_offset_ * dir.x();
       marker2.pose.position.y -= rear_offset_ * dir.y();
@@ -427,7 +427,7 @@ class LineFootprint : public BaseFootprintModel {
    * @param line_start start coordinates (only x and y) of the line (w.r.t. robot/human center at (0,0))
    * @param line_end end coordinates (only x and y) of the line (w.r.t. robot/human center at (0,0))
    */
-  LineFootprint(const geometry_msgs::Point& line_start, const geometry_msgs::Point& line_end) { setLine(line_start, line_end); }
+  LineFootprint(const geometry_msgs::msg::Point& line_start, const geometry_msgs::msg::Point& line_end) { setLine(line_start, line_end); }
 
   /**
    * @brief Default constructor of the abstract obstacle class (Eigen Version)
@@ -445,7 +445,7 @@ class LineFootprint : public BaseFootprintModel {
    * @brief Set vertices of the contour/footprint
    * @param vertices footprint vertices (only x and y) around the robot/human center (0,0) (do not repeat the first and last vertex at the end)
    */
-  void setLine(const geometry_msgs::Point& line_start, const geometry_msgs::Point& line_end) {
+  void setLine(const geometry_msgs::msg::Point& line_start, const geometry_msgs::msg::Point& line_end) {
     line_start_.x() = line_start.x;
     line_start_.y() = line_start.y;
     line_end_.x() = line_end.x;
@@ -497,20 +497,20 @@ class LineFootprint : public BaseFootprintModel {
    * @param[out] markers container of marker messages describing the robot/human shape
    * @param color Color of the footprint
    */
-  void visualizeModel(const PoseSE2& current_pose, std::vector<visualization_msgs::Marker>& markers, const std_msgs::ColorRGBA& color) const override {
+  void visualizeModel(const PoseSE2& current_pose, std::vector<visualization_msgs::msg::Marker>& markers, const std_msgs::msg::ColorRGBA& color) const override {
     markers.emplace_back();
-    visualization_msgs::Marker& marker = markers.front();
-    marker.type = visualization_msgs::Marker::LINE_STRIP;
+    visualization_msgs::msg::Marker& marker = markers.front();
+    marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
     current_pose.toPoseMsg(marker.pose);  // all points are transformed into the robot/human frame!
 
     // line
-    geometry_msgs::Point line_start_world;
+    geometry_msgs::msg::Point line_start_world;
     line_start_world.x = line_start_.x();
     line_start_world.y = line_start_.y();
     line_start_world.z = 0;
     marker.points.push_back(line_start_world);
 
-    geometry_msgs::Point line_end_world;
+    geometry_msgs::msg::Point line_end_world;
     line_end_world.x = line_end_.x();
     line_end_world.y = line_end_.y();
     line_end_world.z = 0;
@@ -615,23 +615,23 @@ class PolygonFootprint : public BaseFootprintModel {
    * @param[out] markers container of marker messages describing the robot/human shape
    * @param color Color of the footprint
    */
-  void visualizeModel(const PoseSE2& current_pose, std::vector<visualization_msgs::Marker>& markers, const std_msgs::ColorRGBA& color) const override {
+  void visualizeModel(const PoseSE2& current_pose, std::vector<visualization_msgs::msg::Marker>& markers, const std_msgs::msg::ColorRGBA& color) const override {
     if (vertices_.empty()) return;
 
     markers.emplace_back();
-    visualization_msgs::Marker& marker = markers.front();
-    marker.type = visualization_msgs::Marker::LINE_STRIP;
+    visualization_msgs::msg::Marker& marker = markers.front();
+    marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
     current_pose.toPoseMsg(marker.pose);  // all points are transformed into the robot/human frame!
 
     for (const auto& vertice : vertices_) {
-      geometry_msgs::Point point;
+      geometry_msgs::msg::Point point;
       point.x = vertice.x();
       point.y = vertice.y();
       point.z = 0;
       marker.points.push_back(point);
     }
     // add first point again in order to close the polygon
-    geometry_msgs::Point point;
+    geometry_msgs::msg::Point point;
     point.x = vertices_.front().x();
     point.y = vertices_.front().y();
     point.z = 0;

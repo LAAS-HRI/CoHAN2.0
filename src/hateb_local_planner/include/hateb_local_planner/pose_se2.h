@@ -42,12 +42,12 @@
 #define POSE_SE2_H_
 
 #include <g2o/stuff/misc.h>
-#include <geometry_msgs/Pose.h>
 #include <hateb_local_planner/misc.h>
 #include <tf2/utils.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 #include <Eigen/Core>
+#include <geometry_msgs/msg/pose.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 namespace hateb_local_planner {
 
@@ -93,7 +93,7 @@ class PoseSE2 {
    * @brief Construct pose using a geometry_msgs::Pose
    * @param pose geometry_msgs::Pose object
    */
-  explicit PoseSE2(const geometry_msgs::Pose& pose) {
+  explicit PoseSE2(const geometry_msgs::msg::Pose& pose) {
     position_.coeffRef(0) = pose.position.x;
     position_.coeffRef(1) = pose.position.y;
     theta_ = tf2::getYaw(pose.orientation);
@@ -180,7 +180,7 @@ class PoseSE2 {
    * @brief Convert PoseSE2 to a geometry_msgs::Pose
    * @param[out] pose Pose message
    */
-  void toPoseMsg(geometry_msgs::Pose& pose) const {
+  void toPoseMsg(geometry_msgs::msg::Pose& pose) const {
     pose.position.x = position_.x();
     pose.position.y = position_.y();
     pose.position.z = 0;

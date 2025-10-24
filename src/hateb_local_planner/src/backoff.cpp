@@ -26,8 +26,6 @@
 
 #include <hateb_local_planner/backoff.h>
 
-#include "ros/time.h"
-
 #define NODE_NAME "BackoffRecovery"
 // Configuarable parameters
 #define MAP_FRAME "map"
@@ -38,52 +36,54 @@
 
 namespace hateb_local_planner {
 // empty constructor and destructor
-Backoff::Backoff(costmap_2d::Costmap2DROS *costmap_ros) {
+Backoff::Backoff(rclcpp_lifecycle::LifecycleNode::SharedPtr node, nav2_costmap_2d::Costmap2DROS* costmap_ros) {
   // Initialize the backoff recovery behavior
-  initialize(costmap_ros);
+  initialize(node, costmap_ros);
 }
 
 Backoff::~Backoff() = default;
 
-void Backoff::initialize(costmap_2d::Costmap2DROS *costmap_ros) {
-  // get private node handle
-  ros::NodeHandle nh("~");
+void Backoff::initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node, nav2_costmap_2d::Costmap2DROS* costmap_ros) {
+  // get node from costmap_ros
+  node_ = node;
+
+  // Initialize configuration
+  cfg_ = std::make_shared<BackoffConfig>();
+  cfg_->initialize(node_);
+  cfg_->setupParameterCallback();
 
   // Initialize tf2 listener with buffer
   tf_listener_ = std::make_unique<tf2_ros::TransformListener>(tf_);
 
-  // Load the parameters from the ros handle
-  loadRosParamFromNodeHandle(nh);
-
   // If a namespace is associated update some topics accordingly
-  if (!ns_.empty()) {
-    footprint_frame_ = ns_ + "/" + footprint_frame_;
-    current_goal_topic_ = "/" + ns_ + current_goal_topic_;
-    publish_goal_topic_ = "/" + ns_ + publish_goal_topic_;
-    get_plan_srv_name_ = "/" + ns_ + get_plan_srv_name_;
+  if (!cfg_->ns.empty()) {
+    cfg_->footprint_frame = cfg_->ns + "/" + cfg_->footprint_frame;
+    cfg_->current_goal_topic = "/" + cfg_->ns + cfg_->current_goal_topic;
+    cfg_->publish_goal_topic = "/" + cfg_->ns + cfg_->publish_goal_topic;
+    cfg_->get_plan_srv_name = "/" + cfg_->ns + cfg_->get_plan_srv_name;
   }
 
   // Get costmap
   costmap_ros_ = costmap_ros;
   costmap_ = costmap_ros_->getCostmap();
-  costmap_model_ = std::make_shared<base_local_planner::CostmapModel>(*costmap_);
+  costmap_model_ = std::make_shared<nav2_costmap_2d::CostmapModel>(*costmap_);
 
   // Initialize ros topics, services and subscribers
-  goal_sub_ = nh.subscribe(current_goal_topic_, 1, &Backoff::goalCB, this);
-  goal_pub_ = nh.advertise<geometry_msgs::PoseStamped>(publish_goal_topic_, 1);
-  get_plan_client_ = nh.serviceClient<nav_msgs::GetPlan>(get_plan_srv_name_, true);
-  poly_pub_l_ = nh.advertise<geometry_msgs::PolygonStamped>("left_polygon", 100);
-  poly_pub_r_ = nh.advertise<geometry_msgs::PolygonStamped>("right_polygon", 100);
+  goal_sub_ = node_->create_subscription<geometry_msgs::msg::PoseStamped>(cfg_->current_goal_topic, 1, std::bind(&Backoff::goalCB, this, std::placeholders::_1));
+  goal_pub_ = node_->create_publisher<geometry_msgs::msg::PoseStamped>(cfg_->publish_goal_topic, 1);
+  get_plan_client_ = node_->create_client<nav2_msgs::srv::GetPlan>(cfg_->get_plan_srv_name);
+  poly_pub_l_ = node_->create_publisher<geometry_msgs::msg::PolygonStamped>("left_polygon", 100);
+  poly_pub_r_ = node_->create_publisher<geometry_msgs::msg::PolygonStamped>("right_polygon", 100);
 
   // Initialize the variables
   self_published_ = false;
   new_goal_ = false;
-  last_time_ = ros::Time::now();
+  last_time_ = node_->now();
 
-  ROS_DEBUG_NAMED(NODE_NAME, "node %s initialized", NODE_NAME);
+  RCLCPP_DEBUG(node_->get_logger(), "node %s initialized", NODE_NAME);
 }
 
-void Backoff::goalCB(const geometry_msgs::PoseStamped::ConstPtr &goal) {
+void Backoff::goalCB(const geometry_msgs::msg::PoseStamped::ConstSharedPtr& goal) {
   // Skip if a new goal is published by this
   if (self_published_) {
     self_published_ = false;
@@ -98,28 +98,28 @@ bool Backoff::startRecovery() {
   auto r = robot_circumscribed_radius_;
 
   // Get the transform from robot frame to map frame
-  geometry_msgs::TransformStamped robot_to_map_tr;
+  geometry_msgs::msg::TransformStamped robot_to_map_tr;
   try {
-    robot_to_map_tr = tf_.lookupTransform(map_frame_, footprint_frame_, ros::Time(0), ros::Duration(0.5));
+    robot_to_map_tr = tf_.lookupTransform(cfg_->map_frame, cfg_->footprint_frame, tf2::TimePointZero, tf2::durationFromSec(0.5));
     transform_found = true;
     tf2::fromMsg(robot_to_map_tr.transform, robot_to_map_tf_);
 
-  } catch (tf2::LookupException &ex) {
-    ROS_ERROR_NAMED(NODE_NAME, "No Transform available Error: %s\n", ex.what());
-  } catch (tf2::ConnectivityException &ex) {
-    ROS_ERROR_NAMED(NODE_NAME, "Connectivity Error: %s\n", ex.what());
-  } catch (tf2::ExtrapolationException &ex) {
-    ROS_ERROR_NAMED(NODE_NAME, "Extrapolation Error: %s\n", ex.what());
+  } catch (tf2::LookupException& ex) {
+    RCLCPP_ERROR(rclcpp::get_logger(NODE_NAME), "No Transform available Error: %s\n", ex.what());
+  } catch (tf2::ConnectivityException& ex) {
+    RCLCPP_ERROR(rclcpp::get_logger(NODE_NAME), "Connectivity Error: %s\n", ex.what());
+  } catch (tf2::ExtrapolationException& ex) {
+    RCLCPP_ERROR(rclcpp::get_logger(NODE_NAME), "Extrapolation Error: %s\n", ex.what());
   }
 
-  geometry_msgs::PoseStamped backoff_goal;
+  geometry_msgs::msg::PoseStamped backoff_goal;
   backoff_goal.header.frame_id = "map";
-  backoff_goal.header.stamp = ros::Time::now();
+  backoff_goal.header.stamp = node_->now();
   backoff_goal.pose.orientation.w = 1;
 
   if (transform_found && get_plan_client_) {
-    std::vector<geometry_msgs::Point32> right_grid_vis;
-    std::vector<geometry_msgs::Point32> left_grid_vis;
+    std::vector<geometry_msgs::msg::Point32> right_grid_vis;
+    std::vector<geometry_msgs::msg::Point32> left_grid_vis;
 
     // Set the polygons for searching (we assume square)
     const double right_grid_offsets_vis[4][2] = {{r, -r}, {r, -3 * r}, {-r, -3 * r}, {-r, -r}};
@@ -134,14 +134,14 @@ bool Backoff::startRecovery() {
     bool flipped = false;
     int count = 0;
 
-    std::vector<geometry_msgs::PoseStamped> goals;
-    nav_msgs::GetPlan get_plan_srv;
-    get_plan_srv.request.start.header.frame_id = "map";
-    get_plan_srv.request.start.pose.position.x = robot_to_map_tr.transform.translation.x;
-    get_plan_srv.request.start.pose.position.y = robot_to_map_tr.transform.translation.y;
-    get_plan_srv.request.start.pose.position.z = robot_to_map_tr.transform.translation.z;
-    get_plan_srv.request.start.pose.orientation = robot_to_map_tr.transform.rotation;
-    get_plan_srv.request.goal.header.frame_id = "map";
+    std::vector<geometry_msgs::msg::PoseStamped> goals;
+    auto get_plan_request = std::make_shared<nav2_msgs::srv::GetPlan::Request>();
+    get_plan_request->start.header.frame_id = "map";
+    get_plan_request->start.pose.position.x = robot_to_map_tr.transform.translation.x;
+    get_plan_request->start.pose.position.y = robot_to_map_tr.transform.translation.y;
+    get_plan_request->start.pose.position.z = robot_to_map_tr.transform.translation.z;
+    get_plan_request->start.pose.orientation = robot_to_map_tr.transform.rotation;
+    get_plan_request->goal.header.frame_id = "map";
 
     // Start the search
     while (true) {
@@ -160,12 +160,12 @@ bool Backoff::startRecovery() {
       // Search upto 50 configurations for each angle
       // TODO: Needs to configure or adjust this number
       for (int i = 0; i < 50; i++) {
-        if (visualize_backoff_) {
+        if (cfg_->visualize_backoff) {
           tf2::Vector3 point_tf;
           point_tf.setZero();
 
           // Get the configuration on right
-          for (const auto *offset : right_grid_offsets_vis) {
+          for (const auto* offset : right_grid_offsets_vis) {
             point_tf.setValue(offset[0] - back_dist, offset[1], 0.0);
             point_tf = start_pose_tr_ * point_tf;
 
@@ -177,7 +177,7 @@ bool Backoff::startRecovery() {
           }
 
           // Get the configuration on left
-          for (const auto *offset : left_grid_offsets_vis) {
+          for (const auto* offset : left_grid_offsets_vis) {
             point_tf.setValue(offset[0] - back_dist, offset[1], 0.0);
             point_tf = start_pose_tr_ * point_tf;
 
@@ -189,17 +189,17 @@ bool Backoff::startRecovery() {
           }
 
           // Publish the Left and Right polygons
-          geometry_msgs::PolygonStamped r_polygon;
+          geometry_msgs::msg::PolygonStamped r_polygon;
           r_polygon.header.frame_id = "map";
-          r_polygon.header.stamp = ros::Time::now();
+          r_polygon.header.stamp = node_->now();
           r_polygon.polygon.points = right_grid_vis;
-          poly_pub_r_.publish(r_polygon);
+          poly_pub_r_->publish(r_polygon);
 
-          geometry_msgs::PolygonStamped l_polygon;
+          geometry_msgs::msg::PolygonStamped l_polygon;
           l_polygon.header.frame_id = "map";
-          l_polygon.header.stamp = ros::Time::now();
+          l_polygon.header.stamp = node_->now();
           l_polygon.polygon.points = left_grid_vis;
-          poly_pub_l_.publish(l_polygon);
+          poly_pub_l_->publish(l_polygon);
         }
 
         // Find the polygon center on right
@@ -262,7 +262,7 @@ bool Backoff::startRecovery() {
       }
     }
     if (!found) {
-      ROS_INFO("No safespot found with the current search range!");
+      RCLCPP_INFO(rclcpp::get_logger(NODE_NAME), "No safespot found with the current search range!");
       return false;
     }
 
@@ -271,17 +271,20 @@ bool Backoff::startRecovery() {
     // Interate through the positions and get the length of global plans.
     // The global plan lengths are then used to determine the backoff goal.
     for (int i = 0; i < count; i++) {
-      get_plan_srv.request.start.header.stamp = ros::Time::now();
-      get_plan_srv.request.goal.header.stamp = ros::Time::now();
+      get_plan_request->start.header.stamp = node_->now();
+      get_plan_request->goal.header.stamp = node_->now();
 
-      get_plan_srv.request.goal.pose.position.x = goals[i].pose.position.x;
-      get_plan_srv.request.goal.pose.position.y = goals[i].pose.position.y;
-      get_plan_srv.request.goal.pose.position.z = 0;
-      get_plan_srv.request.goal.pose.orientation = goals[i].pose.orientation;
-      get_plan_client_.call(get_plan_srv);
+      get_plan_request->goal.pose.position.x = goals[i].pose.position.x;
+      get_plan_request->goal.pose.position.y = goals[i].pose.position.y;
+      get_plan_request->goal.pose.position.z = 0;
+      get_plan_request->goal.pose.orientation = goals[i].pose.orientation;
 
-      if (!get_plan_srv.response.plan.poses.empty()) {
-        length_idx_map[get_plan_srv.response.plan.poses.size()] = i;
+      auto result = get_plan_client_->async_send_request(get_plan_request);
+      if (rclcpp::spin_until_future_complete(get_plan_client_->get_node_base_interface(), result) == rclcpp::FutureReturnCode::SUCCESS) {
+        auto get_plan_response = result.get();
+        if (!get_plan_response->path.poses.empty()) {
+          length_idx_map[get_plan_response->path.poses.size()] = i;
+        }
       }
     }
     // Map arranges the distances sorted according to length.
@@ -298,39 +301,39 @@ bool Backoff::startRecovery() {
   start_pose_tr_ = robot_to_map_tf_ * start_pose_tr_;
   start_pose_ = tf2::toMsg(start_pose_tr_);
 
-  goal_pub_.publish(backoff_goal_);
-  last_time_ = ros::Time::now();
+  goal_pub_->publish(backoff_goal_);
+  last_time_ = node_->now();
 
   return true;
 }
 
-bool Backoff::setbackGoal(geometry_msgs::PoseStamped goal) {
+bool Backoff::setbackGoal(geometry_msgs::msg::PoseStamped goal) {
   // Set back the goal that is existing before recovery
-  ROS_INFO("Setting back the goal !!");
-  goal.header.stamp = ros::Time::now();
+  RCLCPP_INFO(rclcpp::get_logger(NODE_NAME), "Setting back the goal !!");
+  goal.header.stamp = node_->now();
   goal.header.frame_id = "map";
-  goal_pub_.publish(goal);
-  ROS_INFO("Goal set back success");
+  goal_pub_->publish(goal);
+  RCLCPP_INFO(rclcpp::get_logger(NODE_NAME), "Goal set back success");
   return true;
 }
 
 bool Backoff::timeOut() {
   // Return TRUE after a given timeout
-  return (ros::Time::now() - last_time_).toSec() > backoff_timeout_;
+  return (node_->now() - last_time_).seconds() > cfg_->backoff_timeout;
 }
 
 bool Backoff::isBackoffGoalReached() {
   // Get the transform from robot frame to map frame
-  geometry_msgs::TransformStamped robot_to_map_tr;
+  geometry_msgs::msg::TransformStamped robot_to_map_tr;
   try {
-    robot_to_map_tr = tf_.lookupTransform(map_frame_, footprint_frame_, ros::Time(0), ros::Duration(0.5));
+    robot_to_map_tr = tf_.lookupTransform(cfg_->map_frame, cfg_->footprint_frame, tf2::TimePointZero, tf2::durationFromSec(0.5));
 
-  } catch (tf2::LookupException &ex) {
-    ROS_ERROR_NAMED(NODE_NAME, "No Transform available Error: %s\n", ex.what());
-  } catch (tf2::ConnectivityException &ex) {
-    ROS_ERROR_NAMED(NODE_NAME, "Connectivity Error: %s\n", ex.what());
-  } catch (tf2::ExtrapolationException &ex) {
-    ROS_ERROR_NAMED(NODE_NAME, "Extrapolation Error: %s\n", ex.what());
+  } catch (tf2::LookupException& ex) {
+    RCLCPP_ERROR(rclcpp::get_logger(NODE_NAME), "No Transform available Error: %s\n", ex.what());
+  } catch (tf2::ConnectivityException& ex) {
+    RCLCPP_ERROR(rclcpp::get_logger(NODE_NAME), "Connectivity Error: %s\n", ex.what());
+  } catch (tf2::ExtrapolationException& ex) {
+    RCLCPP_ERROR(rclcpp::get_logger(NODE_NAME), "Extrapolation Error: %s\n", ex.what());
   }
 
   // True if Backoff goal is reached
@@ -338,17 +341,6 @@ bool Backoff::isBackoffGoalReached() {
   double dg = std::hypot(backoff_goal_.pose.position.x - robot_to_map_tr.transform.translation.x, backoff_goal_.pose.position.y - robot_to_map_tr.transform.translation.y);
 
   return fabs(dg) < 0.1 && fabs(delta_orient) < 0.1;
-}
-
-void Backoff::loadRosParamFromNodeHandle(const ros::NodeHandle &private_nh) {
-  private_nh.param("ns", ns_, std::string(""));
-  private_nh.param("get_plan_srv_name", get_plan_srv_name_, std::string(GET_PLAN_SRV_NAME));
-  private_nh.param("current_goal_topic", current_goal_topic_, std::string(CURRENT_GOAL_TOPIC_NAME));
-  private_nh.param("publish_goal_topic", publish_goal_topic_, std::string(PUBLISH_GOAL_TOPIC));
-  private_nh.param("footprint_frame", footprint_frame_, std::string(FOOTPRINT_FRAME));
-  private_nh.param("map_frame", map_frame_, std::string(MAP_FRAME));
-  private_nh.param("visualize_backoff", visualize_backoff_, false);
-  private_nh.param("backoff_timeout", backoff_timeout_, 30.0);
 }
 
 }  // namespace hateb_local_planner

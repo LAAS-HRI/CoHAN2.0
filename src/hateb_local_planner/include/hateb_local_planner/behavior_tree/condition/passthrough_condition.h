@@ -24,8 +24,9 @@
  * Author: Phani Teja Singamaneni
  *********************************************************************************/
 
-#include <ros/ros.h>
 #include <tf2/utils.h>
+
+#include <rclcpp/rclcpp.hpp>
 
 // New
 #include <agent_path_prediction/AgentsInfo.h>

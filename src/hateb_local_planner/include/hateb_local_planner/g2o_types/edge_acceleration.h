@@ -44,12 +44,13 @@
 #ifndef EDGE_ACCELERATION_H_
 #define EDGE_ACCELERATION_H_
 
-#include <geometry_msgs/Twist.h>
 #include <hateb_local_planner/g2o_types/base_teb_edges.h>
 #include <hateb_local_planner/g2o_types/penalties.h>
 #include <hateb_local_planner/g2o_types/vertex_pose.h>
 #include <hateb_local_planner/g2o_types/vertex_timediff.h>
 #include <hateb_local_planner/hateb_config.h>
+
+#include <geometry_msgs/msg/twist.hpp>
 
 namespace hateb_local_planner {
 
@@ -82,7 +83,7 @@ class EdgeAcceleration : public BaseTebMultiEdge<2, double> {
    * @brief Actual cost function
    */
   void computeError() override {
-    ROS_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeAcceleration()");
+    HATEB_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeAcceleration()");
     const auto* pose1 = static_cast<const VertexPose*>(_vertices[0]);
     const auto* pose2 = static_cast<const VertexPose*>(_vertices[1]);
     const auto* pose3 = static_cast<const VertexPose*>(_vertices[2]);
@@ -128,8 +129,8 @@ class EdgeAcceleration : public BaseTebMultiEdge<2, double> {
 
     _error[1] = penaltyBoundToInterval(acc_rot, cfg_->robot.acc_lim_theta, cfg_->optim.penalty_epsilon);
 
-    ROS_ASSERT_MSG(std::isfinite(_error[0]), "EdgeAcceleration::computeError() translational: _error[0]=%f\n", _error[0]);
-    ROS_ASSERT_MSG(std::isfinite(_error[1]), "EdgeAcceleration::computeError() rotational: _error[1]=%f\n", _error[1]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[0]), "EdgeAcceleration::computeError() translational: _error[0]=%f\n", _error[0]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[1]), "EdgeAcceleration::computeError() rotational: _error[1]=%f\n", _error[1]);
   }
 
 #ifdef USE_ANALYTIC_JACOBI
@@ -138,7 +139,7 @@ class EdgeAcceleration : public BaseTebMultiEdge<2, double> {
    * @brief Jacobi matrix of the cost function specified in computeError().
    */
   void linearizeOplus() {
-    ROS_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeAcceleration()");
+    HATEB_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeAcceleration()");
     const VertexPointXY* conf1 = static_cast<const VertexPointXY*>(_vertices[0]);
     const VertexPointXY* conf2 = static_cast<const VertexPointXY*>(_vertices[1]);
     const VertexPointXY* conf3 = static_cast<const VertexPointXY*>(_vertices[2]);
@@ -261,7 +262,7 @@ class EdgeAcceleration : public BaseTebMultiEdge<2, double> {
  * @remarks Do not forget to call setHATebConfig()
  * @remarks Refer to EdgeAccelerationGoal() for defining boundary values at the end of the trajectory!
  */
-class EdgeAccelerationStart : public BaseTebMultiEdge<2, const geometry_msgs::Twist*> {
+class EdgeAccelerationStart : public BaseTebMultiEdge<2, const geometry_msgs::msg::Twist*> {
  public:
   /**
    * @brief Construct edge.
@@ -275,7 +276,7 @@ class EdgeAccelerationStart : public BaseTebMultiEdge<2, const geometry_msgs::Tw
    * @brief Actual cost function
    */
   void computeError() override {
-    ROS_ASSERT_MSG(cfg_ && _measurement, "You must call setHATebConfig() and setStartVelocity() on EdgeAccelerationStart()");
+    HATEB_ASSERT_MSG(cfg_ && _measurement, "You must call setHATebConfig() and setStartVelocity() on EdgeAccelerationStart()");
     const auto* pose1 = static_cast<const VertexPose*>(_vertices[0]);
     const auto* pose2 = static_cast<const VertexPose*>(_vertices[1]);
     const auto* dt = static_cast<const VertexTimeDiff*>(_vertices[2]);
@@ -306,15 +307,15 @@ class EdgeAccelerationStart : public BaseTebMultiEdge<2, const geometry_msgs::Tw
 
     _error[1] = penaltyBoundToInterval(acc_rot, cfg_->robot.acc_lim_theta, cfg_->optim.penalty_epsilon);
 
-    ROS_ASSERT_MSG(std::isfinite(_error[0]), "EdgeAccelerationStart::computeError() translational: _error[0]=%f\n", _error[0]);
-    ROS_ASSERT_MSG(std::isfinite(_error[1]), "EdgeAccelerationStart::computeError() rotational: _error[1]=%f\n", _error[1]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[0]), "EdgeAccelerationStart::computeError() translational: _error[0]=%f\n", _error[0]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[1]), "EdgeAccelerationStart::computeError() rotational: _error[1]=%f\n", _error[1]);
   }
 
   /**
    * @brief Set the initial velocity that is taken into account for calculating the acceleration
    * @param vel_start twist message containing the translational and rotational velocity
    */
-  void setInitialVelocity(const geometry_msgs::Twist& vel_start) { _measurement = &vel_start; }
+  void setInitialVelocity(const geometry_msgs::msg::Twist& vel_start) { _measurement = &vel_start; }
 
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -339,7 +340,7 @@ class EdgeAccelerationStart : public BaseTebMultiEdge<2, const geometry_msgs::Tw
  * @remarks Do not forget to call setHATebConfig()
  * @remarks Refer to EdgeAccelerationStart() for defining boundary (initial) values at the end of the trajectory
  */
-class EdgeAccelerationGoal : public BaseTebMultiEdge<2, const geometry_msgs::Twist*> {
+class EdgeAccelerationGoal : public BaseTebMultiEdge<2, const geometry_msgs::msg::Twist*> {
  public:
   /**
    * @brief Construct edge.
@@ -353,7 +354,7 @@ class EdgeAccelerationGoal : public BaseTebMultiEdge<2, const geometry_msgs::Twi
    * @brief Actual cost function
    */
   void computeError() override {
-    ROS_ASSERT_MSG(cfg_ && _measurement, "You must call setHATebConfig() and setGoalVelocity() on EdgeAccelerationGoal()");
+    HATEB_ASSERT_MSG(cfg_ && _measurement, "You must call setHATebConfig() and setGoalVelocity() on EdgeAccelerationGoal()");
     const auto* pose_pre_goal = static_cast<const VertexPose*>(_vertices[0]);
     const auto* pose_goal = static_cast<const VertexPose*>(_vertices[1]);
     const auto* dt = static_cast<const VertexTimeDiff*>(_vertices[2]);
@@ -385,15 +386,15 @@ class EdgeAccelerationGoal : public BaseTebMultiEdge<2, const geometry_msgs::Twi
 
     _error[1] = penaltyBoundToInterval(acc_rot, cfg_->robot.acc_lim_theta, cfg_->optim.penalty_epsilon);
 
-    ROS_ASSERT_MSG(std::isfinite(_error[0]), "EdgeAccelerationGoal::computeError() translational: _error[0]=%f\n", _error[0]);
-    ROS_ASSERT_MSG(std::isfinite(_error[1]), "EdgeAccelerationGoal::computeError() rotational: _error[1]=%f\n", _error[1]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[0]), "EdgeAccelerationGoal::computeError() translational: _error[0]=%f\n", _error[0]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[1]), "EdgeAccelerationGoal::computeError() rotational: _error[1]=%f\n", _error[1]);
   }
 
   /**
    * @brief Set the goal / final velocity that is taken into account for calculating the acceleration
    * @param vel_goal twist message containing the translational and rotational velocity
    */
-  void setGoalVelocity(const geometry_msgs::Twist& vel_goal) { _measurement = &vel_goal; }
+  void setGoalVelocity(const geometry_msgs::msg::Twist& vel_goal) { _measurement = &vel_goal; }
 
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -429,7 +430,7 @@ class EdgeAccelerationHolonomic : public BaseTebMultiEdge<3, double> {
    * @brief Actual cost function
    */
   void computeError() override {
-    ROS_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeAcceleration()");
+    HATEB_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeAcceleration()");
     const auto* pose1 = static_cast<const VertexPose*>(_vertices[0]);
     const auto* pose2 = static_cast<const VertexPose*>(_vertices[1]);
     const auto* pose3 = static_cast<const VertexPose*>(_vertices[2]);
@@ -472,9 +473,9 @@ class EdgeAccelerationHolonomic : public BaseTebMultiEdge<3, double> {
 
     _error[2] = penaltyBoundToInterval(acc_rot, cfg_->robot.acc_lim_theta, cfg_->optim.penalty_epsilon);
 
-    ROS_ASSERT_MSG(std::isfinite(_error[0]), "EdgeAcceleration::computeError() translational: _error[0]=%f\n", _error[0]);
-    ROS_ASSERT_MSG(std::isfinite(_error[1]), "EdgeAcceleration::computeError() strafing: _error[1]=%f\n", _error[1]);
-    ROS_ASSERT_MSG(std::isfinite(_error[2]), "EdgeAcceleration::computeError() rotational: _error[2]=%f\n", _error[2]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[0]), "EdgeAcceleration::computeError() translational: _error[0]=%f\n", _error[0]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[1]), "EdgeAcceleration::computeError() strafing: _error[1]=%f\n", _error[1]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[2]), "EdgeAcceleration::computeError() rotational: _error[2]=%f\n", _error[2]);
   }
 
  public:
@@ -501,7 +502,7 @@ class EdgeAccelerationHolonomic : public BaseTebMultiEdge<3, double> {
  * @remarks Do not forget to call setHATebConfig()
  * @remarks Refer to EdgeAccelerationHolonomicGoal() for defining boundary values at the end of the trajectory!
  */
-class EdgeAccelerationHolonomicStart : public BaseTebMultiEdge<3, const geometry_msgs::Twist*> {
+class EdgeAccelerationHolonomicStart : public BaseTebMultiEdge<3, const geometry_msgs::msg::Twist*> {
  public:
   /**
    * @brief Construct edge.
@@ -515,7 +516,7 @@ class EdgeAccelerationHolonomicStart : public BaseTebMultiEdge<3, const geometry
    * @brief Actual cost function
    */
   void computeError() override {
-    ROS_ASSERT_MSG(cfg_ && _measurement, "You must call setHATebConfig() and setStartVelocity() on EdgeAccelerationStart()");
+    HATEB_ASSERT_MSG(cfg_ && _measurement, "You must call setHATebConfig() and setStartVelocity() on EdgeAccelerationStart()");
     const auto* pose1 = static_cast<const VertexPose*>(_vertices[0]);
     const auto* pose2 = static_cast<const VertexPose*>(_vertices[1]);
     const auto* dt = static_cast<const VertexTimeDiff*>(_vertices[2]);
@@ -548,16 +549,16 @@ class EdgeAccelerationHolonomicStart : public BaseTebMultiEdge<3, const geometry
 
     _error[2] = penaltyBoundToInterval(acc_rot, cfg_->robot.acc_lim_theta, cfg_->optim.penalty_epsilon);
 
-    ROS_ASSERT_MSG(std::isfinite(_error[0]), "EdgeAccelerationStart::computeError() translational: _error[0]=%f\n", _error[0]);
-    ROS_ASSERT_MSG(std::isfinite(_error[1]), "EdgeAccelerationStart::computeError() strafing: _error[1]=%f\n", _error[1]);
-    ROS_ASSERT_MSG(std::isfinite(_error[2]), "EdgeAccelerationStart::computeError() rotational: _error[2]=%f\n", _error[2]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[0]), "EdgeAccelerationStart::computeError() translational: _error[0]=%f\n", _error[0]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[1]), "EdgeAccelerationStart::computeError() strafing: _error[1]=%f\n", _error[1]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[2]), "EdgeAccelerationStart::computeError() rotational: _error[2]=%f\n", _error[2]);
   }
 
   /**
    * @brief Set the initial velocity that is taken into account for calculating the acceleration
    * @param vel_start twist message containing the translational and rotational velocity
    */
-  void setInitialVelocity(const geometry_msgs::Twist& vel_start) { _measurement = &vel_start; }
+  void setInitialVelocity(const geometry_msgs::msg::Twist& vel_start) { _measurement = &vel_start; }
 
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -583,7 +584,7 @@ class EdgeAccelerationHolonomicStart : public BaseTebMultiEdge<3, const geometry
  * @remarks Do not forget to call setHATebConfig()
  * @remarks Refer to EdgeAccelerationHolonomicStart() for defining boundary (initial) values at the end of the trajectory
  */
-class EdgeAccelerationHolonomicGoal : public BaseTebMultiEdge<3, const geometry_msgs::Twist*> {
+class EdgeAccelerationHolonomicGoal : public BaseTebMultiEdge<3, const geometry_msgs::msg::Twist*> {
  public:
   /**
    * @brief Construct edge.
@@ -597,7 +598,7 @@ class EdgeAccelerationHolonomicGoal : public BaseTebMultiEdge<3, const geometry_
    * @brief Actual cost function
    */
   void computeError() override {
-    ROS_ASSERT_MSG(cfg_ && _measurement, "You must call setHATebConfig() and setGoalVelocity() on EdgeAccelerationGoal()");
+    HATEB_ASSERT_MSG(cfg_ && _measurement, "You must call setHATebConfig() and setGoalVelocity() on EdgeAccelerationGoal()");
     const auto* pose_pre_goal = static_cast<const VertexPose*>(_vertices[0]);
     const auto* pose_goal = static_cast<const VertexPose*>(_vertices[1]);
     const auto* dt = static_cast<const VertexTimeDiff*>(_vertices[2]);
@@ -631,16 +632,16 @@ class EdgeAccelerationHolonomicGoal : public BaseTebMultiEdge<3, const geometry_
 
     _error[2] = penaltyBoundToInterval(acc_rot, cfg_->robot.acc_lim_theta, cfg_->optim.penalty_epsilon);
 
-    ROS_ASSERT_MSG(std::isfinite(_error[0]), "EdgeAccelerationGoal::computeError() translational: _error[0]=%f\n", _error[0]);
-    ROS_ASSERT_MSG(std::isfinite(_error[1]), "EdgeAccelerationGoal::computeError() strafing: _error[1]=%f\n", _error[1]);
-    ROS_ASSERT_MSG(std::isfinite(_error[2]), "EdgeAccelerationGoal::computeError() rotational: _error[2]=%f\n", _error[2]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[0]), "EdgeAccelerationGoal::computeError() translational: _error[0]=%f\n", _error[0]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[1]), "EdgeAccelerationGoal::computeError() strafing: _error[1]=%f\n", _error[1]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[2]), "EdgeAccelerationGoal::computeError() rotational: _error[2]=%f\n", _error[2]);
   }
 
   /**
    * @brief Set the goal / final velocity that is taken into account for calculating the acceleration
    * @param vel_goal twist message containing the translational and rotational velocity
    */
-  void setGoalVelocity(const geometry_msgs::Twist& vel_goal) { _measurement = &vel_goal; }
+  void setGoalVelocity(const geometry_msgs::msg::Twist& vel_goal) { _measurement = &vel_goal; }
 
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW

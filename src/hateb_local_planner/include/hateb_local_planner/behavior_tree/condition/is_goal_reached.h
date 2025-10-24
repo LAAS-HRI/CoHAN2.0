@@ -24,12 +24,12 @@
  * Author: Phani Teja Singamaneni
  *********************************************************************************/
 
-#include <ros/ros.h>
 #include <tf2/utils.h>
 
+#include <rclcpp/rclcpp.hpp>
+
 // Messages
-#include <move_base_msgs/MoveBaseActionGoal.h>
-#include <move_base_msgs/MoveBaseActionResult.h>
+#include <nav2_msgs/action/navigate_to_pose.hpp>
 
 // New
 #include <agent_path_prediction/AgentsInfo.h>
@@ -68,13 +68,13 @@ class IsGoalReached : public BT::ConditionNode {
    * @brief Callback for receiving new navigation goals
    * @param goal_msg Message containing the new goal pose
    */
-  void goalReceivedCB(const move_base_msgs::MoveBaseActionGoal& goal_msg);
+  void goalReceivedCB(const nav2_msgs::action::NavigateToPose::Goal& goal_msg);
 
   /**
    * @brief Callback for receiving goal status updates
    * @param result_msg Message containing the goal status result
    */
-  void resultCB(const move_base_msgs::MoveBaseActionResult& result_msg);
+  void resultCB(const nav2_msgs::action::NavigateToPose::Result& result_msg);
 
   /**
    * @brief Method called to evaluate if goal is reached
@@ -88,7 +88,7 @@ class IsGoalReached : public BT::ConditionNode {
    */
   static BT::PortsList providedPorts() {
     // This action has a single input port called "agents_info"
-    return {BT::InputPort<agent_path_prediction::AgentsInfo>("agents_info"), BT::OutputPort<geometry_msgs::Pose>("nav_goal")};
+    return {BT::InputPort<agent_path_prediction::msg::AgentsInfo>("agents_info"), BT::OutputPort<geometry_msgs::msg::Pose>("nav_goal")};
   }
 
  private:
@@ -98,13 +98,14 @@ class IsGoalReached : public BT::ConditionNode {
    */
   bool goalReachedCheck();
 
-  ros::Subscriber goal_sub_, status_sub_;  //!< Subscribers for goal and status updates
-  bool goal_reached_;                      //!< Flag indicating if goal is reached
-  bool updated_;                           //!< Flag indicating if goal was updated
+  rclcpp::Subscription<nav2_msgs::action::NavigateToPose::Goal>::SharedPtr goal_sub_;      //!< Subscriber for goal updates
+  rclcpp::Subscription<nav2_msgs::action::NavigateToPose::Result>::SharedPtr status_sub_;  //!< Subscriber for status updates
+  bool goal_reached_;                                                                      //!< Flag indicating if goal is reached
+  bool updated_;                                                                           //!< Flag indicating if goal was updated
 
   // Blackboard entries
-  geometry_msgs::Pose goal_;                       //!< Current navigation goal pose
-  agent_path_prediction::AgentsInfo agents_info_;  //!< Information about agents in the environment
+  geometry_msgs::msg::Pose goal_;                       //!< Current navigation goal pose
+  agent_path_prediction::msg::AgentsInfo agents_info_;  //!< Information about agents in the environment
 
   std::string name_;  //!< Name of the node
 };

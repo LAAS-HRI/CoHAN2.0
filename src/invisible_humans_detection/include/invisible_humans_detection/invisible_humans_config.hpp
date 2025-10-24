@@ -59,48 +59,18 @@ class InvisibleHumansConfig {
    * @brief Sets up parameter declarations and callback for parameter updates
    */
   void setupParameterCallback() {
-    // Declare parameters using the generic helper
-    param_helper_.declareStringParam("ns", "", "Namespace for multiple robots");
-    param_helper_.declareIntParam("samples", DEFAULT_SAMPLES, 1, 10000, "Number of samples for scanning");
-    param_helper_.declareFloatParam("range_min", DEFAULT_RANGE_MIN, 0.0, 10.0, "Minimum range for scanning");
-    param_helper_.declareFloatParam("range_max", DEFAULT_RANGE_MAX, 0.1, 100.0, "Maximum range for scanning");
-    param_helper_.declareFloatParam("angle_min", DEFAULT_ANGLE_MIN, -6.3, 6.3, "Minimum angle for scanning (radians)");
-    param_helper_.declareFloatParam("angle_max", DEFAULT_ANGLE_MAX, -6.3, 6.3, "Maximum angle for scanning (radians)");
-    param_helper_.declareIntParam("scan_resolution", DEFAULT_SCAN_RESOLUTION, 1, 10000, "Resolution of the scan");
-    param_helper_.declareBoolParam("publish_scan", DEFAULT_PUBLISH_SCAN, "Whether to publish scan data");
-    param_helper_.declareFloatParam("human_radius", DEFAULT_HUMAN_RADIUS, 0.1, 1.0, "Radius of a human for detection");
+    // Bind all parameters with automatic updates
+    bindParameters();
 
-    // Set up parameter change callback with custom validation
+    // Set up parameter change callback - parameters are auto-updated by bindings
     param_helper_.setupParameterCallback([this](const std::vector<rclcpp::Parameter>& params) -> bool {
-      // Custom parameter validation logic for this specific node
-      for (const auto& param : params) {
-        const std::string& name = param.get_name();
-
-        // Update internal variables when parameters change
-        if (name == "ns")
-          ns = param.as_string();
-        else if (name == "samples")
-          samples = param.as_int();
-        else if (name == "range_min")
-          range_min = param.as_double();
-        else if (name == "range_max")
-          range_max = param.as_double();
-        else if (name == "angle_min")
-          angle_min = param.as_double();
-        else if (name == "angle_max")
-          angle_max = param.as_double();
-        else if (name == "scan_resolution")
-          scan_resolution = param.as_int();
-        else if (name == "publish_scan")
-          publish_scan = param.as_bool();
-        else if (name == "human_radius")
-          human_radius = param.as_double();
-      }
+      // Parameters are automatically updated by ParameterHelper bindings
+      // Add any custom validation logic here if needed
       return true;
     });
 
     // Load initial parameter values
-    loadParameters();
+    param_helper_.loadBoundParameters();
   }
 
   // Public member variables for configuration
@@ -116,19 +86,30 @@ class InvisibleHumansConfig {
 
  private:
   /**
-   * @brief Loads and initializes all parameters from ROS2 parameter server
+   * @brief Binds all configuration variables to parameters for auto-update
    */
-  void loadParameters() {
-    // Get parameter values and store them in member variables
-    ns = param_helper_.getParam<std::string>("ns", "");
-    samples = param_helper_.getParam<int>("samples", DEFAULT_SAMPLES);
-    range_min = param_helper_.getParam<double>("range_min", DEFAULT_RANGE_MIN);
-    range_max = param_helper_.getParam<double>("range_max", DEFAULT_RANGE_MAX);
-    angle_min = param_helper_.getParam<double>("angle_min", DEFAULT_ANGLE_MIN);
-    angle_max = param_helper_.getParam<double>("angle_max", DEFAULT_ANGLE_MAX);
-    scan_resolution = param_helper_.getParam<int>("scan_resolution", DEFAULT_SCAN_RESOLUTION);
-    publish_scan = param_helper_.getParam<bool>("publish_scan", DEFAULT_PUBLISH_SCAN);
-    human_radius = param_helper_.getParam<double>("human_radius", DEFAULT_HUMAN_RADIUS);
+  void bindParameters() {
+    // Set default values for parameters BEFORE binding
+    ns = "";
+    samples = DEFAULT_SAMPLES;
+    range_min = DEFAULT_RANGE_MIN;
+    range_max = DEFAULT_RANGE_MAX;
+    angle_min = DEFAULT_ANGLE_MIN;
+    angle_max = DEFAULT_ANGLE_MAX;
+    scan_resolution = DEFAULT_SCAN_RESOLUTION;
+    publish_scan = DEFAULT_PUBLISH_SCAN;
+    human_radius = DEFAULT_HUMAN_RADIUS;
+
+    // Bind parameters with automatic updates
+    param_helper_.bindStringParam("ns", ns, "Namespace for multiple robots");
+    param_helper_.bindIntParam("samples", samples, 1, 10000, "Number of samples for scanning");
+    param_helper_.bindFloatParam("range_min", range_min, 0.0, 10.0, "Minimum range for scanning");
+    param_helper_.bindFloatParam("range_max", range_max, 0.1, 100.0, "Maximum range for scanning");
+    param_helper_.bindFloatParam("angle_min", angle_min, -6.3, 6.3, "Minimum angle for scanning (radians)");
+    param_helper_.bindFloatParam("angle_max", angle_max, -6.3, 6.3, "Maximum angle for scanning (radians)");
+    param_helper_.bindIntParam("scan_resolution", scan_resolution, 1, 10000, "Resolution of the scan");
+    param_helper_.bindBoolParam("publish_scan", publish_scan, "Whether to publish scan data");
+    param_helper_.bindFloatParam("human_radius", human_radius, 0.1, 1.0, "Radius of a human for detection");
   }
 
   parameters::ParameterHelper param_helper_;  //!< Parameter helper for managing ROS2 parameters

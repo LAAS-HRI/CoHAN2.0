@@ -26,8 +26,9 @@
 
 #include <hateb_local_planner/PlanningMode.h>
 #include <hateb_local_planner/behavior_tree/bt_core.h>
-#include <ros/ros.h>
 #include <tf2/utils.h>
+
+#include <rclcpp/rclcpp.hpp>
 
 namespace hateb_local_planner {
 
@@ -40,12 +41,12 @@ namespace hateb_local_planner {
 class SetMode : public StatefulActionNodeROS {
  public:
   /**
-   * @brief Constructor with ROS node handle and behavior tree configuration
-   * @param nh The ROS node handle for communication
+   * @brief Constructor with ROS2 node and behavior tree configuration
+   * @param node The ROS2 node shared pointer for communication
    * @param name Name of the behavior tree node
    * @param config Configuration for the behavior tree node
    */
-  SetMode(ros::NodeHandle& nh, const std::string& name, const BT::NodeConfig& config);
+  SetMode(::SharedPtr node, const std::string& name, const BT::NodeConfig& config);
 
   /**
    * @brief Deleted default constructor to enforce proper initialization
@@ -84,8 +85,8 @@ class SetMode : public StatefulActionNodeROS {
   void onHalted() override;
 
  private:
-  std::string name_;                  //!< Name of the behavior tree node
-  ros::Publisher planning_mode_pub_;  //!< Publisher for planning mode messages
+  std::string name_;                                                                        //!< Name of the behavior tree node
+  rclcpp::Publisher<hateb_local_planner::msg::PlanningMode>::SharedPtr planning_mode_pub_;  //!< Publisher for planning mode messages
 
   // BT Tree main
   std::string plan_type_;     //!< Type of planning mode to use

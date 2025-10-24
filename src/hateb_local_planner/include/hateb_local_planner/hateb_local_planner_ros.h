@@ -41,14 +41,18 @@
 #ifndef HATEB_LOCAL_PLANNER_ROS_H_
 #define HATEB_LOCAL_PLANNER_ROS_H_
 
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
+#include <rclcpp_lifecycle/lifecycle_node.hpp>
+#include <ros2_helpers/utils.hpp>
 
-// base local planner base class and utilities
-#include <base_local_planner/costmap_model.h>
-#include <base_local_planner/goal_functions.h>
-#include <base_local_planner/odometry_helper_ros.h>
-#include <mbf_costmap_core/costmap_controller.h>
-#include <nav_core/base_local_planner.h>
+// nav2 base class and utilities
+#include <nav2_core/controller.hpp>
+#include <nav2_core/exceptions.hpp>
+#include <nav2_core/goal_checker.hpp>
+#include <nav2_costmap_2d/costmap_2d_ros.hpp>
+#include <nav2_costmap_2d/footprint_collision_checker.hpp>
+#include <nav2_util/odometry_utils.hpp>
+#include <nav2_util/robot_utils.hpp>
 
 // timed-elastic-band related classes
 #include <hateb_local_planner/optimal_planner.h>
@@ -56,49 +60,42 @@
 #include <hateb_local_planner/visualization.h>
 
 // message types
-#include <cohan_msgs/Optimize.h>
-#include <costmap_converter/ObstacleMsg.h>
-#include <geometry_msgs/Point.h>
-#include <geometry_msgs/PoseStamped.h>
-#include <nav_msgs/Odometry.h>
-#include <nav_msgs/Path.h>
-#include <std_msgs/String.h>
-#include <visualization_msgs/Marker.h>
-#include <visualization_msgs/MarkerArray.h>
+#include <cohan_msgs/srv/optimize.hpp>
+#include <costmap_converter_msgs/msg/obstacle_array_msg.hpp>
+#include <geometry_msgs/msg/point.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
+#include <geometry_msgs/msg/twist.hpp>
+#include <geometry_msgs/msg/twist_stamped.hpp>
+#include <nav_msgs/msg/odometry.hpp>
+#include <nav_msgs/msg/path.hpp>
+#include <std_msgs/msg/string.hpp>
+#include <visualization_msgs/msg/marker.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
 
 // agent data
-#include <agent_path_prediction/AgentPosePredict.h>
-#include <agent_path_prediction/PredictedGoal.h>
-#include <agent_path_prediction/agent_path_prediction.h>
-#include <cohan_msgs/StateArray.h>
-#include <std_srvs/Empty.h>
-#include <std_srvs/SetBool.h>
-#include <std_srvs/Trigger.h>
-#include <std_srvs/TriggerRequest.h>
-#include <std_srvs/TriggerResponse.h>
+#include <agent_path_prediction/agent_path_prediction.hpp>
+#include <agent_path_prediction/agents_class.hpp>
+#include <cohan_msgs/msg/state_array.hpp>
+#include <cohan_msgs/srv/agent_pose_predict.hpp>
+#include <cohan_msgs/srv/predicted_goal.hpp>
+#include <std_srvs/srv/empty.hpp>
+#include <std_srvs/srv/set_bool.hpp>
+#include <std_srvs/srv/trigger.hpp>
 
 // transforms
-#include <eigen_conversions/eigen_msg.h>
 #include <tf2/convert.h>
-#include <tf2/impl/utils.h>
 #include <tf2/utils.h>
-#include <tf2_eigen/tf2_eigen.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 
-// costmap
-#include <costmap_2d/costmap_2d_ros.h>
+#include <tf2_eigen/tf2_eigen.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+
+// costmap converter
 #include <costmap_converter/costmap_converter_interface.h>
 
-// dynamic reconfigure
-#include <dynamic_reconfigure/server.h>
-#include <hateb_local_planner/HATebLocalPlannerReconfigureConfig.h>
-
-// boost classes
-#include <boost/bind.hpp>
-#include <boost/shared_ptr.hpp>
-#include <boost/smart_ptr/shared_ptr.hpp>
+#include <pluginlib/class_loader.hpp>
 
 // Backoff recovery
 #include <hateb_local_planner/backoff.h>
@@ -106,145 +103,116 @@
 // Behavior Tree and Mode Switch
 #include <hateb_local_planner/mode_switch.h>
 
+// Standard library
+#include <memory>
+#include <mutex>
+#include <string>
+#include <vector>
+
 namespace hateb_local_planner {
 enum class AgentState : std::uint8_t { NO_STATE, STATIC, MOVING, STOPPED, BLOCKED };
 
 /**
  * @class HATebLocalPlannerROS
- * @brief Implements both nav_core::BaseLocalPlanner and
- * mbf_costmap_core::CostmapController abstract interfaces, so the
- * hateb_local_planner plugin can be used both in move_base and move_base_flex
- * (MBF).
+ * @brief Implements the nav2_core::Controller interface for Nav2,
+ * providing human-aware trajectory planning with the Timed Elastic Band approach.
  */
-class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costmap_core::CostmapController {
+class HATebLocalPlannerROS : public nav2_core::Controller {
  public:
   /**
-   * @brief Default constructor of the teb plugin
+   * @brief Default constructor of the hateb plugin
    */
-  HATebLocalPlannerROS();
+  HATebLocalPlannerROS() = default;
 
   /**
    * @brief  Destructor of the plugin
    */
-  ~HATebLocalPlannerROS() override;
-
-  // CPP wrapper for the planner
-  HATebLocalPlannerROS(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros);
+  ~HATebLocalPlannerROS() override = default;
 
   /**
-   * @brief Initializes the teb plugin
-   * @param name The name of the instance
-   * @param tf Pointer to a tf buffer
-   * @param costmap_ros Cost map representing occupied and free space
+   * @brief Configure the controller
+   * @param parent WeakPtr to the lifecycle node
+   * @param name Name of the plugin
+   * @param tf Shared pointer to a TF buffer
+   * @param costmap_ros Shared pointer to the costmap
    */
-  void initialize(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros) override;
+  void configure(const rclcpp_lifecycle::LifecycleNode::WeakPtr& parent, std::string name, std::shared_ptr<tf2_ros::Buffer> tf, std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros) override;
 
   /**
-   * @brief Set the plan that the teb local planner is following
-   * @param orig_global_plan The plan to pass to the local planner
-   * @return True if the plan was updated successfully, false otherwise
+   * @brief Cleanup the controller state machine
    */
-  bool setPlan(const std::vector<geometry_msgs::PoseStamped>& orig_global_plan) override;
+  void cleanup() override;
 
   /**
-   * @brief Given the current position, orientation, and velocity of the robot,
-   * compute velocity commands to send to the base
-   * @param cmd_vel Will be filled with the velocity command to be passed to the
-   * robot base
-   * @return True if a valid trajectory was found, false otherwise
+   * @brief Activate the controller state machine
    */
-  bool computeVelocityCommands(geometry_msgs::Twist& cmd_vel) override;
+  void activate() override;
 
   /**
-   * @brief Given the current position, orientation, and velocity of the robot,
-   * compute velocity commands to send to the base.
-   * @remark Extended version for MBF API
-   * @param pose the current pose of the robot.
-   * @param velocity the current velocity of the robot.
-   * @param cmd_vel Will be filled with the velocity command to be passed to the
-   * robot base.
-   * @param message Optional more detailed outcome as a string
-   * @return Result code as described on ExePath action result:
-   *         SUCCESS         = 0
-   *         1..9 are reserved as plugin specific non-error results
-   *         FAILURE         = 100   Unspecified failure, only used for old,
-   * non-mfb_core based plugins CANCELED        = 101 NO_VALID_CMD    = 102
-   *         PAT_EXCEEDED    = 103
-   *         COLLISION       = 104
-   *         OSCILLATION     = 105
-   *         ROBOT_STUCK     = 106
-   *         MISSED_GOAL     = 107
-   *         MISSED_PATH     = 108
-   *         BLOCKED_PATH    = 109
-   *         INVALID_PATH    = 110
-   *         TF_ERROR        = 111
-   *         NOT_INITIALIZED = 112
-   *         INVALID_PLUGIN  = 113
-   *         INTERNAL_ERROR  = 114
-   *         121..149 are reserved as plugin specific errors
+   * @brief Deactivate the controller state machine
    */
-  uint32_t computeVelocityCommands(const geometry_msgs::PoseStamped& pose, const geometry_msgs::TwistStamped& velocity, geometry_msgs::TwistStamped& cmd_vel, std::string& message) override;
+  void deactivate() override;
 
   /**
-   * @brief  Check if the goal pose has been achieved
-   *
-   * The actual check is performed in computeVelocityCommands().
-   * Only the status flag is checked here.
-   * @return True if achieved, false otherwise
+   * @brief Set the plan that the hateb local planner is following
+   * @param path The plan to pass to the local planner
    */
-  bool isGoalReached() override;
+  void setPlan(const nav_msgs::msg::Path& path) override;
 
   /**
-
-    * @brief Dummy version to satisfy MBF API
-    */
-  bool isGoalReached(double xy_tolerance, double yaw_tolerance) override { return isGoalReached(); };
+   * @brief Nav2 controller computeVelocityCommands - computes the velocity command
+   * @param pose Current robot pose
+   * @param velocity Current robot velocity
+   * @param goal_checker Pointer to the goal checker for awareness if completed
+   * @return TwistStamped with velocity command
+   */
+  geometry_msgs::msg::TwistStamped computeVelocityCommands(const geometry_msgs::msg::PoseStamped& pose, const geometry_msgs::msg::Twist& velocity, nav2_core::GoalChecker* goal_checker) override;
 
   /**
-   * @brief Requests the planner to cancel, e.g. if it takes too much time
-   * @remark New on MBF API
-   * @return True if a cancel has been successfully requested, false if not
-   * implemented.
+   * @brief Set the speed limit
+   * @param speed_limit Speed limit to set
+   * @param percentage Whether the speed limit is a percentage
+   */
+  void setSpeedLimit(const double& speed_limit, const bool& percentage) override;
+
+  /**
+   * @brief Cancel the current planning operation
+   * @remarks Method is called when the controller server receives a cancel request.
+   * This allows for graceful stopping behavior. If unimplemented, the controller
+   * will immediately stop when receiving a cancel request.
+   * @return True if cancel was successfully requested, false otherwise
    */
   bool cancel() override { return false; };
+
+  /**
+   * @brief Check if the goal pose has been achieved
+   * @remarks This is an internal method for HATeb's goal tracking and cleanup logic.
+   * Nav2 uses the GoalChecker passed to computeVelocityCommands() for actual goal checking.
+   * This method handles internal state management when goal is reached.
+   * @return True if goal has been achieved, false otherwise
+   */
+  bool isGoalReached();
 
   /** @name Public utility functions/methods */
   //@{
 
   /**
    * @brief Get the current robot footprint/contour model
-   * @param nh const reference to the local ros::NodeHandle
+   * @param node Shared pointer to the lifecycle node
+   * @param config Configuration parameters
    * @return Robot footprint model used for optimization
    */
-  static FootprintModelPtr getRobotFootprintFromParamServer(const ros::NodeHandle& nh, const HATebConfig& config);
+  static FootprintModelPtr getRobotFootprintFromParamServer(const rclcpp_lifecycle::LifecycleNode::SharedPtr node, const std::shared_ptr<HATebConfig> config);
 
   /**
-   * @brief Set the footprint from the given XmlRpcValue.
-   * @remarks This method is copied from costmap_2d/footprint.h, since it is not
-   * declared public in all ros distros
-   * @remarks It is modified in order to return a container of Eigen::Vector2d
-   * instead of geometry_msgs::Point
-   * @param footprint_xmlrpc should be an array of arrays, where the top-level
-   * array should have 3 or more elements, and the sub-arrays should all have
-   * exactly 2 elements (x and y coordinates).
-   * @param full_param_name this is the full name of the rosparam from which the
-   * footprint_xmlrpc value came. It is used only for reporting errors.
+   * @brief Set the footprint from the given parameter value
+   * @remarks This method parses footprint parameters for ROS 2
+   * @remarks It returns a container of Eigen::Vector2d instead of geometry_msgs::Point
+   * @param footprint_param Parameter value containing footprint array
+   * @param full_param_name Full name of the parameter (for error reporting)
    * @return container of vertices describing the polygon
    */
-  static Point2dContainer makeFootprintFromXMLRPC(XmlRpc::XmlRpcValue& footprint_xmlrpc, const std::string& full_param_name);
-
-  /**
-   * @brief Get a number from the given XmlRpcValue.
-   * @remarks This method is copied from costmap_2d/footprint.h, since it is not
-   * declared public in all ros distros
-   * @remarks It is modified in order to return a container of Eigen::Vector2d
-   * instead of geometry_msgs::Point
-   * @param value double value type
-   * @param full_param_name this is the full name of the rosparam from which the
-   * footprint_xmlrpc value came. It is used only for reporting errors.
-   * @returns double value
-   */
-  static double getNumberFromXMLRPC(XmlRpc::XmlRpcValue& value, const std::string& full_param_name);
+  static Point2dContainer makeFootprintFromParams(const rclcpp::Parameter& footprint_param, const std::string& full_param_name);
 
   //@}
 
@@ -295,7 +263,7 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * already transformed to the planning frame)
    * @param min_separation minimum separation between two consecutive via-points
    */
-  void updateViaPointsContainer(const std::vector<geometry_msgs::PoseStamped>& transformed_plan, double min_separation);
+  void updateViaPointsContainer(const std::vector<geometry_msgs::msg::PoseStamped>& transformed_plan, double min_separation);
 
   /**
    * @brief Update internal via-point container for human based on the current reference plan
@@ -307,33 +275,24 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
   void updateAgentViaPointsContainers(const AgentPlanVelMap& transformed_agent_plan_vel_map, double min_separation);
 
   /**
-   * @brief Callback for the dynamic_reconfigure node.
-   *
-   * This callback allows to modify parameters dynamically at runtime without
-   *restarting the node
-   * @param config Reference to the dynamic reconfigure config
-   * @param level Dynamic reconfigure level
-   */
-  void reconfigureCB(HATebLocalPlannerReconfigureConfig& config, uint32_t level);
-  /**
    * @brief Callback for custom obstacles that are not obtained from the costmap
    * @param obst_msg pointer to the message containing a list of polygon shaped
    * obstacles
    */
-  void customObstacleCB(const costmap_converter::ObstacleArrayMsg::ConstPtr& obst_msg);
+  void customObstacleCB(const costmap_converter_msgs::msg::ObstacleArrayMsg::SharedPtr obst_msg);
 
   /**
    * @brief Callback for invisible humans
    * @param obst_msg pointer to the message containing a list of circular obstacles
    */
-  void InvHumansCB(const costmap_converter::ObstacleArrayMsg::ConstPtr& obst_msg);
+  void InvHumansCB(const costmap_converter_msgs::msg::ObstacleArrayMsg::SharedPtr obst_msg);
 
   /**
    * @brief Callback for custom via-points
    * @param via_points_msg pointer to the message containing a list of
    * via-points
    */
-  void customViaPointsCB(const nav_msgs::Path::ConstPtr& via_points_msg);
+  void customViaPointsCB(const nav_msgs::msg::Path::SharedPtr via_points_msg);
 
   /**
    * @brief Prune global plan such that already passed poses are cut off
@@ -354,7 +313,7 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * @return \c true if the plan is pruned, \c false in case of a transform
    * exception or if no pose cannot be found inside the threshold
    */
-  static bool pruneGlobalPlan(const tf2_ros::Buffer& tf, const geometry_msgs::PoseStamped& global_pose, std::vector<geometry_msgs::PoseStamped>& global_plan, double dist_behind_robot = 1);
+  bool pruneGlobalPlan(const geometry_msgs::msg::PoseStamped& global_pose, std::vector<geometry_msgs::msg::PoseStamped>& global_plan, double dist_behind_robot = 1);
 
   /**
    * @brief  Transforms the global plan of the robot from the planner frame to
@@ -380,9 +339,9 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * the global planning frame
    * @return \c true if the global plan is transformed, \c false otherwise
    */
-  bool transformGlobalPlan(const tf2_ros::Buffer& tf, const std::vector<geometry_msgs::PoseStamped>& global_plan, const geometry_msgs::PoseStamped& global_pose, const costmap_2d::Costmap2D& costmap,
+  bool transformGlobalPlan(const std::vector<geometry_msgs::msg::PoseStamped>& global_plan, const geometry_msgs::msg::PoseStamped& global_pose, const nav2_costmap_2d::Costmap2D& costmap,
                            const std::string& global_frame, double max_plan_length, PlanCombined& transformed_plan_combined, int* current_goal_idx = nullptr,
-                           geometry_msgs::TransformStamped* tf_plan_to_global = nullptr) const;
+                           geometry_msgs::msg::TransformStamped* tf_plan_to_global = nullptr) const;
 
   /**
    * @brief  Transforms the agent plan from the tracker frame to the local
@@ -399,9 +358,9 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * and the local planning frame
    * @return \c true if the global plan is transformed, \c false otherwise
    */
-  bool transformAgentPlan(const tf2_ros::Buffer& tf2, const geometry_msgs::PoseStamped& robot_pose, const costmap_2d::Costmap2D& costmap, const std::string& global_frame,
-                          const std::vector<geometry_msgs::PoseWithCovarianceStamped>& agent_plan, AgentPlanCombined& transformed_agent_plan_combined,
-                          geometry_msgs::TwistStamped& transformed_agent_twist, tf2::Stamped<tf2::Transform>* tf_agent_plan_to_global = nullptr) const;
+  bool transformAgentPlan(const geometry_msgs::msg::PoseStamped& robot_pose, const nav2_costmap_2d::Costmap2D& costmap, const std::string& global_frame,
+                          const std::vector<geometry_msgs::msg::PoseWithCovarianceStamped>& agent_plan, AgentPlanCombined& transformed_agent_plan_combined,
+                          geometry_msgs::msg::TwistStamped& transformed_agent_twist, tf2::Stamped<tf2::Transform>* tf_agent_plan_to_global = nullptr) const;
 
   /**
    * @brief Estimate the orientation of a pose from the global_plan that is
@@ -422,8 +381,8 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * be taken into account
    * @return orientation (yaw-angle) estimate
    */
-  static double estimateLocalGoalOrientation(const std::vector<geometry_msgs::PoseStamped>& global_plan, const geometry_msgs::PoseStamped& local_goal, int current_goal_idx,
-                                             const geometry_msgs::TransformStamped& tf_plan_to_global, int moving_average_length = 3);
+  static double estimateLocalGoalOrientation(const std::vector<geometry_msgs::msg::PoseStamped>& global_plan, const geometry_msgs::msg::PoseStamped& local_goal, int current_goal_idx,
+                                             const geometry_msgs::msg::TransformStamped& tf_plan_to_global, int moving_average_length = 3);
 
   /**
    * @brief Saturate the translational and angular velocity to given limits.
@@ -476,7 +435,7 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * used for the costmap
    * @param min_obst_dist desired distance to obstacles
    */
-  void configureBackupModes(std::vector<geometry_msgs::PoseStamped>& transformed_plan, int& goal_idx);
+  void configureBackupModes(std::vector<geometry_msgs::msg::PoseStamped>& transformed_plan, int& goal_idx);
 
   static void validateFootprints(double opt_inscribed_radius, double costmap_inscribed_radius, double min_obst_dist);
 
@@ -500,7 +459,7 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * @param transformed_agent_plan_vel_map Map containing agent plans with their velocities
    * @return True if plans were successfully updated, false otherwise
    */
-  bool tickTreeAndUpdatePlans(const geometry_msgs::PoseStamped& robot_pose, std::vector<AgentPlanCombined>& transformed_agent_plans, AgentPlanVelMap& transformed_agent_plan_vel_map);
+  bool tickTreeAndUpdatePlans(const geometry_msgs::msg::PoseStamped& robot_pose, std::vector<AgentPlanCombined>& transformed_agent_plans, AgentPlanVelMap& transformed_agent_plan_vel_map);
 
   /**
    * @brief Perform standalone trajectory optimization
@@ -511,183 +470,63 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
    * @param res Service response containing optimization results
    * @return True if optimization was successful, false otherwise
    */
-  bool optimizeStandalone(cohan_msgs::Optimize::Request& req, cohan_msgs::Optimize::Response& res);
-
-  /**
-   * @brief Look up twist information between frames with default reference point
-   *
-   * Simplified version that uses the origin of tracking_frame as the reference point
-   * and observation_frame as the reference frame.
-   * @param tracking_frame The frame being tracked
-   * @param observation_frame The frame from which we're observing
-   * @param time The time at which to get the twist
-   * @param averaging_interval Time interval over which to average the twist
-   * @param[out] twist The resulting twist message
-   */
-  void lookupTwist(const std::string& tracking_frame, const std::string& observation_frame, const ros::Time& time, const ros::Duration& averaging_interval, geometry_msgs::Twist& twist) const {
-    // ref point is origin of tracking_frame, ref_frame = obs_frame
-    lookupTwist(tracking_frame, observation_frame, observation_frame, tf2::Vector3(0, 0, 0), tracking_frame, time, averaging_interval, twist);
-  }
-
-  /**
-   * @brief Look up twist information between frames with custom reference point
-   *
-   * This method computes the twist (linear and angular velocity) of one frame
-   * relative to another, allowing specification of a custom reference point and frame.
-   * It performs the necessary coordinate transformations and averages the motion
-   * over the specified time interval.
-   *
-   * @param tracking_frame The frame being tracked (whose motion we want to determine)
-   * @param observation_frame The frame from which we're observing
-   * @param reference_frame The frame in which the twist should be expressed
-   * @param reference_point The point about which the twist should be computed
-   * @param reference_point_frame The frame in which the reference point is expressed
-   * @param time The time at which to get the twist
-   * @param averaging_interval Time interval over which to average the twist
-   * @param[out] twist The resulting twist message containing linear and angular velocities
-   */
-  void lookupTwist(const std::string& tracking_frame, const std::string& observation_frame, const std::string& reference_frame, const tf2::Vector3& reference_point,
-                   const std::string& reference_point_frame, const ros::Time& time, const ros::Duration& averaging_interval, geometry_msgs::Twist& twist) const {
-    ros::Time latest_time;
-    ros::Time target_time;
-
-    tf2::CompactFrameID target_id = tf_->_lookupFrameNumber(strip_leading_slash(tracking_frame));
-    tf2::CompactFrameID source_id = tf_->_lookupFrameNumber(strip_leading_slash(observation_frame));
-    tf_->_getLatestCommonTime(source_id, target_id, latest_time, nullptr);
-
-    if (ros::Time() == time) {
-      target_time = latest_time;
-    } else {
-      target_time = time;
-    }
-
-    ros::Time end_time = std::min(target_time + averaging_interval * 0.5, latest_time);
-
-    ros::Time start_time = std::max(ros::Time().fromSec(.00001) + averaging_interval, end_time) - averaging_interval;  // don't collide with zero
-    ros::Duration corrected_averaging_interval = end_time - start_time;                                                // correct for the possiblity that start time was
-                                                                                                                       // truncated above.
-    geometry_msgs::TransformStamped start_msg;
-    geometry_msgs::TransformStamped end_msg;
-    start_msg = tf_->lookupTransform(observation_frame, tracking_frame, start_time);
-    end_msg = tf_->lookupTransform(observation_frame, tracking_frame, end_time);
-
-    tf2::Stamped<tf2::Transform> start;
-    tf2::Stamped<tf2::Transform> end;
-    tf2::fromMsg(start_msg, start);
-    tf2::fromMsg(end_msg, end);
-
-    tf2::Matrix3x3 temp = start.getBasis().inverse() * end.getBasis();
-    tf2::Quaternion quat_temp;
-    temp.getRotation(quat_temp);
-    tf2::Vector3 o = start.getBasis() * quat_temp.getAxis();
-    double ang = quat_temp.getAngle();
-
-    double delta_x = end.getOrigin().getX() - start.getOrigin().getX();
-    double delta_y = end.getOrigin().getY() - start.getOrigin().getY();
-    double delta_z = end.getOrigin().getZ() - start.getOrigin().getZ();
-
-    tf2::Vector3 twist_vel((delta_x) / corrected_averaging_interval.toSec(), (delta_y) / corrected_averaging_interval.toSec(), (delta_z) / corrected_averaging_interval.toSec());
-    tf2::Vector3 twist_rot = o * (ang / corrected_averaging_interval.toSec());
-
-    // This is a twist w/ reference frame in observation_frame  and reference
-    // point is in the tracking_frame at the origin (at start_time)
-
-    // correct for the position of the reference frame
-    tf2::Stamped<tf2::Transform> inverse;
-    tf2::fromMsg(tf_->lookupTransform(reference_frame, tracking_frame, target_time), inverse);
-    tf2::Vector3 out_rot = inverse.getBasis() * twist_rot;
-    tf2::Vector3 out_vel = inverse.getBasis() * twist_vel + inverse.getOrigin().cross(out_rot);
-
-    // Rereference the twist about a new reference point
-    // Start by computing the original reference point in the reference frame:
-    tf2::Stamped<tf2::Vector3> rp_orig(tf2::Vector3(0, 0, 0), target_time, tracking_frame);
-    geometry_msgs::TransformStamped reference_frame_trans;
-    tf2::fromMsg(tf_->lookupTransform(reference_frame, rp_orig.frame_id_, rp_orig.stamp_), reference_frame_trans);
-
-    geometry_msgs::PointStamped rp_orig_msg;
-    tf2::toMsg(rp_orig, rp_orig_msg);
-    tf2::doTransform(rp_orig_msg, rp_orig_msg, reference_frame_trans);
-
-    // convert the requrested reference point into the right frame
-    tf2::Stamped<tf2::Vector3> rp_desired(reference_point, target_time, reference_point_frame);
-    geometry_msgs::PointStamped rp_desired_msg;
-    tf2::toMsg(rp_desired, rp_desired_msg);
-    tf2::doTransform(rp_desired_msg, rp_desired_msg, reference_frame_trans);
-    // compute the delta
-    tf2::Vector3 delta = rp_desired - rp_orig;
-    // Correct for the change in reference point
-    out_vel = out_vel + out_rot * delta;
-    // out_rot unchanged
-
-    twist.linear.x = out_vel.x();
-    twist.linear.y = out_vel.y();
-    twist.linear.z = out_vel.z();
-    twist.angular.x = out_rot.x();
-    twist.angular.y = out_rot.y();
-    twist.angular.z = out_rot.z();
-  }
-
-  std::string strip_leading_slash(const std::string& frame_id) const {
-    if (!frame_id.empty() && frame_id[0] == '/') {
-      return frame_id.substr(1);
-    }
-    return frame_id;
-  }
+  bool optimizeStandalone(const std::shared_ptr<cohan_msgs::srv::Optimize::Request> req, std::shared_ptr<cohan_msgs::srv::Optimize::Response> res);
 
  private:
   // Definition of member variables
 
-  // external objects (store weak pointers)
-  costmap_2d::Costmap2DROS* costmap_ros_;  //!< Pointer to the costmap ros wrapper, received from the navigation stack
-  costmap_2d::Costmap2D* costmap_;         //!< Pointer to the 2d costmap (obtained from the costmap ros wrapper)
-  tf2_ros::Buffer* tf_;                    //!< pointer to tf buffer
+  // ROS 2 node
+  rclcpp_lifecycle::LifecycleNode::WeakPtr node_;  //!< Weak pointer to the lifecycle node
+  std::string plugin_name_;                        //!< Name of this plugin instance
+
+  // external objects (store shared pointers for ROS 2)
+  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;  //!< Pointer to the costmap ros wrapper
+  nav2_costmap_2d::Costmap2D* costmap_;                         //!< Pointer to the 2d costmap (obtained from the costmap ros wrapper)
+  std::shared_ptr<tf2_ros::Buffer> tf_;                         //!< pointer to tf buffer
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_;     //!< TF listener
 
   // internal objects (memory management owned)
-  PlannerInterfacePtr planner_;                                        //!< Instance of the underlying optimal planner class
-  ObstContainer obstacles_;                                            //!< Obstacle vector that should be considered during local trajectory optimization
-  ViaPointContainer via_points_;                                       //!< Container of via-points that should be considered during local trajectory optimization
-  std::map<uint64_t, ViaPointContainer> agents_via_points_map_;        //!< Map storing via points for each agent
-  TebVisualizationPtr visualization_;                                  //!< Instance of the visualization class (local/global plan, obstacles, ...)
-  boost::shared_ptr<base_local_planner::CostmapModel> costmap_model_;  //!< Costmap model for collision checking
-  HATebConfig cfg_;                                                    //!< Config class that stores and manages all related parameters
-  HATebLocalPlannerReconfigureConfig config_;                          //!< Dynamic reconfigure config class
-  FailureDetector failure_detector_;                                   //!< Detect if the robot got stucked
+  PlannerInterfacePtr planner_;                                  //!< Instance of the underlying optimal planner class
+  ObstContainer obstacles_;                                      //!< Obstacle vector that should be considered during local trajectory optimization
+  ViaPointContainer via_points_;                                 //!< Container of via-points that should be considered during local trajectory optimization
+  std::map<uint64_t, ViaPointContainer> agents_via_points_map_;  //!< Map storing via points for each agent
+  TebVisualizationPtr visualization_;                            //!< Instance of the visualization class (local/global plan, obstacles, ...)
+  std::shared_ptr<nav2_costmap_2d::FootprintCollisionChecker<nav2_costmap_2d::Costmap2D*>> collision_checker_;  //!< Collision checker for footprint
+  std::shared_ptr<HATebConfig> cfg_;                                                                            //!< Config class that stores and manages all related parameters
+  FailureDetector failure_detector_;                                                                            //!< Detect if the robot got stucked
 
-  std::vector<geometry_msgs::PoseStamped> global_plan_;  //!< Store the current global plan
+  nav_msgs::msg::Path global_plan_;  //!< Store the current global plan
+  std::shared_ptr<nav2_util::OdomSmoother> odom_helper_;
 
-  base_local_planner::OdometryHelperRos odom_helper_;  //!< Provides an interface to receive the current velocity from the robot
+  std::unique_ptr<pluginlib::ClassLoader<costmap_converter::BaseCostmapToPolygons>> costmap_converter_loader_;  //!< Load costmap converter plugins at runtime
+  std::shared_ptr<costmap_converter::BaseCostmapToPolygons> costmap_converter_;                                 //!< Store the current costmap_converter
 
-  pluginlib::ClassLoader<costmap_converter::BaseCostmapToPolygons> costmap_converter_loader_;  //!< Load costmap converter plugins at runtime
-  boost::shared_ptr<costmap_converter::BaseCostmapToPolygons> costmap_converter_;              //!< Store the current costmap_converter
+  rclcpp::Subscription<costmap_converter_msgs::msg::ObstacleArrayMsg>::SharedPtr custom_obst_sub_;  //!< Subscriber for custom obstacles received via ObstacleMsg
+  rclcpp::Subscription<costmap_converter_msgs::msg::ObstacleArrayMsg>::SharedPtr inv_humans_sub_;   //!< Subscriber for invisible humans data
+  std::mutex custom_obst_mutex_;                                                                    //!< Mutex that locks the obstacle array (multi-threaded)
+  std::mutex inv_human_mutex_;                                                                      //!< Mutex that locks the invisible humans array
+  costmap_converter_msgs::msg::ObstacleArrayMsg custom_obstacle_msg_;                               //!< Copy of the most recent obstacle message
+  costmap_converter_msgs::msg::ObstacleArrayMsg inv_humans_msg_;                                    //!< Copy of the most recent invisible humans message
 
-  boost::shared_ptr<dynamic_reconfigure::Server<HATebLocalPlannerReconfigureConfig>> dynamic_recfg_;  //!< Dynamic reconfigure server to allow config modifications at runtime
+  rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr via_points_sub_;  //!< Subscriber for custom via-points received via Path msg
+  bool custom_via_points_active_;                                        //!< Keep track whether valid via-points have been received
+  std::mutex via_point_mutex_;                                           //!< Mutex that locks the via_points container (multi-threaded)
 
-  ros::Subscriber custom_obst_sub_;                          //!< Subscriber for custom obstacles received via ObstacleMsg
-  ros::Subscriber inv_humans_sub_;                           //!< Subscriber for invisible humans data
-  boost::mutex custom_obst_mutex_;                           //!< Mutex that locks the obstacle array (multi-threaded)
-  boost::mutex inv_human_mutex_;                             //!< Mutex that locks the invisible humans array
-  costmap_converter::ObstacleArrayMsg custom_obstacle_msg_;  //!< Copy of the most recent obstacle message
-  costmap_converter::ObstacleArrayMsg inv_humans_msg_;       //!< Copy of the most recent invisible humans message
+  PoseSE2 robot_pose_;                      //!< Store current robot pose
+  PoseSE2 robot_goal_;                      //!< Store current robot goal
+  geometry_msgs::msg::Twist robot_vel_;     //!< Store current robot velocities (vx, vy, omega)
+  bool goal_reached_;                       //!< Store whether the goal is reached or not
+  bool horizon_reduced_;                    //!< Flag indicating if the planning horizon was temporarily reduced
+  rclcpp::Time horizon_reduced_stamp_;      //!< Time when the horizon was reduced
+  rclcpp::Time time_last_infeasible_plan_;  //!< Time stamp of last infeasible plan detection
+  int no_infeasible_plans_;                 //!< Number of consecutive infeasible plans
+  rclcpp::Time time_last_oscillation_;      //!< Time stamp of last oscillation detection
+  RotType last_preferred_rotdir_;           //!< Store recent preferred turning direction
+  geometry_msgs::msg::Twist last_cmd_;      //!< Store the last control command generated
 
-  ros::Subscriber via_points_sub_;  //!< Subscriber for custom via-points received via Path msg
-  bool custom_via_points_active_;   //!< Keep track whether valid via-points have been received
-  boost::mutex via_point_mutex_;    //!< Mutex that locks the via_points container (multi-threaded)
-
-  PoseSE2 robot_pose_;                   //!< Store current robot pose
-  PoseSE2 robot_goal_;                   //!< Store current robot goal
-  geometry_msgs::Twist robot_vel_;       //!< Store current robot velocities (vx, vy, omega)
-  bool goal_reached_;                    //!< Store whether the goal is reached or not
-  bool horizon_reduced_;                 //!< Flag indicating if the planning horizon was temporarily reduced
-  ros::Time horizon_reduced_stamp_;      //!< Time when the horizon was reduced
-  ros::Time time_last_infeasible_plan_;  //!< Time stamp of last infeasible plan detection
-  int no_infeasible_plans_;              //!< Number of consecutive infeasible plans
-  ros::Time time_last_oscillation_;      //!< Time stamp of last oscillation detection
-  RotType last_preferred_rotdir_;        //!< Store recent preferred turning direction
-  geometry_msgs::Twist last_cmd_;        //!< Store the last control command generated
-
-  std::vector<geometry_msgs::Point> footprint_spec_;  //!< Store the footprint of the robot
-  double robot_inscribed_radius_;                     //!< The radius of the inscribed circle of the robot
-  double robot_circumscribed_radius_;                 //!< The radius of the circumscribed circle of the robot
+  std::vector<geometry_msgs::msg::Point> footprint_spec_;  //!< Store the footprint of the robot
+  double robot_inscribed_radius_;                          //!< The radius of the inscribed circle of the robot
+  double robot_circumscribed_radius_;                      //!< The radius of the circumscribed circle of the robot
 
   std::string global_frame_;      //!< The frame in which the controller will run
   std::string robot_base_frame_;  //!< Used as the base frame id of the robot
@@ -695,18 +534,18 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
   bool initialized_;  //!< Flag to track proper initialization of this class
 
   // Agent prediction services and related variables
-  ros::ServiceClient predict_agents_client_;             //!< Client for predicting agent trajectories
-  ros::ServiceClient reset_agents_prediction_client_;    //!< Client for resetting agent predictions
-  ros::ServiceClient publish_predicted_markers_client_;  //!< Client for publishing prediction markers
+  rclcpp::Client<cohan_msgs::srv::AgentPosePredict>::SharedPtr predict_agents_client_;  //!< Client for predicting agent trajectories
+  rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr reset_agents_prediction_client_;    //!< Client for resetting agent predictions
+  rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr publish_predicted_markers_client_;  //!< Client for publishing prediction markers
 
   std::string predict_srv_name_;           //!< Name of the prediction service
   std::string reset_prediction_srv_name_;  //!< Name of the reset prediction service
   std::string publish_makers_srv_name_;    //!< Name of the marker publishing service
 
-  ros::ServiceServer optimize_server_;  //!< optimize service for calling standalone
-  ros::Time last_call_time_;            //!< Time of last service call
-  ros::Time last_omega_sign_change_;    //!< Time of last angular velocity sign change
-  double last_omega_;                   //!< Last angular velocity value
+  rclcpp::Service<cohan_msgs::srv::Optimize>::SharedPtr optimize_server_;  //!< optimize service for calling standalone
+  rclcpp::Time last_call_time_;                                            //!< Time of last service call
+  rclcpp::Time last_omega_sign_change_;                                    //!< Time of last angular velocity sign change
+  double last_omega_;                                                      //!< Last angular velocity value
 
   // Planning control flags
   bool goal_ctrl_;     //!< Flag for goal control
@@ -714,16 +553,20 @@ class HATebLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costm
 
   int isMode_;  //!< Current planning mode
 
-  std::string logs_;                        //!< System log messages
-  ros::Subscriber agents_sub_;              //!< Subscriber for tracked agents
-  ros::Publisher log_pub_;                  //!< Publisher for system logs
-  std::string ns_;                          //!< Namespace for multi-agent support
-  std::string invisible_humans_sub_topic_;  //!< Name for invisible humans topic
+  std::string logs_;                                                         //!< System log messages
+  rclcpp::Subscription<cohan_msgs::msg::StateArray>::SharedPtr agents_sub_;  //!< Subscriber for tracked agents
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr log_pub_;              //!< Publisher for system logs
+  std::string ns_;                                                           //!< Namespace for multi-agent support
+  std::string invisible_humans_sub_topic_;                                   //!< Name for invisible humans topic
 
   // Helper class instances
   std::shared_ptr<agents::Agents> agents_ptr_;  //!< Pointer to agents management class
   std::shared_ptr<Backoff> backoff_ptr_;        //!< Pointer to backoff behavior class
   ModeSwitch bt_mode_switch_;                   //!< Behavior tree mode switch handler
+
+  // ROS 2 logging and time
+  rclcpp::Logger logger_{rclcpp::get_logger("HATebLocalPlanner")};  //!< Logger for this plugin
+  rclcpp::Clock::SharedPtr clock_;                                  //!< ROS 2 clock
 
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW

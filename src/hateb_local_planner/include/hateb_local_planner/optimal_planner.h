@@ -41,7 +41,16 @@
 #ifndef OPTIMAL_PLANNER_H_
 #define OPTIMAL_PLANNER_H_
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <rclcpp/rclcpp.hpp>
+#include <rclcpp_lifecycle/lifecycle_node.hpp>
+#include <ros2_helpers/utils.hpp>
+#include <utility>
 
 // teb stuff
 #include <hateb_local_planner/footprint_model.h>
@@ -78,68 +87,72 @@
 #include <hateb_local_planner/g2o_types/edge_via_point.h>
 
 // messages
-#include <cohan_msgs/AgentType.h>
-#include <cohan_msgs/Trajectory.h>
-#include <geometry_msgs/PoseStamped.h>
-#include <nav_msgs/Odometry.h>
-#include <nav_msgs/Path.h>
-
 #include <climits>
+#include <cohan_msgs/msg/agent_type.hpp>
+#include <cohan_msgs/msg/trajectory.hpp>
+#include <geometry_msgs/msg/point.hpp>
+#include <geometry_msgs/msg/pose.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/twist.hpp>
+#include <nav_msgs/msg/odometry.hpp>
+#include <nav_msgs/msg/path.hpp>
 
 namespace hateb_local_planner {
 
 //! Typedef for the block solver utilized for optimization
-using TEBBlockSolver = g2o::BlockSolver<g2o::BlockSolverTraits<-1, -1>>;
+using HATEBBlockSolver = g2o::BlockSolver<g2o::BlockSolverTraits<-1, -1>>;
 
 //! Typedef for the linear solver utilized for optimization
-using TEBLinearSolver = g2o::LinearSolverCholmod<TEBBlockSolver::PoseMatrixType>;
+using HATEBLinearSolver = g2o::LinearSolverCholmod<HATEBBlockSolver::PoseMatrixType>;
 
 //! Typedef for a container storing via-points
 using ViaPointContainer = std::vector<Eigen::Vector2d, Eigen::aligned_allocator<Eigen::Vector2d>>;
 
 /**
- * @class TebOptimalPlanner
- * @brief This class optimizes an internal Timed Elastic Band trajectory using the g2o-framework.
+ * @class HATebOptimalPlanner
+ * @brief This class optimizes an internal Human Aware Timed Elastic Band trajectory using the g2o-framework.
  *
  * For an introduction and further details about the TEB optimization problem refer to:
  * 	- C. Rösmann et al.: Trajectory modification considering dynamic constraints of autonomous robots, ROBOTIK, 2012.
  * 	- C. Rösmann et al.: Efficient trajectory optimization using a sparse model, ECMR, 2013.
  * 	- R. Kümmerle et al.: G2o: A general framework for graph optimization, ICRA, 2011.
  */
-class TebOptimalPlanner : public PlannerInterface {
+class HATebOptimalPlanner : public PlannerInterface {
  public:
   /**
    * @brief Default constructor
    */
-  TebOptimalPlanner();
+  HATebOptimalPlanner();
 
   /**
    * @brief Construct and initialize the TEB optimal planner.
+   * @param node Shared pointer to the lifecycle node for ROS2 operations
    * @param cfg Const reference to the HATebConfig class for internal parameters
    * @param obstacles Container storing all relevant obstacles (see Obstacle)
    * @param robot_model Shared pointer to the robot shape model used for optimization (optional)
    * @param visual Shared pointer to the TebVisualization class (optional)
    * @param via_points Container storing via-points (optional)
    */
-  explicit TebOptimalPlanner(const HATebConfig& cfg, ObstContainer* obstacles = nullptr, FootprintModelPtr robot_model = boost::make_shared<PointFootprint>(),
-                             TebVisualizationPtr visual = TebVisualizationPtr(), const ViaPointContainer* via_points = nullptr,
-                             CircularFootprintPtr agent_model = boost::make_shared<CircularFootprint>(), const std::map<uint64_t, ViaPointContainer>* agents_via_points_map = nullptr);
+  explicit HATebOptimalPlanner(rclcpp_lifecycle::LifecycleNode::SharedPtr node, const HATebConfig& cfg, ObstContainer* obstacles = nullptr,
+                               FootprintModelPtr robot_model = std::make_shared<PointFootprint>(), TebVisualizationPtr visual = TebVisualizationPtr(), const ViaPointContainer* via_points = nullptr,
+                               CircularFootprintPtr agent_model = std::make_shared<CircularFootprint>(), const std::map<uint64_t, ViaPointContainer>* agents_via_points_map = nullptr);
 
   /**
    * @brief Destruct the optimal planner.
    */
-  ~TebOptimalPlanner() override;
+  ~HATebOptimalPlanner() override;
 
   /**
    * @brief Initializes the optimal planner
+   * @param node Shared pointer to the lifecycle node for ROS2 operations
    * @param cfg Const reference to the HATebConfig class for internal parameters
    * @param obstacles Container storing all relevant obstacles (see Obstacle)
    * @param robot_model Shared pointer to the robot shape model used for optimization (optional)
    * @param visual Shared pointer to the TebVisualization class (optional)
    * @param via_points Container storing via-points (optional)
    */
-  void initialize(const HATebConfig& cfg, ObstContainer* obstacles = nullptr, FootprintModelPtr robot_model = boost::make_shared<PointFootprint>(), TebVisualizationPtr visual = TebVisualizationPtr(),
-                  const ViaPointContainer* via_points = nullptr, CircularFootprintPtr agent_model = boost::make_shared<CircularFootprint>(),
+  void initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node, const HATebConfig& cfg, ObstContainer* obstacles = nullptr, FootprintModelPtr robot_model = std::make_shared<PointFootprint>(),
+                  TebVisualizationPtr visual = TebVisualizationPtr(), const ViaPointContainer* via_points = nullptr, CircularFootprintPtr agent_model = std::make_shared<CircularFootprint>(),
                   const std::map<uint64_t, ViaPointContainer>* agents_via_points_map = nullptr);
 
   /** @name Plan a trajectory  */
@@ -156,13 +169,13 @@ class TebOptimalPlanner : public PlannerInterface {
    * 	- If a previous solution is avaiable, update the trajectory based on the initial plan,
    * 	  see bool TimedElasticBand::updateAndPruneTEB
    * 	- Afterwards optimize the recently initialized or updated trajectory by calling optimizeTEB() and invoking g2o
-   * @param initial_plan vector of geometry_msgs::PoseStamped
+   * @param initial_plan vector of geometry_msgs::msg::PoseStamped
    * @param start_vel Current start velocity (e.g. the velocity of the robot, only linear.x, linear.y (holonomic) and angular.z are used)
    * @param free_goal_vel if \c true, a nonzero final velocity at the goal pose is allowed,
    *		      otherwise the final velocity will be zero (default: false)
    * @return \c true if planning was successful, \c false otherwise
    */
-  bool plan(const std::vector<geometry_msgs::PoseStamped>& initial_plan, const geometry_msgs::Twist* start_vel = nullptr, bool free_goal_vel = false,
+  bool plan(const std::vector<geometry_msgs::msg::PoseStamped>& initial_plan, const geometry_msgs::msg::Twist* start_vel = nullptr, bool free_goal_vel = false,
             const AgentPlanVelMap* initial_agent_plan_vel_map = nullptr, hateb_local_planner::OptimizationCostArray* op_costs = nullptr, double dt_ref = 0.4, double dt_hyst = 0.1,
             int Mode = 0) override;
 
@@ -182,7 +195,7 @@ class TebOptimalPlanner : public PlannerInterface {
    *		      otherwise the final velocity will be zero (default: false)
    * @return \c true if planning was successful, \c false otherwise
    */
-  bool plan(const PoseSE2& start, const PoseSE2& goal, const geometry_msgs::Twist* start_vel = nullptr, bool free_goal_vel = false, double pre_plan_time = 0.0,
+  bool plan(const PoseSE2& start, const PoseSE2& goal, const geometry_msgs::msg::Twist* start_vel = nullptr, bool free_goal_vel = false, double pre_plan_time = 0.0,
             hateb_local_planner::OptimizationCostArray* op_costs = nullptr, double dt_ref = 0.4, double dt_hyst = 0.1, int Mode = 0) override;
 
   /**
@@ -239,14 +252,14 @@ class TebOptimalPlanner : public PlannerInterface {
    * @param vel_start Current start velocity (e.g. the velocity of the robot, only linear.x and angular.z are used,
    *                  for holonomic robots also linear.y)
    */
-  void setVelocityStart(const geometry_msgs::Twist& vel_start);
+  void setVelocityStart(const geometry_msgs::msg::Twist& vel_start);
 
   /**
    * @brief Set the desired final velocity at the trajectory's goal pose.
    * @remarks Call this function only if a non-zero velocity is desired and if \c free_goal_vel is set to \c false in plan()
    * @param vel_goal twist message containing the translational and angular final velocity
    */
-  void setVelocityGoal(const geometry_msgs::Twist& vel_goal);
+  void setVelocityGoal(const geometry_msgs::msg::Twist& vel_goal);
 
   /**
    * @brief Set the desired final velocity at the trajectory's goal pose to be the maximum velocity limit
@@ -362,13 +375,13 @@ class TebOptimalPlanner : public PlannerInterface {
    * @warning In general, the underlying optimizer must not be modified directly. Use with care...
    * @return const shared pointer to the g2o sparse optimizer
    */
-  boost::shared_ptr<g2o::SparseOptimizer> optimizer() { return optimizer_; };
+  std::shared_ptr<g2o::SparseOptimizer> optimizer() { return optimizer_; };
 
   /**
    * @brief Access the internal g2o optimizer (read-only).
    * @return const shared pointer to the g2o sparse optimizer
    */
-  boost::shared_ptr<const g2o::SparseOptimizer> optimizer() const { return optimizer_; };
+  std::shared_ptr<const g2o::SparseOptimizer> optimizer() const { return optimizer_; };
 
   /**
    * @brief Check if last optimization was successful
@@ -451,7 +464,7 @@ class TebOptimalPlanner : public PlannerInterface {
    * to the next step refer to getVelocityCommand().
    * @param[out] velocity_profile velocity profile will be written to this vector (after clearing any existing content) with the size=no_poses+1
    */
-  void getVelocityProfile(std::vector<geometry_msgs::Twist>& velocity_profile) const;
+  void getVelocityProfile(std::vector<geometry_msgs::msg::Twist>& velocity_profile) const;
 
   /**
    * @brief Return the complete trajectory including poses, velocity profiles and temporal information
@@ -463,7 +476,7 @@ class TebOptimalPlanner : public PlannerInterface {
    * See getVelocityProfile() for the list of velocities between consecutive points.
    * @param[out] trajectory the resulting trajectory
    */
-  cohan_msgs::Trajectory getFullTrajectory() const override;
+  cohan_msgs::msg::Trajectory getFullTrajectory() const override;
 
   /**
    * @brief Return the complete trajectory for a specific agent including poses, velocity profiles and temporal information
@@ -474,7 +487,7 @@ class TebOptimalPlanner : public PlannerInterface {
    * @param agent_id The unique identifier of the agent whose trajectory should be retrieved
    * @return The complete trajectory message for the specified agent
    */
-  cohan_msgs::Trajectory getFullAgentTrajectory(uint64_t agent_id) override;
+  cohan_msgs::msg::Trajectory getFullAgentTrajectory(uint64_t agent_id) override;
 
   /**
    * @brief Check whether the planned trajectory is feasible or not.
@@ -489,8 +502,8 @@ class TebOptimalPlanner : public PlannerInterface {
    * @return \c true, if the robot footprint along the first part of the trajectory intersects with
    *         any obstacle in the costmap, \c false otherwise.
    */
-  bool isTrajectoryFeasible(base_local_planner::CostmapModel* costmap_model, const std::vector<geometry_msgs::Point>& footprint_spec, double inscribed_radius = 0.0, double circumscribed_radius = 0.0,
-                            int look_ahead_idx = -1) override;
+  bool isTrajectoryFeasible(nav2_costmap_2d::CostmapModel* costmap_model, const std::vector<geometry_msgs::msg::Point>& footprint_spec, double inscribed_radius = 0.0,
+                            double circumscribed_radius = 0.0, int look_ahead_idx = -1) override;
 
   //@}
 
@@ -502,7 +515,7 @@ class TebOptimalPlanner : public PlannerInterface {
    * @brief Build the hyper-graph representing the TEB optimization problem.
    *
    * This method creates the optimization problem according to the hyper-graph formulation. \n
-   * For more details refer to the literature cited in the TebOptimalPlanner class description.
+   * For more details refer to the literature cited in the HATebOptimalPlanner class description.
    * @see optimizeGraph
    * @see clearGraph
    * @param weight_multiplier Specify a weight multipler for selected weights in optimizeGraph
@@ -517,7 +530,7 @@ class TebOptimalPlanner : public PlannerInterface {
    *
    * This method invokes the g2o framework to solve the optimization problem considering dedicated sparsity patterns. \n
    * The current implementation calls a non-constrained sparse Levenberg-Marquardt algorithm. Constraints are considered
-   * by utilizing penalty approximations. Refer to the literature cited in the TebOptimalPlanner class description.
+   * by utilizing penalty approximations. Refer to the literature cited in the HATebOptimalPlanner class description.
    * @see buildGraph
    * @see clearGraph
    * @param no_iterations Number of solver iterations
@@ -790,9 +803,10 @@ class TebOptimalPlanner : public PlannerInterface {
    * @brief Initialize and configure the g2o sparse optimizer.
    * @return shared pointer to the g2o::SparseOptimizer instance
    */
-  static boost::shared_ptr<g2o::SparseOptimizer> initOptimizer();
+  static std::shared_ptr<g2o::SparseOptimizer> initOptimizer();
 
   // external objects (store weak pointers)
+  rclcpp_lifecycle::LifecycleNode::SharedPtr node_;                     //!< Shared pointer to lifecycle node for ROS2 operations
   const HATebConfig* cfg_;                                              //!< Config class that stores and manages all related parameters
   ObstContainer* obstacles_;                                            //!< Store obstacles that are relevant for planning
   const ViaPointContainer* via_points_;                                 //!< Store via points for planning
@@ -804,33 +818,33 @@ class TebOptimalPlanner : public PlannerInterface {
   std::map<uint64_t, TimedElasticBand> agents_tebs_map_;  //!< Map of TEBs of agents
   FootprintModelPtr robot_model_;                         //!< Robot model
   CircularFootprintPtr agent_model_;                      //!< Agent Footprint model
-  boost::shared_ptr<g2o::SparseOptimizer> optimizer_;     //!< g2o optimizer for trajectory optimization
+  std::shared_ptr<g2o::SparseOptimizer> optimizer_;       //!< g2o optimizer for trajectory optimization
 
-  std::map<uint64_t, std::pair<bool, geometry_msgs::Twist>> agents_vel_start_;  //!< Initial velocities for each agent
-  std::map<uint64_t, std::pair<bool, geometry_msgs::Twist>> agents_vel_goal_;   //!< Goal velocities for each agent
-  std::pair<bool, geometry_msgs::Twist> vel_start_;                             //!< Store the initial velocity at the start pose
-  std::pair<bool, geometry_msgs::Twist> vel_goal_;                              //!< Store the final velocity at the goal pose
-  std::vector<geometry_msgs::Pose> static_agents_;                              //!< Store poses of static agents in the environment that do not move but need consideration for visibility and safety
-  bool initialized_;                                                            //!< Keeps track about the correct initialization of this class
-  bool optimized_;                                                              //!< This variable is \c true as long as the last optimization has been completed successful
-  double agent_radius_;                                                         //!< Radius of the circular footprint used for agent collision checking and safety distances
-  double robot_radius_;                                                         //!< Radius of the robot's circular footprint used for collision checking and safety calculations
-  int isMode_;                                                                  //!< Planning Mode
-  std::vector<double> agent_nominal_vels_;                                      //!< Nominal agent velocities calculated using moving average filter
-  double current_agent_robot_min_dist_;                                         //!< Controls addition of edges
-  double cost_;                                                                 //!< Store cost value of the current hyper-graph
-  RotType prefer_rotdir_;  //!< Store whether to prefer a specific initial rotation in optimization (might be activated in case the robot oscillates)
+  std::map<uint64_t, std::pair<bool, geometry_msgs::msg::Twist>> agents_vel_start_;  //!< Initial velocities for each agent
+  std::map<uint64_t, std::pair<bool, geometry_msgs::msg::Twist>> agents_vel_goal_;   //!< Goal velocities for each agent
+  std::pair<bool, geometry_msgs::msg::Twist> vel_start_;                             //!< Store the initial velocity at the start pose
+  std::pair<bool, geometry_msgs::msg::Twist> vel_goal_;                              //!< Store the final velocity at the goal pose
+  std::vector<geometry_msgs::msg::Pose> static_agents_;  //!< Store poses of static agents in the environment that do not move but need consideration for visibility and safety
+  bool initialized_;                                     //!< Keeps track about the correct initialization of this class
+  bool optimized_;                                       //!< This variable is \c true as long as the last optimization has been completed successful
+  double agent_radius_;                                  //!< Radius of the circular footprint used for agent collision checking and safety distances
+  double robot_radius_;                                  //!< Radius of the robot's circular footprint used for collision checking and safety calculations
+  int isMode_;                                           //!< Planning Mode
+  std::vector<double> agent_nominal_vels_;               //!< Nominal agent velocities calculated using moving average filter
+  double current_agent_robot_min_dist_;                  //!< Controls addition of edges
+  double cost_;                                          //!< Store cost value of the current hyper-graph
+  RotType prefer_rotdir_;                                //!< Store whether to prefer a specific initial rotation in optimization (might be activated in case the robot oscillates)
 
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 
-//! Abbrev. for shared instances of the TebOptimalPlanner
-using TebOptimalPlannerPtr = boost::shared_ptr<TebOptimalPlanner>;
-//! Abbrev. for shared const TebOptimalPlanner pointers
-using TebOptimalPlannerConstPtr = boost::shared_ptr<const TebOptimalPlanner>;
+//! Abbrev. for shared instances of the HATebOptimalPlanner
+using HATebOptimalPlannerPtr = std::shared_ptr<HATebOptimalPlanner>;
+//! Abbrev. for shared const HATebOptimalPlanner pointers
+using HATebOptimalPlannerConstPtr = std::shared_ptr<const HATebOptimalPlanner>;
 //! Abbrev. for containers storing multiple teb optimal planners
-using TebOptPlannerContainer = std::vector<TebOptimalPlannerPtr>;
+using TebOptPlannerContainer = std::vector<HATebOptimalPlannerPtr>;
 
 }  // namespace hateb_local_planner
 

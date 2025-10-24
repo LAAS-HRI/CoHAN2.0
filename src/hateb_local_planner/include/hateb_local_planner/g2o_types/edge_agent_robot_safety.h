@@ -65,7 +65,7 @@ class EdgeAgentRobotSafety : public BaseTebBinaryEdge<1, double, VertexPose, Ver
    * The error is stored in _error[0].
    */
   void computeError() override {
-    ROS_ASSERT_MSG(cfg_, "You must call setHATebConfig() on EdgeAgentRobotSafety()");
+    HATEB_ASSERT_MSG(cfg_, "You must call setHATebConfig() on EdgeAgentRobotSafety()");
     const auto *robot_bandpt = static_cast<const VertexPose *>(_vertices[0]);
     const auto *agent_bandpt = static_cast<const VertexPose *>(_vertices[1]);
     static_cast<PointObstacle *>(obs_)->setCentroid(agent_bandpt->x(), agent_bandpt->y());
@@ -77,7 +77,7 @@ class EdgeAgentRobotSafety : public BaseTebBinaryEdge<1, double, VertexPose, Ver
     // Apply a quadratic penalty
     _error[0] = penaltyBoundFromBelowQuad(dist, cfg_->hateb.min_agent_robot_dist, cfg_->optim.penalty_epsilon);
 
-    ROS_ASSERT_MSG(std::isfinite(_error[0]), "EdgeAgentRobotSafety::computeError() _error[0]=%f\n", _error[0]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[0]), "EdgeAgentRobotSafety::computeError() _error[0]=%f\n", _error[0]);
   }
 
  protected:

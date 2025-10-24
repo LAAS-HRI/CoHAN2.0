@@ -37,8 +37,8 @@
  *********************************************************************/
 
 #include <hateb_local_planner/obstacles.h>
-#include <ros/assert.h>
-#include <ros/console.h>
+
+#include <rclcpp/logging.hpp>
 // #include <hateb_local_planner/misc.h>
 
 namespace hateb_local_planner {
@@ -56,7 +56,7 @@ void PolygonObstacle::fixPolygonClosure() {
 void PolygonObstacle::calcCentroid() {
   if (vertices_.empty()) {
     centroid_.setConstant(NAN);
-    ROS_WARN("PolygonObstacle::calcCentroid(): number of vertices is empty. the resulting centroid is a vector of NANs.");
+    RCLCPP_WARN(rclcpp::get_logger("hateb_local_planner"), "PolygonObstacle::calcCentroid(): number of vertices is empty. the resulting centroid is a vector of NANs.");
     return;
   }
 
@@ -148,7 +148,7 @@ Eigen::Vector2d PolygonObstacle::getClosestPoint(const Eigen::Vector2d& position
     return new_pt;  // closest point on line segment
   }
 
-  ROS_ERROR("PolygonObstacle::getClosestPoint() cannot find any closest point. Polygon ill-defined?");
+  RCLCPP_ERROR(rclcpp::get_logger("hateb_local_planner"), "PolygonObstacle::getClosestPoint() cannot find any closest point. Polygon ill-defined?");
   return Eigen::Vector2d::Zero();  // todo: maybe boost::optional?
 }
 
@@ -169,7 +169,7 @@ bool PolygonObstacle::checkLineIntersection(const Eigen::Vector2d& line_start, c
 }
 
 // implements toPolygonMsg() of the base class
-void PolygonObstacle::toPolygonMsg(geometry_msgs::Polygon& polygon) {
+void PolygonObstacle::toPolygonMsg(geometry_msgs::msg::Polygon& polygon) {
   polygon.points.resize(vertices_.size());
   for (std::size_t i = 0; i < vertices_.size(); ++i) {
     polygon.points[i].x = vertices_[i].x();

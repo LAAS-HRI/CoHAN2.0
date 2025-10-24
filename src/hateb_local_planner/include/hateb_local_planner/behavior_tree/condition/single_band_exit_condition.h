@@ -24,8 +24,9 @@
  * Author: Phani Teja Singamaneni
  *********************************************************************************/
 
-#include <ros/ros.h>
 #include <tf2/utils.h>
+
+#include <rclcpp/rclcpp.hpp>
 
 // New
 #include <agent_path_prediction/AgentsInfo.h>
@@ -72,13 +73,13 @@ class SingleBandExitCondition : public BT::ConditionNode {
    */
   static BT::PortsList providedPorts() {
     // This action has a single input port called "agents_info"
-    return {BT::InputPort<agent_path_prediction::AgentsInfo>("agents_info"), BT::InputPort<double>("dist_max")};
+    return {BT::InputPort<agent_path_prediction::msg::AgentsInfo>("agents_info"), BT::InputPort<double>("dist_max")};
   }
 
  private:
   // Blackboard entries
-  agent_path_prediction::AgentsInfo agents_info_;  //!< Information about agents in the environment
-  double dist_max_;                                //!< Maximum distance threshold for band exit condition
+  agent_path_prediction::msg::AgentsInfo agents_info_;  //!< Information about agents in the environment
+  double dist_max_;                                     //!< Maximum distance threshold for band exit condition
 
   // name of the node
   std::string name_;  //!< Name of the condition node

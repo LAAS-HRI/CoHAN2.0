@@ -28,29 +28,28 @@
 
 #include <string>
 
-#define AGENTS_INFO_SUB "/move_base/agentsInfo"
-#define GOAL_SUB "/move_base/goal"
-#define RESULT_SUB "/move_base/result"
+#define AGENTS_INFO_SUB "/agents_info"
+#define GOAL_SUB "/goal_pose"
+#define RESULT_SUB "/navigate_to_pose/_action/status"
 #define PASSAGE_SUB "/map_scanner/passage"
 
 namespace hateb_local_planner {
 ModeSwitch::ModeSwitch() {
   name_ = "ModeSwitch";
   initialized_ = false;
-};
+}
 
-void ModeSwitch::initialize(ros::NodeHandle& nh, std::string& xml_path, std::shared_ptr<agents::Agents>& agents_ptr, std::shared_ptr<Backoff>& backoff_ptr) {
+void ModeSwitch::initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node, std::string& xml_path, std::shared_ptr<agents::Agents>& agents_ptr, std::shared_ptr<Backoff>& backoff_ptr) {
   if (!initialized_) {
     // Initialize the ROS components
     // TODO(sphanit): Check if you need to make them configurable
-    nh_ = nh;
+    node_ = node;
 
-    // Get the namespace from the parameter server (different from the cfg server)
-    if (!ros::param::get("~ns", ns_)) {
-      ns_ = std::string("");
-    }
+    // Get the namespace from the parameter (different from the cfg server)
+    node_->declare_parameter("ns", "");
+    node_->get_parameter("ns", ns_);
 
-    // Map the subcsriptions properly
+    // Map the subscriptions properly
     agents_info_sub_topic_ = std::string(AGENTS_INFO_SUB);
     goal_sub_topic_ = std::string(GOAL_SUB);
     result_sub_topic_ = std::string(RESULT_SUB);
@@ -62,11 +61,11 @@ void ModeSwitch::initialize(ros::NodeHandle& nh, std::string& xml_path, std::sha
       passage_sub_topic_ = "/" + ns_ + passage_sub_topic_;
     }
 
-    agents_info_sub_ = nh_.subscribe(agents_info_sub_topic_, 1, &ModeSwitch::agentsInfoCB, this);
-    goal_sub_ = nh_.subscribe(goal_sub_topic_, 1, &ModeSwitch::goalMoveBaseCB, this);
-    result_sub_ = nh_.subscribe(result_sub_topic_, 1, &ModeSwitch::resultMoveBaseCB, this);
-    passage_detect_sub_ = nh_.subscribe(passage_sub_topic_, 1, &ModeSwitch::passageCB, this);
-    planning_mode_pub_ = nh_.advertise<hateb_local_planner::PlanningMode>("planning_mode", 10);
+    agents_info_sub_ = node_->create_subscription<agent_path_prediction::msg::AgentsInfo>(agents_info_sub_topic_, 1, std::bind(&ModeSwitch::agentsInfoCB, this, std::placeholders::_1));
+    goal_sub_ = node_->create_subscription<nav2_msgs::action::NavigateToPose::Goal>(goal_sub_topic_, 1, std::bind(&ModeSwitch::goalNavigateToPoseCB, this, std::placeholders::_1));
+    result_sub_ = node_->create_subscription<action_msgs::msg::GoalStatusArray>(result_sub_topic_, 1, std::bind(&ModeSwitch::resultNavigateToPoseCB, this, std::placeholders::_1));
+    passage_detect_sub_ = node_->create_subscription<cohan_msgs::msg::PassageType>(passage_sub_topic_, 1, std::bind(&ModeSwitch::passageCB, this, std::placeholders::_1));
+    planning_mode_pub_ = node_->create_publisher<hateb_local_planner::msg::PlanningMode>("planning_mode", 10);
 
     // Initialize the parameters
     goal_reached_ = true;
@@ -82,7 +81,7 @@ void ModeSwitch::initialize(ros::NodeHandle& nh, std::string& xml_path, std::sha
       exit(0);
     }
     bhv_tree_ = bhv_factory_.createTreeFromFile(xml_path);
-    int8_t psg_type = cohan_msgs::PassageType::OPEN;
+    int8_t psg_type = cohan_msgs::msg::PassageType::OPEN;
 
     // Set the initial Blackboard entries
     ModeInfo init_mode;
@@ -103,34 +102,40 @@ void ModeSwitch::initialize(ros::NodeHandle& nh, std::string& xml_path, std::sha
   }
 }
 
-void ModeSwitch::passageCB(const cohan_msgs::PassageType& passage_msg) {
+void ModeSwitch::passageCB(const cohan_msgs::msg::PassageType::SharedPtr passage_msg) {
   // Set the passage type on the blackboard
-  bhv_tree_.rootBlackboard()->set("passage_type", passage_msg.type);
+  bhv_tree_.rootBlackboard()->set("passage_type", passage_msg->type);
 }
 
-void ModeSwitch::agentsInfoCB(const agent_path_prediction::AgentsInfo& info_msg) {
-  agents_info_ = info_msg;
+void ModeSwitch::agentsInfoCB(const agent_path_prediction::msg::AgentsInfo::SharedPtr info_msg) {
+  agents_info_ = *info_msg;
 
   // Set the agents_info on the blackboard
   bhv_tree_.rootBlackboard()->set("agents_info", agents_info_);
 }
 
-void ModeSwitch::goalMoveBaseCB(const move_base_msgs::MoveBaseActionGoal& goal_msg) {
+void ModeSwitch::goalNavigateToPoseCB(const nav2_msgs::action::NavigateToPose::Goal::SharedPtr goal_msg) {
   // Set the goal status
   BT_INFO(name_, "Goal is set!")
   if (!goal_reached_) {
     bhv_tree_.rootBlackboard()->set("goal_update", true);
     goal_update_ = true;
   }
-  goal_ = goal_msg.goal.target_pose;
+  goal_ = goal_msg->pose;
   bhv_tree_.rootBlackboard()->set("nav_goal", goal_);
   goal_reached_ = false;
 }
 
-void ModeSwitch::resultMoveBaseCB(const move_base_msgs::MoveBaseActionResult& result_msg) {
-  // Set the goal status
-  if (static_cast<int>(result_msg.status.status) == 3) {
-    goal_reached_ = true;
+void ModeSwitch::resultNavigateToPoseCB(const action_msgs::msg::GoalStatusArray::SharedPtr result_msg) {
+  // Set the goal status based on the status array
+  if (!result_msg->status_list.empty()) {
+    // Check if any goal has succeeded (status 4 = SUCCEEDED in action_msgs)
+    for (const auto& status : result_msg->status_list) {
+      if (status.status == action_msgs::msg::GoalStatus::STATUS_SUCCEEDED) {
+        goal_reached_ = true;
+        break;
+      }
+    }
   }
 }
 
@@ -160,20 +165,20 @@ void ModeSwitch::updateMode(int duration) {
   plan_mode_.still_humans = agents_info_.still;
 
   // TODO(sphanit): Make the duration configurable. will this be of any advantage?
-  // Publish the mode on the give ROS Topic
+  // Publish the mode on the given ROS Topic
   if (duration == 0) {
-    planning_mode_pub_.publish(plan_mode_);
+    planning_mode_pub_->publish(plan_mode_);
   } else {
-    auto start = ros::Time::now();
-    auto end = ros::Time::now();
-    while (((end - start).toSec() != duration)) {
-      end = ros::Time::now();
-      planning_mode_pub_.publish(plan_mode_);
+    auto start = node_->now();
+    auto end = node_->now();
+    while (((end - start).seconds() < duration)) {
+      end = node_->now();
+      planning_mode_pub_->publish(plan_mode_);
     }
   }
 }
 
-hateb_local_planner::PlanningMode ModeSwitch::tickAndGetMode() {
+hateb_local_planner::msg::PlanningMode ModeSwitch::tickAndGetMode() {
   // Tick the tree once and return the updated planning mode
   tickBT();
   return plan_mode_;
@@ -188,7 +193,7 @@ void ModeSwitch::resetBT() {
 
 void ModeSwitch::registerNodes() {
   // The only node that handles ROS connections is the "setMode"
-  RegisterStatefulActionNodeROS<hateb_local_planner::SetMode>(bhv_factory_, "setMode", nh_);
+  RegisterStatefulActionNodeROS<hateb_local_planner::SetMode>(bhv_factory_, "setMode", node_);
   // Register all other nodes needed for the behavior tree
   bhv_factory_.registerNodeType<hateb_local_planner::IsGoalReached>("goalCheck");
   bhv_factory_.registerNodeType<hateb_local_planner::IsGoalUpdated>("isGoalUpdated");
@@ -199,4 +204,4 @@ void ModeSwitch::registerNodes() {
   bhv_factory_.registerNodeType<hateb_local_planner::PassThroughCondition>("passThroughCond");
 }
 
-};  // namespace hateb_local_planner
+}  // namespace hateb_local_planner
