@@ -36,14 +36,14 @@
 
 namespace hateb_local_planner {
 // empty constructor and destructor
-Backoff::Backoff(rclcpp_lifecycle::LifecycleNode::SharedPtr node, nav2_costmap_2d::Costmap2DROS* costmap_ros) {
+Backoff::Backoff(rclcpp_lifecycle::LifecycleNode::SharedPtr node, std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros) {
   // Initialize the backoff recovery behavior
   initialize(node, costmap_ros);
 }
 
 Backoff::~Backoff() = default;
 
-void Backoff::initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node, nav2_costmap_2d::Costmap2DROS* costmap_ros) {
+void Backoff::initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node, std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros) {
   // get node from costmap_ros
   node_ = node;
 
@@ -53,7 +53,8 @@ void Backoff::initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node, nav2_c
   cfg_->setupParameterCallback();
 
   // Initialize tf2 listener with buffer
-  tf_listener_ = std::make_unique<tf2_ros::TransformListener>(tf_);
+  tf_ = std::make_shared<tf2_ros::Buffer>(node_->get_clock());
+  tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_);
 
   // If a namespace is associated update some topics accordingly
   if (!cfg_->ns.empty()) {
@@ -66,12 +67,13 @@ void Backoff::initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node, nav2_c
   // Get costmap
   costmap_ros_ = costmap_ros;
   costmap_ = costmap_ros_->getCostmap();
-  costmap_model_ = std::make_shared<nav2_costmap_2d::CostmapModel>(*costmap_);
+  // costmap_model_ = std::make_shared<nav2_costmap_2d::CostmapModel>(*costmap_);
+  collision_checker_ = std::make_shared<nav2_costmap_2d::FootprintCollisionChecker<nav2_costmap_2d::Costmap2D*>>(costmap_);
 
   // Initialize ros topics, services and subscribers
   goal_sub_ = node_->create_subscription<geometry_msgs::msg::PoseStamped>(cfg_->current_goal_topic, 1, std::bind(&Backoff::goalCB, this, std::placeholders::_1));
   goal_pub_ = node_->create_publisher<geometry_msgs::msg::PoseStamped>(cfg_->publish_goal_topic, 1);
-  get_plan_client_ = node_->create_client<nav2_msgs::srv::GetPlan>(cfg_->get_plan_srv_name);
+  get_plan_client_ = node_->create_client<nav_msgs::srv::GetPlan>(cfg_->get_plan_srv_name);
   poly_pub_l_ = node_->create_publisher<geometry_msgs::msg::PolygonStamped>("left_polygon", 100);
   poly_pub_r_ = node_->create_publisher<geometry_msgs::msg::PolygonStamped>("right_polygon", 100);
 
@@ -100,7 +102,7 @@ bool Backoff::startRecovery() {
   // Get the transform from robot frame to map frame
   geometry_msgs::msg::TransformStamped robot_to_map_tr;
   try {
-    robot_to_map_tr = tf_.lookupTransform(cfg_->map_frame, cfg_->footprint_frame, tf2::TimePointZero, tf2::durationFromSec(0.5));
+    robot_to_map_tr = tf_->lookupTransform(cfg_->map_frame, cfg_->footprint_frame, tf2::TimePointZero, tf2::durationFromSec(0.5));
     transform_found = true;
     tf2::fromMsg(robot_to_map_tr.transform, robot_to_map_tf_);
 
@@ -135,7 +137,7 @@ bool Backoff::startRecovery() {
     int count = 0;
 
     std::vector<geometry_msgs::msg::PoseStamped> goals;
-    auto get_plan_request = std::make_shared<nav2_msgs::srv::GetPlan::Request>();
+    auto get_plan_request = std::make_shared<nav_msgs::srv::GetPlan::Request>();
     get_plan_request->start.header.frame_id = "map";
     get_plan_request->start.pose.position.x = robot_to_map_tr.transform.translation.x;
     get_plan_request->start.pose.position.y = robot_to_map_tr.transform.translation.y;
@@ -169,7 +171,7 @@ bool Backoff::startRecovery() {
             point_tf.setValue(offset[0] - back_dist, offset[1], 0.0);
             point_tf = start_pose_tr_ * point_tf;
 
-            geometry_msgs::Point32 p32;
+            geometry_msgs::msg::Point32 p32;
             p32.x = point_tf.x();
             p32.y = point_tf.y();
             p32.z = 0;
@@ -181,7 +183,7 @@ bool Backoff::startRecovery() {
             point_tf.setValue(offset[0] - back_dist, offset[1], 0.0);
             point_tf = start_pose_tr_ * point_tf;
 
-            geometry_msgs::Point32 p32;
+            geometry_msgs::msg::Point32 p32;
             p32.x = point_tf.x();
             p32.y = point_tf.y();
             p32.z = 0;
@@ -211,7 +213,7 @@ bool Backoff::startRecovery() {
         l_center = start_pose_tr_ * l_center;
 
         // Check overlap with costmap (right)
-        if (costmap_model_->footprintCost(r_center.x(), r_center.y(), robot_theta, right_grid_) == 0) {
+        if (collision_checker_->footprintCostAtPose(r_center.x(), r_center.y(), robot_theta, right_grid_) == 0) {
           // ROS_INFO("Found safe spot on right");
           backoff_goal.pose.position.x = r_center.x();
           backoff_goal.pose.position.y = r_center.y();
@@ -224,7 +226,7 @@ bool Backoff::startRecovery() {
         }
 
         // Check overlap with costmap (left)
-        if (costmap_model_->footprintCost(l_center.x(), l_center.y(), robot_theta, left_grid_) == 0) {
+        if (collision_checker_->footprintCostAtPose(l_center.x(), l_center.y(), robot_theta, left_grid_) == 0) {
           // ROS_INFO("Found safe spot on left");
           backoff_goal.pose.position.x = l_center.x();
           backoff_goal.pose.position.y = l_center.y();
@@ -280,10 +282,10 @@ bool Backoff::startRecovery() {
       get_plan_request->goal.pose.orientation = goals[i].pose.orientation;
 
       auto result = get_plan_client_->async_send_request(get_plan_request);
-      if (rclcpp::spin_until_future_complete(get_plan_client_->get_node_base_interface(), result) == rclcpp::FutureReturnCode::SUCCESS) {
+      if (rclcpp::spin_until_future_complete(node_, result) == rclcpp::FutureReturnCode::SUCCESS) {
         auto get_plan_response = result.get();
-        if (!get_plan_response->path.poses.empty()) {
-          length_idx_map[get_plan_response->path.poses.size()] = i;
+        if (!get_plan_response->plan.poses.empty()) {
+          length_idx_map[get_plan_response->plan.poses.size()] = i;
         }
       }
     }
@@ -326,7 +328,7 @@ bool Backoff::isBackoffGoalReached() {
   // Get the transform from robot frame to map frame
   geometry_msgs::msg::TransformStamped robot_to_map_tr;
   try {
-    robot_to_map_tr = tf_.lookupTransform(cfg_->map_frame, cfg_->footprint_frame, tf2::TimePointZero, tf2::durationFromSec(0.5));
+    robot_to_map_tr = tf_->lookupTransform(cfg_->map_frame, cfg_->footprint_frame, tf2::TimePointZero, tf2::durationFromSec(0.5));
 
   } catch (tf2::LookupException& ex) {
     RCLCPP_ERROR(rclcpp::get_logger(NODE_NAME), "No Transform available Error: %s\n", ex.what());

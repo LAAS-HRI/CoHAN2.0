@@ -47,11 +47,11 @@
 
 // teb stuff
 #include <hateb_local_planner/footprint_model.h>
-#include <hateb_local_planner/hateb_config.h>
-#include <hateb_local_planner/timed_elastic_band.h>
+
+#include <hateb_local_planner/hateb_config.hpp>
+#include <hateb_local_planner/timed_elastic_band.hpp>
 
 // ros stuff
-#include <base_local_planner/goal_functions.h>
 #include <tf2/utils.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
@@ -76,6 +76,8 @@
 #include <cohan_msgs/msg/trajectory_stamped.hpp>
 #include <geometry_msgs/msg/pose_array.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <hateb_local_planner/msg/feedback_msg.hpp>
+#include <hateb_local_planner/visualization.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <nav_msgs/msg/path.hpp>
 #include <std_msgs/msg/color_rgba.hpp>
@@ -140,7 +142,7 @@ typedef struct {
   std::vector<geometry_msgs::msg::PoseStamped> plan_after;
 } AgentPlanCombined;
 
-class TebOptimalPlanner;  //!< Forward Declaration
+class HATebOptimalPlanner;  //!< Forward Declaration
 
 /**
  * @class TebVisualization
@@ -314,10 +316,10 @@ class TebVisualization {
   /**
    * @brief Publish multiple Tebs from a container class (publish as marker message).
    *
-   * @param teb_planner Container of boost::shared_ptr< TebOptPlannerPtr >
+   * @param teb_planner Container of std::shared_ptr< HATebOptimalPlanner >
    * @param ns Namespace for the marker objects
    */
-  void publishTebContainer(const std::vector<boost::shared_ptr<TebOptimalPlanner> >& teb_planner, const std::string& ns = "TebContainer");
+  void publishTebContainer(const std::vector<std::shared_ptr<HATebOptimalPlanner> >& teb_planner, const std::string& ns = "TebContainer");
 
   /**
    * @brief Publish a feedback message (multiple trajectory version)
@@ -329,7 +331,7 @@ class TebVisualization {
    * @param selected_trajectory_idx Idx of the currently selected trajectory in \c teb_planners
    * @param obstacles Container of obstacles
    */
-  void publishFeedbackMessage(const std::vector<boost::shared_ptr<TebOptimalPlanner> >& teb_planners, unsigned int selected_trajectory_idx, const ObstContainer& obstacles);
+  void publishFeedbackMessage(const std::vector<std::shared_ptr<HATebOptimalPlanner> >& teb_planners, unsigned int selected_trajectory_idx, const ObstContainer& obstacles);
 
   /**
    * @brief Publish a feedback message (single trajectory overload)
@@ -340,7 +342,7 @@ class TebVisualization {
    * @param teb_planner the planning instance
    * @param obstacles Container of obstacles
    */
-  void publishFeedbackMessage(const TebOptimalPlanner& teb_planner, const ObstContainer& obstacles);
+  void publishFeedbackMessage(const HATebOptimalPlanner& teb_planner, const ObstContainer& obstacles);
 
   //@}
 
@@ -390,22 +392,22 @@ class TebVisualization {
    */
   void clearingTimerCB();
 
-  rclcpp_lifecycle::LifecycleNode::SharedPtr node_;                                                               //!< Shared pointer to ROS2 node
-  rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr global_plan_pub_;                                             //!< Publisher for the global plan
-  rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr local_plan_pub_;                                              //!< Publisher for the local plan
-  rclcpp::Publisher<cohan_msgs::msg::TrajectoryStamped>::SharedPtr local_traj_pub_;                               //!< Publisher for the local traj
-  rclcpp::Publisher<cohan_msgs::msg::AgentPathArray>::SharedPtr agents_global_plans_pub_;                         //!< Publisher for the local plan
-  rclcpp::Publisher<cohan_msgs::msg::AgentPathArray>::SharedPtr agents_local_plans_pub_;                          //!< Publisher for the local plan
-  rclcpp::Publisher<cohan_msgs::msg::AgentTrajectoryArray>::SharedPtr agents_local_trajs_pub_;                    //!< Publisher for the agents local plans
-  rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr teb_poses_pub_, teb_fp_poses_pub_;                  //!< Publisher for the trajectory pose sequence
-  rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr agents_tebs_poses_pub_, agents_tebs_fp_poses_pub_;  //!< Publisher for the trajectory pose sequence
-  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr teb_marker_pub_;                                  //!< Publisher for visualization markers
-  rclcpp::Publisher<hateb_local_planner::msg::FeedbackMsg>::SharedPtr feedback_pub_;                              //!< Publisher for optimization feedback messages
-  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr mode_text_pub_;                                   //!< Publisher for current planner mode text visualization
-  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr robot_traj_time_pub_;                  //!< Publisher for robot's time to goal with optimized trajectory (until end of trajectory)
-  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr robot_path_time_pub_;                  //!< Publisher for robot's full time to goal (until goal, using path + traj)
+  rclcpp_lifecycle::LifecycleNode::SharedPtr node_;                                                                 //!< Shared pointer to ROS2 node
+  rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr global_plan_pub_;                                               //!< Publisher for the global plan
+  rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr local_plan_pub_;                                                //!< Publisher for the local plan
+  rclcpp::Publisher<cohan_msgs::msg::TrajectoryStamped>::SharedPtr local_traj_pub_;                                 //!< Publisher for the local traj
+  rclcpp::Publisher<cohan_msgs::msg::AgentPathArray>::SharedPtr agents_global_plans_pub_;                           //!< Publisher for the local plan
+  rclcpp::Publisher<cohan_msgs::msg::AgentPathArray>::SharedPtr agents_local_plans_pub_;                            //!< Publisher for the local plan
+  rclcpp::Publisher<cohan_msgs::msg::AgentTrajectoryArray>::SharedPtr agents_local_trajs_pub_;                      //!< Publisher for the agents local plans
+  rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr teb_poses_pub_, agents_tebs_poses_pub_;               //!< Publisher for the trajectory pose sequence
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr teb_fp_poses_pub_, agents_tebs_fp_poses_pub_;  //!< Publisher for the trajectory pose sequence
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr teb_marker_pub_;                                    //!< Publisher for visualization markers
+  rclcpp::Publisher<hateb_local_planner::msg::FeedbackMsg>::SharedPtr feedback_pub_;                                //!< Publisher for optimization feedback messages
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr mode_text_pub_;                                     //!< Publisher for current planner mode text visualization
+  rclcpp::Publisher<cohan_msgs::msg::AgentTimeToGoal>::SharedPtr robot_traj_time_pub_;        //!< Publisher for robot's time to goal with optimized trajectory (until end of trajectory)
+  rclcpp::Publisher<cohan_msgs::msg::AgentTimeToGoal>::SharedPtr robot_path_time_pub_;        //!< Publisher for robot's full time to goal (until goal, using path + traj)
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr robot_next_pose_pub_;         //!< Publisher for robot's predicted next pose
-  rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr agent_next_pose_pub_;           //!< Publisher for agents' predicted next poses
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr agent_next_pose_pub_;         //!< Publisher for agents' predicted next poses
   rclcpp::Publisher<cohan_msgs::msg::AgentTimeToGoalArray>::SharedPtr agent_trajs_time_pub_;  //!< Publisher for agents' time to goal with optimized trajectory (until end of trajectory)
   rclcpp::Publisher<cohan_msgs::msg::AgentTimeToGoalArray>::SharedPtr agent_paths_time_pub_;  //!< Publisher for agents' full time to goal (until goal, using path + traj)
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr agent_marker_pub_;       //!< Publisher for agent visualization markers
@@ -415,13 +417,13 @@ class TebVisualization {
   rclcpp::Subscription<cohan_msgs::msg::TrackedAgents>::SharedPtr tracked_agents_sub_;  //!< Subscriber for tracked agents data input
   std::vector<double> vel_robot_;                                                       //!< Store robot velocity history (for bar visualization)
   std::vector<double> vel_agent_;                                                       //!< Store agent velocity history (for bar visualization)
-  tf2_ros::Buffer tf_;                                                                  // TF2 buffer for coordinate transformations
-  std::unique_ptr<tf2_ros::TransformListener> tf_listener_;                             // TF2 transform listener for coordinate transformations
-  rclcpp::Publisher<cohan_msgs::msg::AgentTimeToGoalArray>::SharedPtr ttg_pub_;         //!< Publisher for time-to-goal information
+  std::shared_ptr<tf2_ros::Buffer> tf_;                                                 // TF2 buffer for coordinate transformations
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_;                             // TF2 transform listener for coordinate transformations
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr ttg_pub_;                        //!< Publisher for time-to-goal information
   std::string ns_;                                                                      //!< Name space of the robot
   std::string tracked_agents_sub_topic_;                                                //!< Tracked agents sub topic
 
-  const std::shared_ptr<HATebConfig> cfg_;       //!< Config class that stores and manages all related parameters
+  std::shared_ptr<HATebConfig> cfg_;             //!< Config class that stores and manages all related parameters
   bool initialized_;                             //!< Keeps track about the correct initialization of this class
   rclcpp::TimerBase::SharedPtr clearing_timer_;  //!< Timer for periodically clearing old visualization markers
 
@@ -451,8 +453,8 @@ template <typename GraphType>
 void TebVisualization::publishGraph(const GraphType& graph, const std::string& ns_prefix) {
   if (printErrorWhenNotInitialized()) return;
 
-  using GraphVertexIterator = typename std::graph_traits<GraphType>::vertex_iterator;
-  using GraphEdgeIterator = typename std::graph_traits<GraphType>::edge_iterator;
+  using GraphVertexIterator = typename boost::graph_traits<GraphType>::vertex_iterator;
+  using GraphEdgeIterator = typename boost::graph_traits<GraphType>::edge_iterator;
 
   // Visualize Edges
   visualization_msgs::msg::Marker marker;

@@ -36,7 +36,8 @@
 #include <hateb_local_planner/g2o_types/penalties.h>
 #include <hateb_local_planner/g2o_types/vertex_pose.h>
 #include <hateb_local_planner/g2o_types/vertex_timediff.h>
-#include <hateb_local_planner/hateb_config.h>
+
+#include <hateb_local_planner/hateb_config.hpp>
 
 namespace hateb_local_planner {
 
@@ -64,12 +65,12 @@ class EdgeAgentRobotRelVelocity : public BaseTebMultiEdge<1, double> {
    */
   void computeError() override {
     HATEB_ASSERT_MSG(cfg_, "You must call setHATebConfig() on EdgeAgentRobotRelVelocity()");
-    const auto *robot_bandpt = static_cast<const VertexPose *>(_vertices[0]);
-    const auto *robot_bandpt_nxt = static_cast<const VertexPose *>(_vertices[1]);
-    const auto *dt_robot = static_cast<const VertexTimeDiff *>(_vertices[2]);
-    const auto *agent_bandpt = static_cast<const VertexPose *>(_vertices[3]);
-    const auto *agent_bandpt_nxt = static_cast<const VertexPose *>(_vertices[4]);
-    const auto *dt_agent = static_cast<const VertexTimeDiff *>(_vertices[5]);
+    const auto* robot_bandpt = static_cast<const VertexPose*>(_vertices[0]);
+    const auto* robot_bandpt_nxt = static_cast<const VertexPose*>(_vertices[1]);
+    const auto* dt_robot = static_cast<const VertexTimeDiff*>(_vertices[2]);
+    const auto* agent_bandpt = static_cast<const VertexPose*>(_vertices[3]);
+    const auto* agent_bandpt_nxt = static_cast<const VertexPose*>(_vertices[4]);
+    const auto* dt_agent = static_cast<const VertexTimeDiff*>(_vertices[5]);
 
     // Get the velocities of the robot and agent
     Eigen::Vector2d diff_robot = robot_bandpt_nxt->position() - robot_bandpt->position();

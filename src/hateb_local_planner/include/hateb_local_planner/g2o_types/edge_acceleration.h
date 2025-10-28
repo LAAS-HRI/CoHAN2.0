@@ -48,9 +48,9 @@
 #include <hateb_local_planner/g2o_types/penalties.h>
 #include <hateb_local_planner/g2o_types/vertex_pose.h>
 #include <hateb_local_planner/g2o_types/vertex_timediff.h>
-#include <hateb_local_planner/hateb_config.h>
 
 #include <geometry_msgs/msg/twist.hpp>
+#include <hateb_local_planner/hateb_config.hpp>
 
 namespace hateb_local_planner {
 

@@ -178,9 +178,9 @@ std::shared_ptr<g2o::SparseOptimizer> HATebOptimalPlanner::initOptimizer() {
 
   // allocating the optimizer
   std::shared_ptr<g2o::SparseOptimizer> optimizer = std::make_shared<g2o::SparseOptimizer>();
-  std::unique_ptr<TEBLinearSolver> linear_solver(new TEBLinearSolver());  // see typedef in optimization.h
+  std::unique_ptr<HATEBLinearSolver> linear_solver(new HATEBLinearSolver());  // see typedef in optimization.h
   linear_solver->setBlockOrdering(true);
-  std::unique_ptr<TEBBlockSolver> block_solver(new TEBBlockSolver(std::move(linear_solver)));
+  std::unique_ptr<HATEBBlockSolver> block_solver(new HATEBBlockSolver(std::move(linear_solver)));
   auto* solver = new g2o::OptimizationAlgorithmLevenberg(std::move(block_solver));
 
   optimizer->setAlgorithm(solver);
@@ -191,14 +191,14 @@ std::shared_ptr<g2o::SparseOptimizer> HATebOptimalPlanner::initOptimizer() {
 }
 
 bool HATebOptimalPlanner::optimizeTEB(int iterations_innerloop, int iterations_outerloop, bool compute_cost_afterwards, double obst_cost_scale, double viapoint_cost_scale, bool alternative_time_cost,
-                                      hateb_local_planner::OptimizationCostArray* op_costs) {
+                                      hateb_local_planner::msg::OptimizationCostArray* op_costs) {
   optimizeTEB(iterations_innerloop, iterations_outerloop, compute_cost_afterwards, obst_cost_scale, viapoint_cost_scale, alternative_time_cost, op_costs, cfg_->trajectory.dt_ref,
               cfg_->trajectory.dt_hysteresis);
   return true;
 }
 
 bool HATebOptimalPlanner::optimizeTEB(int iterations_innerloop, int iterations_outerloop, bool compute_cost_afterwards, double obst_cost_scale, double viapoint_cost_scale, bool alternative_time_cost,
-                                      hateb_local_planner::OptimizationCostArray* op_costs, double dt_ref, double dt_hyst) {
+                                      hateb_local_planner::msg::OptimizationCostArray* op_costs, double dt_ref, double dt_hyst) {
   if (!cfg_->optim.optimization_activate) {
     return false;
   }
@@ -251,7 +251,7 @@ void HATebOptimalPlanner::setVelocityGoal(const geometry_msgs::msg::Twist& vel_g
 }
 
 bool HATebOptimalPlanner::plan(const std::vector<geometry_msgs::msg::PoseStamped>& initial_plan, const geometry_msgs::msg::Twist* start_vel, bool free_goal_vel,
-                               const AgentPlanVelMap* initial_agent_plan_vel_map, hateb_local_planner::OptimizationCostArray* op_costs, double dt_ref, double dt_hyst, int Mode) {
+                               const AgentPlanVelMap* initial_agent_plan_vel_map, hateb_local_planner::msg::OptimizationCostArray* op_costs, double dt_ref, double dt_hyst, int Mode) {
   isMode_ = Mode;
   RCLCPP_ASSERT_MSG(initialized_, "Call initialize() first.");
   auto prep_start_time = node_->now();
@@ -399,8 +399,8 @@ bool HATebOptimalPlanner::plan(const std::vector<geometry_msgs::msg::PoseStamped
   bool teb_opt_result = optimizeTEB(cfg_->optim.no_inner_iterations, cfg_->optim.no_outer_iterations, true, 1.0, 1.0, false, op_costs, dt_ref, dt_hyst);
 
   if (op_costs) {
-    hateb_local_planner::OptimizationCost op_cost;
-    op_cost.type = hateb_local_planner::OptimizationCost::AGENT_ROBOT_MIN_DIST;
+    hateb_local_planner::msg::OptimizationCost op_cost;
+    op_cost.type = hateb_local_planner::msg::OptimizationCost::AGENT_ROBOT_MIN_DIST;
     op_cost.cost = current_agent_robot_min_dist_;
     op_costs->costs.push_back(op_cost);
   }
@@ -420,7 +420,7 @@ bool HATebOptimalPlanner::plan(const std::vector<geometry_msgs::msg::PoseStamped
 }
 
 bool HATebOptimalPlanner::plan(const PoseSE2& start, const PoseSE2& goal, const geometry_msgs::msg::Twist* start_vel, bool free_goal_vel, double pre_plan_time,
-                               hateb_local_planner::OptimizationCostArray* op_costs, double dt_ref, double dt_hyst, int Mode) {
+                               hateb_local_planner::msg::OptimizationCostArray* op_costs, double dt_ref, double dt_hyst, int Mode) {
   isMode_ = Mode;
   RCLCPP_ASSERT_MSG(initialized_, "Call initialize() first.");
   auto prep_start_time = node_->now();
@@ -1672,7 +1672,7 @@ void HATebOptimalPlanner::AddEdgesStaticAgentVisibility() {
   }
 }
 
-void HATebOptimalPlanner::computeCurrentCost(double obst_cost_scale, double viapoint_cost_scale, bool alternative_time_cost, hateb_local_planner::OptimizationCostArray* op_costs) {
+void HATebOptimalPlanner::computeCurrentCost(double obst_cost_scale, double viapoint_cost_scale, bool alternative_time_cost, hateb_local_planner::msg::OptimizationCostArray* op_costs) {
   // check if graph is empty/exist  -> important if function is called between buildGraph and optimizeGraph/clearGraph
   bool graph_exist_flag(false);
 
@@ -1832,7 +1832,7 @@ cohan_msgs::msg::Trajectory HATebOptimalPlanner::getFullTrajectory() const {
   start.velocity.linear.x = vel_start_.second.linear.x;
   start.velocity.linear.y = vel_start_.second.linear.y;
   start.velocity.angular.z = vel_start_.second.angular.z;
-  start.time_from_start = rclcpp::Duration::from_seconds(curr_time);
+  start.time_from_start = curr_time;
   trajectory.points.push_back(start);
 
   curr_time += teb_.TimeDiff(0);
@@ -1854,7 +1854,7 @@ cohan_msgs::msg::Trajectory HATebOptimalPlanner::getFullTrajectory() const {
     point.velocity.linear.x = 0.5 * (vel1_x + vel2_x);
     point.velocity.linear.y = 0.5 * (vel1_y + vel2_y);
     point.velocity.angular.z = 0.5 * (omega1 + omega2);
-    point.time_from_start = rclcpp::Duration::from_seconds(curr_time);
+    point.time_from_start = curr_time;
     trajectory.points.push_back(point);
     curr_time += teb_.TimeDiff(i);
   }
@@ -1867,7 +1867,7 @@ cohan_msgs::msg::Trajectory HATebOptimalPlanner::getFullTrajectory() const {
   goal.velocity.linear.x = vel_goal_.second.linear.x;
   goal.velocity.linear.y = vel_goal_.second.linear.y;
   goal.velocity.angular.z = vel_goal_.second.angular.z;
-  goal.time_from_start = rclcpp::Duration::from_seconds(curr_time);
+  goal.time_from_start = curr_time;
   trajectory.points.push_back(goal);
 
   return trajectory;
@@ -1893,7 +1893,7 @@ cohan_msgs::msg::Trajectory HATebOptimalPlanner::getFullAgentTrajectory(const ui
     start.velocity.linear.x = agents_vel_start_[agent_id].second.linear.x;
     start.velocity.linear.y = agents_vel_start_[agent_id].second.linear.y;
     start.velocity.angular.z = agents_vel_start_[agent_id].second.angular.z;
-    start.time_from_start = rclcpp::Duration::from_seconds(curr_time);
+    start.time_from_start = curr_time;
     agent_trajectory.points.push_back(start);
 
     curr_time += agent_teb.TimeDiff(0);
@@ -1915,7 +1915,7 @@ cohan_msgs::msg::Trajectory HATebOptimalPlanner::getFullAgentTrajectory(const ui
       point.velocity.linear.x = 0.5 * (vel1_x + vel2_x);
       point.velocity.linear.y = 0.5 * (vel1_y + vel2_y);
       point.velocity.angular.z = 0.5 * (omega1 + omega2);
-      point.time_from_start = rclcpp::Duration::from_seconds(curr_time);
+      point.time_from_start = curr_time;
       agent_trajectory.points.push_back(point);
 
       curr_time += agent_teb.TimeDiff(i);
@@ -1928,17 +1928,17 @@ cohan_msgs::msg::Trajectory HATebOptimalPlanner::getFullAgentTrajectory(const ui
     goal.velocity.linear.x = agents_vel_goal_[agent_id].second.linear.x;
     goal.velocity.linear.y = agents_vel_goal_[agent_id].second.linear.y;
     goal.velocity.angular.z = agents_vel_goal_[agent_id].second.angular.z;
-    goal.time_from_start = rclcpp::Duration::from_seconds(curr_time);
+    goal.time_from_start = curr_time;
     agent_trajectory.points.push_back(goal);
   }
   return agent_trajectory;
 }
-bool HATebOptimalPlanner::isTrajectoryFeasible(nav2_costmap_2d::CostmapModel* costmap_model, const std::vector<geometry_msgs::msg::Point>& footprint_spec, double inscribed_radius,
-                                               double circumscribed_radius, int look_ahead_idx) {
+bool HATebOptimalPlanner::isTrajectoryFeasible(std::shared_ptr<nav2_costmap_2d::FootprintCollisionChecker<nav2_costmap_2d::Costmap2D*>> collision_checker,
+                                               const std::vector<geometry_msgs::msg::Point>& footprint_spec, double inscribed_radius, double circumscribed_radius, int look_ahead_idx) {
   if (look_ahead_idx < 0 || look_ahead_idx >= teb().sizePoses()) look_ahead_idx = teb().sizePoses() - 1;
 
   for (int i = 0; i <= look_ahead_idx; ++i) {
-    if (costmap_model->footprintCost(teb().Pose(i).x(), teb().Pose(i).y(), teb().Pose(i).theta(), footprint_spec, inscribed_radius, circumscribed_radius) == -1) {
+    if (collision_checker->footprintCostAtPose(teb().Pose(i).x(), teb().Pose(i).y(), teb().Pose(i).theta(), footprint_spec) == -1) {
       if (visualization_) {
         visualization_->publishInfeasibleRobotPose(teb().Pose(i), *robot_model_);
       }
@@ -1958,7 +1958,7 @@ bool HATebOptimalPlanner::isTrajectoryFeasible(nav2_costmap_2d::CostmapModel* co
         for (int step = 0; step < n_additional_samples; ++step) {
           intermediate_pose.position() = intermediate_pose.position() + delta_dist / (n_additional_samples + 1.0);
           intermediate_pose.theta() = g2o::normalize_theta(intermediate_pose.theta() + (delta_rot / (n_additional_samples + 1.0)));
-          if (costmap_model->footprintCost(intermediate_pose.x(), intermediate_pose.y(), intermediate_pose.theta(), footprint_spec, inscribed_radius, circumscribed_radius) == -1) {
+          if (collision_checker->footprintCostAtPose(intermediate_pose.x(), intermediate_pose.y(), intermediate_pose.theta(), footprint_spec) == -1) {
             if (visualization_) {
               visualization_->publishInfeasibleRobotPose(intermediate_pose, *robot_model_);
             }

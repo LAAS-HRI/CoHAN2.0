@@ -45,7 +45,10 @@
 #include <boost/optional.hpp>
 #include <geometry_msgs/msg/pose_array.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <limits>
+#include <rclcpp/logging.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <ros2_helpers/utils.hpp>
 
 // G2O Types
 #include <hateb_local_planner/g2o_types/vertex_pose.h>
@@ -586,7 +589,7 @@ bool TimedElasticBand::initTrajectoryToGoal(BidirIter path_start, BidirIter path
                                             boost::optional<double> max_acc_theta, boost::optional<double> start_orientation, boost::optional<double> goal_orientation, int min_samples,
                                             bool guess_backwards_motion) {
   Eigen::Vector2d start_position = fun_position(*path_start);
-  Eigen::Vector2d goal_position = fun_position(*boost::prior(path_end));
+  Eigen::Vector2d goal_position = fun_position(*std::prev(path_end));
 
   bool backwards = false;
 

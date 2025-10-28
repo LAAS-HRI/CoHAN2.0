@@ -10,6 +10,6 @@ cohan_msgs/Trajectory[] trajectories
 uint16 selected_trajectory_idx
 
 # List of active obstacles
-costmap_converter/ObstacleArrayMsg obstacles_msg
+costmap_converter_msgs/ObstacleArrayMsg obstacles_msg
 
 

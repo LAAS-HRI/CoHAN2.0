@@ -24,11 +24,12 @@
  * Author: Phani Teja Singamaneni
  *********************************************************************************/
 
-#include <hateb_local_planner/PlanningMode.h>
 #include <hateb_local_planner/behavior_tree/bt_core.h>
-#include <tf2/utils.h>
 
-#include <rclcpp/rclcpp.hpp>
+#include <hateb_local_planner/msg/planning_mode.hpp>
+#include <memory>
+#include <rclcpp_lifecycle/lifecycle_node.hpp>
+#include <string>
 
 namespace hateb_local_planner {
 
@@ -38,7 +39,7 @@ namespace hateb_local_planner {
  * This class provides functionality to set planning modes in CoHAN.
  * It inherits from StatefulActionNodeROS to integrate with ROS and behavior tree framework.
  */
-class SetMode : public StatefulActionNodeROS {
+class SetMode : public BT::StatefulActionNode {
  public:
   /**
    * @brief Constructor with ROS2 node and behavior tree configuration
@@ -46,7 +47,10 @@ class SetMode : public StatefulActionNodeROS {
    * @param name Name of the behavior tree node
    * @param config Configuration for the behavior tree node
    */
-  SetMode(::SharedPtr node, const std::string& name, const BT::NodeConfig& config);
+  SetMode(const std::string& name, const BT::NodeConfiguration& config);
+
+  // ROS2-compatible constructor
+  SetMode(const std::shared_ptr<rclcpp_lifecycle::LifecycleNode>& node, const std::string& name, const BT::NodeConfig& config);
 
   /**
    * @brief Deleted default constructor to enforce proper initialization
@@ -85,10 +89,7 @@ class SetMode : public StatefulActionNodeROS {
   void onHalted() override;
 
  private:
-  std::string name_;                                                                        //!< Name of the behavior tree node
-  rclcpp::Publisher<hateb_local_planner::msg::PlanningMode>::SharedPtr planning_mode_pub_;  //!< Publisher for planning mode messages
-
-  // BT Tree main
+  std::string name_;          //!< Name of the behavior tree node
   std::string plan_type_;     //!< Type of planning mode to use
   std::string predict_type_;  //!< Type of prediction to use
   ModeInfo p_msg_;            //!< Message containing mode information

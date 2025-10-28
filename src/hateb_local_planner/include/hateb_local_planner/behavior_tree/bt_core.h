@@ -36,6 +36,7 @@
  */
 
 #include <rclcpp/rclcpp.hpp>
+#include <rclcpp_lifecycle/lifecycle_node.hpp>
 
 #include "behaviortree_cpp/bt_factory.h"
 
@@ -98,7 +99,7 @@ class StatefulActionNodeROS : public BT::StatefulActionNode {
    * @param name Name of the behavior tree node
    * @param conf Configuration for the behavior tree node
    */
-  StatefulActionNodeROS(::SharedPtr node, const std::string& name, const BT::NodeConfiguration& conf) : BT::StatefulActionNode(name, conf), node_(node) {}
+  StatefulActionNodeROS(rclcpp_lifecycle::LifecycleNode::SharedPtr node, const std::string& name, const BT::NodeConfiguration& conf) : BT::StatefulActionNode(name, conf), node_(node) {}
 
  public:
   // using BaseClass = StatefulActionNodeROS<ActionT>;
@@ -132,7 +133,7 @@ class StatefulActionNodeROS : public BT::StatefulActionNode {
   void onHalted() override = 0;
 
  protected:
-  ::SharedPtr node_;  // ROS2 node shared pointer for communication
+  rclcpp_lifecycle::LifecycleNode::SharedPtr node_;  // ROS2 node shared pointer for communication
 };
 
 /**
@@ -146,7 +147,7 @@ class StatefulActionNodeROS : public BT::StatefulActionNode {
  * @param node ROS2 node shared pointer for communication
  */
 template <class DerivedT>
-static void RegisterStatefulActionNodeROS(BT::BehaviorTreeFactory& factory, const std::string& registration_ID, ::SharedPtr node) {
+static void RegisterStatefulActionNodeROS(BT::BehaviorTreeFactory& factory, const std::string& registration_ID, rclcpp_lifecycle::LifecycleNode::SharedPtr node) {
   BT::NodeBuilder builder = [node](const std::string& name, const BT::NodeConfiguration& config) { return std::make_unique<DerivedT>(node, name, config); };
 
   BT::TreeNodeManifest manifest;

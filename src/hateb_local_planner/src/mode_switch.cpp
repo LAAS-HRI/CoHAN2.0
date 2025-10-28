@@ -192,10 +192,8 @@ void ModeSwitch::resetBT() {
 }
 
 void ModeSwitch::registerNodes() {
-  // The only node that handles ROS connections is the "setMode"
-  RegisterStatefulActionNodeROS<hateb_local_planner::SetMode>(bhv_factory_, "setMode", node_);
-  // Register all other nodes needed for the behavior tree
-  bhv_factory_.registerNodeType<hateb_local_planner::IsGoalReached>("goalCheck");
+  // Register all nodes needed for the behavior tree
+  bhv_factory_.registerNodeType<hateb_local_planner::SetMode>("setMode");
   bhv_factory_.registerNodeType<hateb_local_planner::IsGoalUpdated>("isGoalUpdated");
   bhv_factory_.registerNodeType<hateb_local_planner::SingleBandExitCondition>("singleBandExitCond");
   bhv_factory_.registerNodeType<hateb_local_planner::DualBandExitCondition>("dualBandExitCond");

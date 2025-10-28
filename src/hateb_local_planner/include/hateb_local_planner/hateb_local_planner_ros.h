@@ -57,7 +57,8 @@
 // timed-elastic-band related classes
 #include <hateb_local_planner/optimal_planner.h>
 #include <hateb_local_planner/recovery_behaviors.h>
-#include <hateb_local_planner/visualization.h>
+
+#include <hateb_local_planner/visualization.hpp>
 
 // message types
 #include <cohan_msgs/srv/optimize.hpp>
@@ -76,9 +77,9 @@
 // agent data
 #include <agent_path_prediction/agent_path_prediction.hpp>
 #include <agent_path_prediction/agents_class.hpp>
+#include <agent_path_prediction/msg/predicted_goal.hpp>
+#include <agent_path_prediction/srv/agent_pose_predict.hpp>
 #include <cohan_msgs/msg/state_array.hpp>
-#include <cohan_msgs/srv/agent_pose_predict.hpp>
-#include <cohan_msgs/srv/predicted_goal.hpp>
 #include <std_srvs/srv/empty.hpp>
 #include <std_srvs/srv/set_bool.hpp>
 #include <std_srvs/srv/trigger.hpp>
@@ -182,7 +183,7 @@ class HATebLocalPlannerROS : public nav2_core::Controller {
    * will immediately stop when receiving a cancel request.
    * @return True if cancel was successfully requested, false otherwise
    */
-  bool cancel() override { return false; };
+  bool cancel() { return false; };
 
   /**
    * @brief Check if the goal pose has been achieved
@@ -202,7 +203,7 @@ class HATebLocalPlannerROS : public nav2_core::Controller {
    * @param config Configuration parameters
    * @return Robot footprint model used for optimization
    */
-  static FootprintModelPtr getRobotFootprintFromParamServer(const rclcpp_lifecycle::LifecycleNode::SharedPtr node, const std::shared_ptr<HATebConfig> config);
+  FootprintModelPtr getRobotFootprintFromParamServer(const rclcpp_lifecycle::LifecycleNode::SharedPtr node, const std::shared_ptr<HATebConfig> config);
 
   /**
    * @brief Set the footprint from the given parameter value
@@ -212,7 +213,7 @@ class HATebLocalPlannerROS : public nav2_core::Controller {
    * @param full_param_name Full name of the parameter (for error reporting)
    * @return container of vertices describing the polygon
    */
-  static Point2dContainer makeFootprintFromParams(const rclcpp::Parameter& footprint_param, const std::string& full_param_name);
+  Point2dContainer makeFootprintFromParams(const rclcpp::Parameter& footprint_param, const std::string& full_param_name);
 
   //@}
 
@@ -381,8 +382,8 @@ class HATebLocalPlannerROS : public nav2_core::Controller {
    * be taken into account
    * @return orientation (yaw-angle) estimate
    */
-  static double estimateLocalGoalOrientation(const std::vector<geometry_msgs::msg::PoseStamped>& global_plan, const geometry_msgs::msg::PoseStamped& local_goal, int current_goal_idx,
-                                             const geometry_msgs::msg::TransformStamped& tf_plan_to_global, int moving_average_length = 3);
+  double estimateLocalGoalOrientation(const std::vector<geometry_msgs::msg::PoseStamped>& global_plan, const geometry_msgs::msg::PoseStamped& local_goal, int current_goal_idx,
+                                      const geometry_msgs::msg::TransformStamped& tf_plan_to_global, int moving_average_length = 3);
 
   /**
    * @brief Saturate the translational and angular velocity to given limits.
@@ -421,7 +422,7 @@ class HATebLocalPlannerROS : public nav2_core::Controller {
    * @param min_turning_radius Specify a lower bound on the turning radius
    * @return Resulting steering angle in [rad] inbetween [-pi/2, pi/2]
    */
-  static double convertTransRotVelToSteeringAngle(double v, double omega, double wheelbase, double min_turning_radius = 0);
+  double convertTransRotVelToSteeringAngle(double v, double omega, double wheelbase, double min_turning_radius = 0);
 
   /**
    * @brief Validate current parameter values of the footprint for optimization,
@@ -437,7 +438,7 @@ class HATebLocalPlannerROS : public nav2_core::Controller {
    */
   void configureBackupModes(std::vector<geometry_msgs::msg::PoseStamped>& transformed_plan, int& goal_idx);
 
-  static void validateFootprints(double opt_inscribed_radius, double costmap_inscribed_radius, double min_obst_dist);
+  void validateFootprints(double opt_inscribed_radius, double costmap_inscribed_radius, double min_obst_dist);
 
   // Agent Prediction reset
   /**
@@ -534,9 +535,9 @@ class HATebLocalPlannerROS : public nav2_core::Controller {
   bool initialized_;  //!< Flag to track proper initialization of this class
 
   // Agent prediction services and related variables
-  rclcpp::Client<cohan_msgs::srv::AgentPosePredict>::SharedPtr predict_agents_client_;  //!< Client for predicting agent trajectories
-  rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr reset_agents_prediction_client_;    //!< Client for resetting agent predictions
-  rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr publish_predicted_markers_client_;  //!< Client for publishing prediction markers
+  rclcpp::Client<agent_path_prediction::srv::AgentPosePredict>::SharedPtr predict_agents_client_;  //!< Client for predicting agent trajectories
+  rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr reset_agents_prediction_client_;               //!< Client for resetting agent predictions
+  rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr publish_predicted_markers_client_;             //!< Client for publishing prediction markers
 
   std::string predict_srv_name_;           //!< Name of the prediction service
   std::string reset_prediction_srv_name_;  //!< Name of the reset prediction service
@@ -567,6 +568,8 @@ class HATebLocalPlannerROS : public nav2_core::Controller {
   // ROS 2 logging and time
   rclcpp::Logger logger_{rclcpp::get_logger("HATebLocalPlanner")};  //!< Logger for this plugin
   rclcpp::Clock::SharedPtr clock_;                                  //!< ROS 2 clock
+  rclcpp::Node::SharedPtr intra_node_costmap_converter_;            //!< Shared pointer to node for costmap converter
+  rclcpp::Node::SharedPtr intra_node_agents_;                       //!< Shared pointer to node for agents
 
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW

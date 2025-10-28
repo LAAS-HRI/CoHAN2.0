@@ -28,16 +28,18 @@
 
 namespace hateb_local_planner {
 
-DualBandExitCondition::DualBandExitCondition(const std::string& condition_name, const BT::NodeConfiguration& conf) : BT::ConditionNode(condition_name, conf) {
+DualBandExitCondition::DualBandExitCondition(const std::string& condition_name, const BT::NodeConfiguration& conf) : BT::ConditionNode(condition_name, conf), clock_(RCL_ROS_TIME) {
   name_ = condition_name;
   // Initialize the variables
   dist_threshold_ = 999;
   goal_dist_ = 999;
+  stopped_time_ = clock_.now();
+  BT_INFO(name_, "Starting the DualBandExitCondition BT Node");
 }
 
 DualBandExitCondition::~DualBandExitCondition() {
-  // ROS_INFO in destructor
-  ROS_INFO("Shutting downd the DualBandExitCondition BT Node");
+  // BT_INFO in destructor
+  BT_INFO(name_, "Shutting down the DualBandExitCondition BT Node");
 }
 
 BT::NodeStatus DualBandExitCondition::tick() {
@@ -80,12 +82,12 @@ bool DualBandExitCondition::isRobotStuck() {
 
   // Check if distance to goal is constantly decreasing or not
   if (fabs(goal_dist_ - std::hypot(dx, dy)) > DIST_EPS) {
-    stopped_time_ = ros::Time::now();
+    stopped_time_ = rclcpp::Clock().now();
     goal_dist_ = std::hypot(dx, dy);
   }
 
   // If the goal_dist is not decreasing for over 2.0 sec, exit the mode
-  if ((ros::Time::now() - stopped_time_).toSec() >= 2.0) {  // TODO(sphanit): Remove the magic number 2.0s here
+  if ((rclcpp::Clock().now() - stopped_time_).seconds() >= 2.0) {  // TODO(sphanit): Remove the magic number 2.0s here
     if (goal_dist_ - std::hypot(dx, dy) < 2 * DIST_EPS) {
       return true;
     }

@@ -45,7 +45,8 @@
 #include <boost/shared_ptr.hpp>
 
 // ros
-#include <nav2_costmap_2d/costmap_model.hpp>
+// #include <nav2_costmap_2d/costmap_model.hpp>
+#include <nav2_costmap_2d/footprint_collision_checker.hpp>
 #include <rclcpp/rclcpp.hpp>
 
 // this package
@@ -157,7 +158,7 @@ class PlannerInterface {
    *
    * This method currently checks only that the trajectory, or a part of the trajectory is collision free.
    * Obstacles are here represented as costmap instead of the internal ObstacleContainer.
-   * @param costmap_model Pointer to the costmap model
+   * @param collision_checker Pointer to the collision checker associated with a costmap
    * @param footprint_spec The specification of the footprint of the robot in world coordinates
    * @param inscribed_radius The radius of the inscribed circle of the robot
    * @param circumscribed_radius The radius of the circumscribed circle of the robot
@@ -165,8 +166,8 @@ class PlannerInterface {
    * @return \c true, if the robot footprint along the first part of the trajectory intersects with
    *         any obstacle in the costmap, \c false otherwise.
    */
-  virtual bool isTrajectoryFeasible(nav2_costmap_2d::CostmapModel* costmap_model, const std::vector<geometry_msgs::msg::Point>& footprint_spec, double inscribed_radius = 0.0,
-                                    double circumscribed_radius = 0.0,
+  virtual bool isTrajectoryFeasible(std::shared_ptr<nav2_costmap_2d::FootprintCollisionChecker<nav2_costmap_2d::Costmap2D*>> collision_checker,
+                                    const std::vector<geometry_msgs::msg::Point>& footprint_spec, double inscribed_radius = 0.0, double circumscribed_radius = 0.0,
                                     int look_ahead_idx = -1) = 0; /**
                                                                    * Compute and return the cost of the current optimization graph (supports multiple trajectories)
                                                                    * @param[out] cost current cost value for each trajectory

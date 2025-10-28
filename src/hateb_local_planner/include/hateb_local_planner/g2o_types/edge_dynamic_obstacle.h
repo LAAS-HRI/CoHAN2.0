@@ -44,14 +44,15 @@
 #ifndef EDGE_DYNAMICOBSTACLE_H
 #define EDGE_DYNAMICOBSTACLE_H
 
-#include <cohan_msgs/AgentType.h>
 #include <hateb_local_planner/footprint_model.h>
 #include <hateb_local_planner/g2o_types/base_teb_edges.h>
 #include <hateb_local_planner/g2o_types/penalties.h>
 #include <hateb_local_planner/g2o_types/vertex_pose.h>
 #include <hateb_local_planner/g2o_types/vertex_timediff.h>
-#include <hateb_local_planner/hateb_config.h>
 #include <hateb_local_planner/obstacles.h>
+
+#include <cohan_msgs/msg/agent_type.hpp>
+#include <hateb_local_planner/hateb_config.hpp>
 
 namespace hateb_local_planner {
 
@@ -90,11 +91,11 @@ class EdgeDynamicObstacle : public BaseTebUnaryEdge<2, const Obstacle*, VertexPo
 
     double dist = 0;
 
-    if (type_ == static_cast<int>(cohan_msgs::AgentType::ROBOT)) {
+    if (type_ == static_cast<int>(cohan_msgs::msg::AgentType::ROBOT)) {
       dist = cfg_->robot_model->estimateSpatioTemporalDistance(bandpt->pose(), _measurement, t_);
     }
 
-    if (type_ == static_cast<int>(cohan_msgs::AgentType::HUMAN)) {
+    if (type_ == static_cast<int>(cohan_msgs::msg::AgentType::HUMAN)) {
       dist = cfg_->human_model->estimateSpatioTemporalDistance(bandpt->pose(), _measurement, t_);
     }
 

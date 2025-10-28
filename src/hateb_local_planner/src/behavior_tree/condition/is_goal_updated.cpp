@@ -31,11 +31,12 @@ namespace hateb_local_planner {
 IsGoalUpdated::IsGoalUpdated(const std::string& condition_name, const BT::NodeConfiguration& conf) : BT::ConditionNode(condition_name, conf) {
   // set the node name
   name_ = condition_name;
+  BT_INFO(name_, "Starting the IsGoalUpdated BT Node");
 }
 
 IsGoalUpdated::~IsGoalUpdated() {
-  // ROS_INFO in destructor
-  ROS_INFO("Shutting down the isGoalUpdated BT Node");
+  // BT_INFO in destructor
+  BT_INFO(name_, "Shutting down the IsGoalUpdated BT Node");
 }
 
 BT::NodeStatus IsGoalUpdated::tick() {

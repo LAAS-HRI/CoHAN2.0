@@ -20,10 +20,10 @@ find_package(nav2_core REQUIRED)
 find_package(nav2_costmap_2d REQUIRED)
 find_package(nav2_util REQUIRED)
 find_package(costmap_converter REQUIRED)
+find_package(costmap_converter_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(interactive_markers REQUIRED)
 find_package(nav_msgs REQUIRED)
-find_package(nav2_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(pluginlib REQUIRED)
@@ -36,6 +36,7 @@ find_package(cohan_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(behaviortree_cpp REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
+find_package(ros2_helpers REQUIRED)
 
 message(STATUS "System: ${CMAKE_SYSTEM}")
 
@@ -68,7 +69,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/OptimizationCostArray.msg"
   "msg/FeedbackMsg.msg"
   "msg/PlanningMode.msg"
-  DEPENDENCIES geometry_msgs std_msgs costmap_converter cohan_msgs
+  DEPENDENCIES geometry_msgs std_msgs costmap_converter_msgs cohan_msgs
 )
 
 rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
@@ -86,10 +87,10 @@ set(dependencies
   nav2_costmap_2d
   nav2_util
   costmap_converter
+  costmap_converter_msgs
   geometry_msgs
   interactive_markers
   nav_msgs
-  nav2_msgs
   std_msgs
   std_srvs
   pluginlib
@@ -101,10 +102,11 @@ set(dependencies
   cohan_msgs
   visualization_msgs
   behaviortree_cpp
+  ros2_helpers
 )
 
 # Build the hateb_local_planner library
-add_library(hateb_local_planner SHARED
+add_library(hateb_local_planner_core SHARED
   src/timed_elastic_band.cpp
   src/optimal_planner.cpp
   src/obstacles.cpp
@@ -113,7 +115,6 @@ add_library(hateb_local_planner SHARED
   src/hateb_config.cpp
   src/hateb_local_planner_ros.cpp
   src/backoff.cpp
-  src/behavior_tree/condition/is_goal_reached.cpp
   src/behavior_tree/condition/is_goal_updated.cpp
   src/behavior_tree/condition/vel_obs_exit_condition.cpp
   src/behavior_tree/condition/backoff_exit_condition.cpp
@@ -124,17 +125,17 @@ add_library(hateb_local_planner SHARED
   src/mode_switch.cpp
 )
 
-ament_target_dependencies(hateb_local_planner
+ament_target_dependencies(hateb_local_planner_core
   ${dependencies}
 )
 
-target_link_libraries(hateb_local_planner
+target_link_libraries(hateb_local_planner_core
   ${EXTERNAL_LIBS}
   "${cpp_typesupport_target}"
 )
 
 # Install
-install(TARGETS hateb_local_planner
+install(TARGETS hateb_local_planner_core
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
@@ -156,7 +157,6 @@ install(DIRECTORY
 )
 
 install(PROGRAMS
-  scripts/ros1_ros2_bridge.py
   scripts/static_plan_visualizer.py
   DESTINATION lib/${PROJECT_NAME}
 )
@@ -169,7 +169,7 @@ if(BUILD_TESTING)
 endif()
 
 ament_export_include_directories(include)
-ament_export_libraries(hateb_local_planner)
+ament_export_libraries(hateb_local_planner_core)
 ament_export_dependencies(${dependencies})
 
 ament_package()

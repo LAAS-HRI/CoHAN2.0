@@ -35,7 +35,8 @@
 #include <hateb_local_planner/g2o_types/base_teb_edges.h>
 #include <hateb_local_planner/g2o_types/penalties.h>
 #include <hateb_local_planner/g2o_types/vertex_pose.h>
-#include <hateb_local_planner/hateb_config.h>
+
+#include <hateb_local_planner/hateb_config.hpp>
 
 namespace hateb_local_planner {
 
@@ -63,8 +64,8 @@ class EdgeAgentRobotVisibility : public BaseTebBinaryEdge<1, double, VertexPose,
    */
   void computeError() override {
     HATEB_ASSERT_MSG(cfg_, "You must call setParameters() on EdgeAgentRobotVisibility()");
-    const auto *robot_bandpt = static_cast<const VertexPose *>(_vertices[0]);
-    const auto *agent_bandpt = static_cast<const VertexPose *>(_vertices[1]);
+    const auto* robot_bandpt = static_cast<const VertexPose*>(_vertices[0]);
+    const auto* agent_bandpt = static_cast<const VertexPose*>(_vertices[1]);
 
     Eigen::Vector2d d_rtoh = agent_bandpt->position() - robot_bandpt->position();
     Eigen::Vector2d d_htor = robot_bandpt->position() - agent_bandpt->position();

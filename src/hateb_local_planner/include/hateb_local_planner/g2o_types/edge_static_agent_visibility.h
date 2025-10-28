@@ -35,7 +35,8 @@
 #include <hateb_local_planner/g2o_types/base_teb_edges.h>
 #include <hateb_local_planner/g2o_types/penalties.h>
 #include <hateb_local_planner/g2o_types/vertex_pose.h>
-#include <hateb_local_planner/hateb_config.h>
+
+#include <hateb_local_planner/hateb_config.hpp>
 
 #include "g2o/core/base_unary_edge.h"
 
@@ -65,7 +66,7 @@ class EdgeStaticAgentVisibility : public BaseTebUnaryEdge<1, double, VertexPose>
    */
   void computeError() override {
     HATEB_ASSERT_MSG(cfg_, "You must call setParameters() on EdgeStaticAgentVisibility()");
-    const auto *robot_bandpt = static_cast<const VertexPose *>(_vertices[0]);
+    const auto* robot_bandpt = static_cast<const VertexPose*>(_vertices[0]);
 
     Eigen::Vector2d d_rtoh = static_agent_.position() - robot_bandpt->position();
     Eigen::Vector2d d_htor = robot_bandpt->position() - static_agent_.position();
@@ -96,7 +97,7 @@ class EdgeStaticAgentVisibility : public BaseTebUnaryEdge<1, double, VertexPose>
    * @param cfg HATebConfig configuration
    * @param static_agent Pose of the static agent
    */
-  void setParameters(const HATebConfig &cfg, const PoseSE2 &static_agent) {
+  void setParameters(const HATebConfig& cfg, const PoseSE2& static_agent) {
     cfg_ = &cfg;
     static_agent_ = static_agent;
   }

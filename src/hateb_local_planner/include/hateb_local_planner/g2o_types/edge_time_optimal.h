@@ -47,9 +47,9 @@
 #include <hateb_local_planner/g2o_types/base_teb_edges.h>
 #include <hateb_local_planner/g2o_types/penalties.h>
 #include <hateb_local_planner/g2o_types/vertex_timediff.h>
-#include <hateb_local_planner/hateb_config.h>
 
 #include <Eigen/Core>
+#include <hateb_local_planner/hateb_config.hpp>
 
 namespace hateb_local_planner {
 

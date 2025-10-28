@@ -28,11 +28,11 @@
   <depend>nav2_costmap_2d</depend>
   <depend>nav2_util</depend>
   <depend>costmap_converter</depend>
+  <depend>costmap_converter_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>interactive_markers</depend>
   <depend>libg2o</depend>
   <depend>nav_msgs</depend>
-  <depend>nav2_msgs</depend>
   <depend>pluginlib</depend>
   <depend>std_msgs</depend>
   <depend>tf2</depend>
@@ -44,6 +44,7 @@
   <depend>std_srvs</depend>
   <depend>visualization_msgs</depend>
   <depend>behaviortree_cpp</depend>
+  <depend>ros2_helpers</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

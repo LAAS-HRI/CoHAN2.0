@@ -431,7 +431,7 @@ class HATebConfig {
    * @param node ROS 2 node shared pointer
    * @param plugin_name Name of the plugin for parameter namespacing
    */
-  void initialize(::SharedPtr node, const std::string& plugin_name = "") {
+  void initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node, const std::string& plugin_name = "") {
     node_ = node;
     plugin_name_ = plugin_name;
     param_helper_.initialize(node);
@@ -462,10 +462,10 @@ class HATebConfig {
    */
   void bindParameters();
 
-  std::weak_ptr<> node_;                      //!< ROS 2 node weak pointer (to avoid circular dependencies)
-  std::string plugin_name_;                   //!< Plugin name for parameter namespacing
-  parameters::ParameterHelper param_helper_;  //!< Parameter helper for managing ROS2 parameters
-  std::mutex config_mutex_;                   //!< Mutex for config accesses and changes
+  std::weak_ptr<rclcpp_lifecycle::LifecycleNode> node_;  //!< ROS 2 node weak pointer (to avoid circular dependencies)
+  std::string plugin_name_;                              //!< Plugin name for parameter namespacing
+  parameters::ParameterHelper param_helper_;             //!< Parameter helper for managing ROS2 parameters
+  std::mutex config_mutex_;                              //!< Mutex for config accesses and changes
 };
 
 }  // namespace hateb_local_planner

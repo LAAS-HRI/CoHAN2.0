@@ -130,7 +130,7 @@
  * @param frame_id The frame ID string
  * @return Frame ID without leading slash
  */
-std::string strip_leading_slash(const std::string& frame_id) {
+inline std::string strip_leading_slash(const std::string& frame_id) {
   if (!frame_id.empty() && frame_id[0] == '/') {
     return frame_id.substr(1);
   }
@@ -155,9 +155,9 @@ std::string strip_leading_slash(const std::string& frame_id) {
  * @param[out] twist The resulting twist message containing linear and angular velocities
  */
 
-void lookupTwist(const std::string& tracking_frame, const std::string& observation_frame, const std::string& reference_frame, const tf2::Vector3& reference_point,
-                 const std::string& reference_point_frame, const rclcpp::Time& time, const rclcpp::Duration& averaging_interval, geometry_msgs::msg::Twist& twist,
-                 std::shared_ptr<tf2_ros::Buffer> tf_) {
+inline void lookupTwist(const std::string& tracking_frame, const std::string& observation_frame, const std::string& reference_frame, const tf2::Vector3& reference_point,
+                        const std::string& reference_point_frame, const rclcpp::Time& time, const rclcpp::Duration& averaging_interval, geometry_msgs::msg::Twist& twist,
+                        std::shared_ptr<tf2_ros::Buffer> tf_) {
   // Use the same clock type as the provided time to avoid mixing clock sources
   rcl_clock_type_t clock_type = time.get_clock_type();
 
@@ -269,8 +269,8 @@ void lookupTwist(const std::string& tracking_frame, const std::string& observati
  * @param averaging_interval Time interval over which to average the twist
  * @param[out] twist The resulting twist message
  */
-void lookupTwist(const std::string& tracking_frame, const std::string& observation_frame, const rclcpp::Time& time, const rclcpp::Duration& averaging_interval, geometry_msgs::msg::Twist& twist,
-                 std::shared_ptr<tf2_ros::Buffer> tf_) {
+inline void lookupTwist(const std::string& tracking_frame, const std::string& observation_frame, const rclcpp::Time& time, const rclcpp::Duration& averaging_interval, geometry_msgs::msg::Twist& twist,
+                        std::shared_ptr<tf2_ros::Buffer> tf_) {
   // ref point is origin of tracking_frame, ref_frame = obs_frame
   lookupTwist(tracking_frame, observation_frame, observation_frame, tf2::Vector3(0, 0, 0), tracking_frame, time, averaging_interval, twist, tf_);
 }

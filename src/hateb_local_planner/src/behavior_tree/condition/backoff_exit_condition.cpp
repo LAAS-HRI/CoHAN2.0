@@ -35,11 +35,12 @@ BackoffExitCondition::BackoffExitCondition(const std::string& condition_name, co
   started_ = false;
   new_goal_ = false;
   backed_off_ = false;
+  BT_INFO(name_, "Starting the BackoffExitCondition BT Node");
 }
 
 BackoffExitCondition::~BackoffExitCondition() {
-  // ROS_INFO in destructor
-  BT_INFO(name_, "Shutting down the Node");
+  // BT_INFO in destructor
+  BT_INFO(name_, "Shutting down the BackoffExitCondition BT Node");
 }
 
 BT::NodeStatus BackoffExitCondition::tick() {

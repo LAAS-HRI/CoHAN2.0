@@ -47,9 +47,9 @@
 #include <g2o/core/base_binary_edge.h>
 #include <g2o/core/base_multi_edge.h>
 #include <g2o/core/base_unary_edge.h>
-#include <hateb_local_planner/hateb_config.h>
 
 #include <cassert>
+#include <hateb_local_planner/hateb_config.hpp>
 #include <rclcpp/logging.hpp>
 
 // ROS2 compatible assertion macro - equivalent to ROS1's HATEB_ASSERT_MSG

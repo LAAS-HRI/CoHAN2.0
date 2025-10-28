@@ -33,11 +33,12 @@ VelObsExitCondition::VelObsExitCondition(const std::string& condition_name, cons
   name_ = condition_name;
   nearest_human_id_ = -1;
   t_stuck_ = 0;
+  BT_INFO(name_, "Starting the VelObsExitCondition BT Node");
 }
 
 VelObsExitCondition::~VelObsExitCondition() {
-  // ROS_INFO in destructor
-  ROS_INFO("Shutting downd the VelObsExitCondition BT Node");
+  // BT_INFO in destructor
+  BT_INFO(name_, "Shutting down the VelObsExitCondition BT Node");
 }
 
 BT::NodeStatus VelObsExitCondition::tick() {

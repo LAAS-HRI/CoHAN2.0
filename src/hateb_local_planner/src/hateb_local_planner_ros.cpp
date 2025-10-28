@@ -92,11 +92,16 @@ void HATebLocalPlannerROS::configure(const rclcpp_lifecycle::LifecycleNode::Weak
   cfg_->initialize(node, name);
   cfg_->setupParameterCallback();
 
+  // Initialize intra process nodes
+  intra_node_costmap_converter_ = std::make_shared<rclcpp::Node>("costmap_converter", node->get_namespace(), rclcpp::NodeOptions().use_intra_process_comms(true));
+  intra_node_agents_ = std::make_shared<rclcpp::Node>("agents", node->get_namespace(), rclcpp::NodeOptions().use_intra_process_comms(true));
+
   // Reserve some memory for obstacles
   obstacles_.reserve(500);
 
   // Create the costmap model for collision checking
-  costmap_model_ = std::make_shared<nav2_costmap_2d::CostmapModel>(*costmap_);
+  // costmap_model_ = std::make_shared<nav2_costmap_2d::CostmapModel>(*costmap_);
+  collision_checker_ = std::make_shared<nav2_costmap_2d::FootprintCollisionChecker<nav2_costmap_2d::Costmap2D*>>(costmap_);
 
   // Get frame IDs from costmap
   global_frame_ = costmap_ros_->getGlobalFrameID();
@@ -126,23 +131,15 @@ void HATebLocalPlannerROS::configure(const rclcpp_lifecycle::LifecycleNode::Weak
     try {
       costmap_converter_loader_ = std::make_unique<pluginlib::ClassLoader<costmap_converter::BaseCostmapToPolygons>>("costmap_converter", "costmap_converter::BaseCostmapToPolygons");
       costmap_converter_ = costmap_converter_loader_->createSharedInstance(cfg_->obstacles.costmap_converter_plugin);
-
-      /*
-      /
-      / May not be needed ?
-      /
-      /
-      */
       std::string converter_name = costmap_converter_loader_->getName(cfg_->obstacles.costmap_converter_plugin);
       // Replace '::' by '/' for parameter namespace
       boost::replace_all(converter_name, "::", "/");
-      // to here
-      ///////
 
       costmap_converter_->setOdomTopic(cfg_->odom_topic);
-      costmap_converter_->initialize(std::static_pointer_cast<rclcpp::Node>(node));
+      costmap_converter_->initialize(intra_node_costmap_converter_);
       costmap_converter_->setCostmap2D(costmap_);
-      costmap_converter_->startWorker(rclcpp::Rate(cfg_->obstacles.costmap_converter_rate), costmap_, cfg_->obstacles.costmap_converter_spin_thread);
+      const auto rate = std::make_shared<rclcpp::Rate>((double)cfg_->obstacles.costmap_converter_rate);
+      costmap_converter_->startWorker(rate, costmap_, cfg_->obstacles.costmap_converter_spin_thread);
       RCLCPP_INFO_STREAM(logger_, "Costmap conversion plugin " << cfg_->obstacles.costmap_converter_plugin << " loaded.");
 
     } catch (pluginlib::PluginlibException& ex) {
@@ -158,20 +155,11 @@ void HATebLocalPlannerROS::configure(const rclcpp_lifecycle::LifecycleNode::Weak
   footprint_spec_ = costmap_ros_->getRobotFootprint();
 
   // The radii are updated in the function below
-  auto min_max_dists = nav2_costmap_2d::calculateMinAndMaxDistances(footprint_spec_);
-  robot_inscribed_radius_ = min_max_dists.first;
-  robot_circumscribed_radius_ = min_max_dists.second;
+  nav2_costmap_2d::calculateMinAndMaxDistances(footprint_spec_, robot_inscribed_radius_, robot_circumscribed_radius_);
 
   // Create collision checker
-  /*
-  /
-  / May not be needed ?
-  /
-  /
-  */
   collision_checker_ = std::make_shared<nav2_costmap_2d::FootprintCollisionChecker<nav2_costmap_2d::Costmap2D*>>(costmap_);
   collision_checker_->setCostmap(costmap_);
-  /////
 
   /*
   /
@@ -215,15 +203,15 @@ void HATebLocalPlannerROS::configure(const rclcpp_lifecycle::LifecycleNode::Weak
       node->create_subscription<costmap_converter_msgs::msg::ObstacleArrayMsg>(invisible_humans_sub_topic_, 1, std::bind(&HATebLocalPlannerROS::InvHumansCB, this, std::placeholders::_1));
 
   // Setup agent prediction clients
-  predict_agents_client_ = node->create_client<cohan_msgs::srv::AgentPosePredict>(predict_srv_name_);
+  predict_agents_client_ = node->create_client<agent_path_prediction::srv::AgentPosePredict>(predict_srv_name_);
   reset_agents_prediction_client_ = node->create_client<std_srvs::srv::Trigger>(reset_prediction_srv_name_);
 
   // Service servers and publishers
-  optimize_server_ = node_->create_service<cohan_msgs::srv::Optimize>(OPTIMIZE_SRV_NAME, std::bind(&HATebLocalPlannerROS::optimizeStandalone, this, std::placeholders::_1, std::placeholders::_2));
-  log_pub_ = node_->create_publisher<std_msgs::msg::String>(HATEB_LOG, 1);
+  optimize_server_ = node->create_service<cohan_msgs::srv::Optimize>(OPTIMIZE_SRV_NAME, std::bind(&HATebLocalPlannerROS::optimizeStandalone, this, std::placeholders::_1, std::placeholders::_2));
+  log_pub_ = node->create_publisher<std_msgs::msg::String>(HATEB_LOG, 1);
 
   // Initialize the pointer to agents, backoff and mode switch
-  agents_ptr_ = std::make_shared<agents::Agents>(std::static_pointer_cast<rclcpp::Node>(node), tf_, costmap_ros);
+  agents_ptr_ = std::make_shared<agents::Agents>(intra_node_agents_, tf_, costmap_ros);
   backoff_ptr_ = std::make_shared<Backoff>(node, costmap_ros);
   backoff_ptr_->initializeOffsets(robot_circumscribed_radius_);
 
@@ -233,7 +221,7 @@ void HATebLocalPlannerROS::configure(const rclcpp_lifecycle::LifecycleNode::Weak
   if (xml_path.empty()) {
     RCLCPP_ERROR(logger_, "Please provide the xml path by setting the bt_xml_path param");
   }
-  bt_mode_switch_.initialize(node, xml_path, agents_ptr_, backoff_ptr_);
+  bt_mode_switch_.initialize(node->shared_from_this(), xml_path, agents_ptr_, backoff_ptr_);
 
   // Initialize timers and properties
   last_call_time_ = clock_->now() - rclcpp::Duration::from_seconds(cfg_->hateb.pose_prediction_reset_time);
@@ -268,7 +256,6 @@ void HATebLocalPlannerROS::cleanup() {
   costmap_converter_.reset();
   costmap_converter_loader_.reset();
   collision_checker_.reset();
-  cfg_->reset();
   agents_ptr_.reset();
   backoff_ptr_.reset();
 
@@ -316,14 +303,13 @@ void HATebLocalPlannerROS::setPlan(const nav_msgs::msg::Path& path) {
 
   // reset goal_reached_ flag
   goal_reached_ = false;
-
-  return true;
 }
 
 geometry_msgs::msg::TwistStamped HATebLocalPlannerROS::computeVelocityCommands(const geometry_msgs::msg::PoseStamped& pose, const geometry_msgs::msg::Twist& velocity,
                                                                                nav2_core::GoalChecker* /*goal_checker*/) {
+  auto node = node_.lock();
   geometry_msgs::msg::TwistStamped cmd_vel;
-  auto start_time = node_->now();
+  auto start_time = node->now();
   if ((start_time - last_call_time_).seconds() > cfg_->hateb.pose_prediction_reset_time) {
     resetAgentsPrediction();
   }
@@ -333,7 +319,7 @@ geometry_msgs::msg::TwistStamped HATebLocalPlannerROS::computeVelocityCommands(c
   logs_.clear();
   if (!initialized_) {
     RCLCPP_ERROR(logger_, "hateb_local_planner has not been initialized, please call configure() before using this planner");
-    throw nav2_core::InvalidPlanner("hateb_local_planner has not been configured!");
+    throw std::runtime_error("hateb_local_planner has not been configured!");
   }
 
   if (reset_states_) {
@@ -341,7 +327,7 @@ geometry_msgs::msg::TwistStamped HATebLocalPlannerROS::computeVelocityCommands(c
     reset_states_ = false;
   }
 
-  cmd_vel.header.stamp = node_->now();
+  cmd_vel.header.stamp = node->now();
   cmd_vel.header.frame_id = robot_base_frame_;
   cmd_vel.twist.linear.x = cmd_vel.twist.linear.y = cmd_vel.twist.angular.z = 0;
   goal_reached_ = false;
@@ -354,18 +340,18 @@ geometry_msgs::msg::TwistStamped HATebLocalPlannerROS::computeVelocityCommands(c
   logs_ += "velocity: " + std::to_string(robot_vel_.linear.x) + " " + std::to_string(robot_vel_.linear.y) + "; ";
 
   // prune global plan to cut off parts of the past (spatially before the robot)
-  auto prune_start_time = node_->now();
-  pruneGlobalPlan(pose, global_plan_, cfg_->trajectory.global_plan_prune_distance);
-  auto prune_time = node_->now() - prune_start_time;
+  auto prune_start_time = node->now();
+  pruneGlobalPlan(pose, global_plan_.poses, cfg_->trajectory.global_plan_prune_distance);
+  auto prune_time = node->now() - prune_start_time;
 
   // Transform global plan to the frame of interest (w.r.t. the local costmap)
-  auto transform_start_time = node_->now();
+  auto transform_start_time = node->now();
   PlanCombined transformed_plan_combined;
   int goal_idx;
   geometry_msgs::msg::TransformStamped tf_plan_to_global;
-  if (!transformGlobalPlan(global_plan_, pose, *costmap_, global_frame_, cfg_->trajectory.max_global_plan_lookahead_dist, transformed_plan_combined, &goal_idx, &tf_plan_to_global)) {
+  if (!transformGlobalPlan(global_plan_.poses, pose, *costmap_, global_frame_, cfg_->trajectory.max_global_plan_lookahead_dist, transformed_plan_combined, &goal_idx, &tf_plan_to_global)) {
     RCLCPP_WARN(logger_, "Could not transform the global plan to the frame of the controller");
-    throw nav2_core::InvalidPath("Could not transform the global plan to the frame of the controller");
+    throw std::runtime_error("Could not transform the global plan to the frame of the controller");
   }
   auto& transformed_plan = transformed_plan_combined.plan_to_optimize;
 
@@ -374,7 +360,7 @@ geometry_msgs::msg::TwistStamped HATebLocalPlannerROS::computeVelocityCommands(c
 
   // check if global goal is reached (could be updated -- please use goal_checker)
   geometry_msgs::msg::PoseStamped global_goal;
-  tf2::doTransform(global_plan_.back(), global_goal, tf_plan_to_global);
+  tf2::doTransform(global_plan_.poses.back(), global_goal, tf_plan_to_global);
   double dx = global_goal.pose.position.x - robot_pose_.x();
   double dy = global_goal.pose.position.y - robot_pose_.y();
   double delta_orient = g2o::normalize_theta(tf2::getYaw(global_goal.pose.orientation) - robot_pose_.theta());
@@ -387,7 +373,7 @@ geometry_msgs::msg::TwistStamped HATebLocalPlannerROS::computeVelocityCommands(c
   // Return false if the transformed global plan is empty
   if (transformed_plan.empty()) {
     RCLCPP_WARN(logger_, "Transformed plan is empty. Cannot determine a local plan.");
-    throw nav2_core::InvalidPath("Transformed plan is empty");
+    throw std::runtime_error("Transformed plan is empty");
   }
 
   // Get current goal point (last point of the transformed plan)
@@ -395,7 +381,7 @@ geometry_msgs::msg::TwistStamped HATebLocalPlannerROS::computeVelocityCommands(c
   robot_goal_.y() = transformed_plan.back().pose.position.y;
   // Overwrite goal orientation if needed
   if (cfg_->trajectory.global_plan_overwrite_orientation) {
-    robot_goal_.theta() = estimateLocalGoalOrientation(global_plan_, transformed_plan.back(), goal_idx, tf_plan_to_global);
+    robot_goal_.theta() = estimateLocalGoalOrientation(global_plan_.poses, transformed_plan.back(), goal_idx, tf_plan_to_global);
     // overwrite/update goal orientation of the transformed plan with the actual
     // goal (enable using the plan as initialization)
     tf2::Quaternion q;
@@ -428,7 +414,7 @@ geometry_msgs::msg::TwistStamped HATebLocalPlannerROS::computeVelocityCommands(c
   updateObstacleContainerWithInvHumans();
 
   // Do not allow config changes during the following optimization step
-  std::mutex::scoped_lock cfg_lock(cfg_->configMutex());
+  std::scoped_lock cfg_lock(cfg_->configMutex());
 
   //************************************************************************
   //      The NEW BT Automation
@@ -458,7 +444,7 @@ geometry_msgs::msg::TwistStamped HATebLocalPlannerROS::computeVelocityCommands(c
 
   std_msgs::msg::String log_msg;
   log_msg.data = logs_;
-  log_pub_.publish(log_msg);
+  log_pub_->publish(log_msg);
 
   // update via-points container
   // overwrite/update start of the transformed plan with the actual robot position (allows using the plan as initial trajectory)
@@ -468,7 +454,7 @@ geometry_msgs::msg::TwistStamped HATebLocalPlannerROS::computeVelocityCommands(c
   }
 
   // Now perform the actual optimization
-  hateb_local_planner::OptimizationCostArray op_costs;
+  hateb_local_planner::msg::OptimizationCostArray op_costs;
 
   double dt_resize = cfg_->trajectory.dt_ref;
   double dt_hyst_resize = cfg_->trajectory.dt_hysteresis;
@@ -479,9 +465,9 @@ geometry_msgs::msg::TwistStamped HATebLocalPlannerROS::computeVelocityCommands(c
     RCLCPP_WARN(logger_, "hateb_local_planner was not able to obtain a local plan for the current setting.");
 
     ++no_infeasible_plans_;  // increase number of infeasible solutions in a row
-    time_last_infeasible_plan_ = node_->now();
+    time_last_infeasible_plan_ = node->now();
     last_cmd_ = cmd_vel.twist;
-    throw nav2_core::NoValidControl("hateb_local_planner was not able to obtain a local plan");
+    throw std::runtime_error("hateb_local_planner was not able to obtain a local plan");
   }
 
   PlanTrajCombined plan_traj_combined;
@@ -513,13 +499,11 @@ geometry_msgs::msg::TwistStamped HATebLocalPlannerROS::computeVelocityCommands(c
     // Update footprint of the robot and minimum and maximum distance from the center of the robot to its footprint vertices.
     footprint_spec_ = costmap_ros_->getRobotFootprint();
     // The radii are updated in the function below
-    auto min_max_dists = nav2_costmap_2d::calculateMinAndMaxDistances(footprint_spec_);
-    robot_inscribed_radius_ = min_max_dists.first;
-    robot_circumscribed_radius_ = min_max_dists.second;
+    nav2_costmap_2d::calculateMinAndMaxDistances(footprint_spec_, robot_inscribed_radius_, robot_circumscribed_radius_);
     // backoff_ptr_->initializeOffsets(robot_circumscribed_radius_);
   }
 
-  bool feasible = planner_->isTrajectoryFeasible(costmap_model_.get(), footprint_spec_, robot_inscribed_radius_, robot_circumscribed_radius_, cfg_->trajectory.feasibility_check_no_poses);
+  bool feasible = planner_->isTrajectoryFeasible(collision_checker_, footprint_spec_, robot_inscribed_radius_, robot_circumscribed_radius_, cfg_->trajectory.feasibility_check_no_poses);
   if (!feasible) {
     cmd_vel.twist.linear.x = cmd_vel.twist.linear.y = cmd_vel.twist.angular.z = 0;
     // now we reset everything to start again with the initialization of new trajectories.
@@ -527,10 +511,10 @@ geometry_msgs::msg::TwistStamped HATebLocalPlannerROS::computeVelocityCommands(c
     RCLCPP_WARN(logger_, "HATebLocalPlannerROS: trajectory is not feasible. Resetting planner...");
 
     ++no_infeasible_plans_;  // increase number of infeasible solutions in a row
-    time_last_infeasible_plan_ = node_->now();
+    time_last_infeasible_plan_ = node->now();
     last_cmd_ = cmd_vel.twist;
 
-    throw nav2_core::NoValidControl("hateb_local_planner trajectory is not feasible");
+    throw std::runtime_error("hateb_local_planner trajectory is not feasible");
   }
 
   // Get the velocity command for this sampling interval
@@ -538,9 +522,9 @@ geometry_msgs::msg::TwistStamped HATebLocalPlannerROS::computeVelocityCommands(c
     planner_->clearPlanner();
     RCLCPP_WARN(logger_, "HATebLocalPlannerROS: velocity command invalid. Resetting planner...");
     ++no_infeasible_plans_;  // increase number of infeasible solutions in a row
-    time_last_infeasible_plan_ = node_->now();
+    time_last_infeasible_plan_ = node->now();
     last_cmd_ = cmd_vel.twist;
-    throw nav2_core::NoValidControl("hateb_local_planner velocity command invalid");
+    throw std::runtime_error("hateb_local_planner velocity command invalid");
   }
 
   // Saturate velocity, if the optimization results violates the constraints (could be possible due to soft constraints).
@@ -559,8 +543,8 @@ geometry_msgs::msg::TwistStamped HATebLocalPlannerROS::computeVelocityCommands(c
       planner_->clearPlanner();
       RCLCPP_WARN(logger_, "HATebLocalPlannerROS: Resulting steering angle is not finite. Resetting planner...");
       ++no_infeasible_plans_;  // increase number of infeasible solutions in a row
-      time_last_infeasible_plan_ = node_->now();
-      throw nav2_core::NoValidControl("hateb_local_planner steering angle is not finite");
+      time_last_infeasible_plan_ = node->now();
+      throw std::runtime_error("hateb_local_planner steering angle is not finite");
     }
   }
 
@@ -578,7 +562,7 @@ geometry_msgs::msg::TwistStamped HATebLocalPlannerROS::computeVelocityCommands(c
   planner_->visualize();
   visualization_->publishObstacles(obstacles_);
   visualization_->publishViaPoints(via_points_);
-  visualization_->publishGlobalPlan(global_plan_);
+  visualization_->publishGlobalPlan(global_plan_.poses);
   visualization_->publishMode(isMode_);
 
   return cmd_vel;
@@ -653,12 +637,12 @@ bool HATebLocalPlannerROS::tickTreeAndUpdatePlans(const geometry_msgs::msg::Pose
   }
 
   // Define the prediction service
-  agent_path_prediction::AgentPosePredict predict_srv;
+  auto predict_srv = std::make_shared<agent_path_prediction::srv::AgentPosePredict::Request>();
 
   // Add the moving agent ids to the prediction service
   int num_agents = 0;
   for (auto& moving_agent : mode_info.moving_humans) {
-    predict_srv.request.ids.push_back(moving_agent);
+    predict_srv->ids.push_back(moving_agent);
     num_agents++;
 
     // TODO(sphanit): Make this configurable
@@ -673,21 +657,21 @@ bool HATebLocalPlannerROS::tickTreeAndUpdatePlans(const geometry_msgs::msg::Pose
       double traj_size = 10;
       double predict_time = 5.0;  // TODO(sphanit): make these values configurable
       for (double i = 1.0; i <= traj_size; i++) {
-        predict_srv.request.predict_times.push_back(predict_time * (i / traj_size));
+        predict_srv->predict_times.push_back(predict_time * (i / traj_size));
       }
-      predict_srv.request.type = agent_path_prediction::AgentPosePredictRequest::VELOCITY_OBSTACLE;
+      predict_srv->type = agent_path_prediction::srv::AgentPosePredict::Request::VELOCITY_OBSTACLE;
     } break;
 
     case PREDICTION::BEHIND:
-      predict_srv.request.type = agent_path_prediction::AgentPosePredictRequest::BEHIND_ROBOT;
+      predict_srv->type = agent_path_prediction::srv::AgentPosePredict::Request::BEHIND_ROBOT;
       break;
 
     case PREDICTION::PREDICT:
-      predict_srv.request.type = agent_path_prediction::AgentPosePredictRequest::PREDICTED_GOAL;
+      predict_srv->type = agent_path_prediction::srv::AgentPosePredict::Request::PREDICTED_GOAL;
       break;
 
     case PREDICTION::EXTERNAL:
-      predict_srv.request.type = agent_path_prediction::AgentPosePredictRequest::EXTERNAL;
+      predict_srv->type = agent_path_prediction::srv::AgentPosePredict::Request::EXTERNAL;
       break;
 
     default:
@@ -699,13 +683,9 @@ bool HATebLocalPlannerROS::tickTreeAndUpdatePlans(const geometry_msgs::msg::Pose
 
   // Call the predict agents service and update the agents plans
   if (predict_agents_client_) {
-    auto request = std::make_shared<cohan_msgs::srv::AgentPosePredict::Request>();
-    request->ids = predict_srv.request.ids;
-    request->predict_times = predict_srv.request.predict_times;
-    request->type = predict_srv.request.type;
-
-    auto future = predict_agents_client_->async_send_request(request);
-    if (rclcpp::spin_until_future_complete(node_.lock(), future, std::chrono::milliseconds(100)) == rclcpp::FutureReturnCode::SUCCESS) {
+    auto node = node_.lock();
+    auto future = predict_agents_client_->async_send_request(predict_srv);
+    if (rclcpp::spin_until_future_complete(node, future, std::chrono::milliseconds(100)) == rclcpp::FutureReturnCode::SUCCESS) {
       auto response = future.get();
       tf2::Stamped<tf2::Transform> tf_agent_plan_to_global;
 
@@ -777,7 +757,7 @@ void HATebLocalPlannerROS::updateObstacleContainerWithCostmapConverter() {
   }
 
   for (const auto& i : obstacles->obstacles) {
-    const costmap_converter::ObstacleMsg* obstacle = &i;
+    const costmap_converter_msgs::msg::ObstacleMsg* obstacle = &i;
     const geometry_msgs::msg::Polygon* polygon = &obstacle->polygon;
 
     if (polygon->points.size() == 1 && obstacle->radius > 0)  // Circle
@@ -808,7 +788,7 @@ void HATebLocalPlannerROS::updateObstacleContainerWithCostmapConverter() {
 
 void HATebLocalPlannerROS::updateObstacleContainerWithCustomObstacles() {
   // Add custom obstacles obtained via message
-  std::mutex::scoped_lock l(custom_obst_mutex_);
+  std::scoped_lock l(custom_obst_mutex_);
 
   if (!custom_obstacle_msg_.obstacles.empty()) {
     // We only use the global header to specify the obstacle coordinate system
@@ -1094,6 +1074,7 @@ double HATebLocalPlannerROS::estimateLocalGoalOrientation(const std::vector<geom
 }
 
 void HATebLocalPlannerROS::saturateVelocity(double& vx, double& vy, double& omega, double max_vel_x, double max_vel_y, double max_vel_theta, double max_vel_x_backwards) {
+  auto node = node_.lock();
   // Limit translational velocity for forward driving
   vx = std::min(vx, max_vel_x);
 
@@ -1123,7 +1104,7 @@ void HATebLocalPlannerROS::saturateVelocity(double& vx, double& vy, double& omeg
   if (cfg_->optim.disable_rapid_omega_chage) {
     if (std::signbit(omega) != std::signbit(last_omega_)) {
       // signs are changed
-      auto now = node_->now();
+      auto now = node->now();
       if ((now - last_omega_sign_change_).seconds() < cfg_->optim.omega_chage_time_seperation) {
         // do not allow sign change
         omega = std::copysign(min_vel_theta, omega);
@@ -1147,28 +1128,29 @@ double HATebLocalPlannerROS::convertTransRotVelToSteeringAngle(double v, double 
 }
 
 void HATebLocalPlannerROS::validateFootprints(double opt_inscribed_radius, double costmap_inscribed_radius, double min_obst_dist) {
-  RCLCPP_WARN_COND(logger_, opt_inscribed_radius + min_obst_dist < costmap_inscribed_radius,
+  RCLCPP_WARN_COND(opt_inscribed_radius + min_obst_dist < costmap_inscribed_radius, logger_,
                    "The inscribed radius of the footprint specified for HATEB optimization (%f) + min_obstacle_dist (%f) are smaller than the inscribed radius of the robot's footprint in the costmap "
                    "parameters (%f, including 'footprint_padding'). Infeasible optimization results might occur frequently!",
                    opt_inscribed_radius, min_obst_dist, costmap_inscribed_radius);
 }
 
 void HATebLocalPlannerROS::configureBackupModes(std::vector<geometry_msgs::msg::PoseStamped>& transformed_plan, int& goal_idx) {
-  rclcpp::Time current_time = node_->now();
+  auto node = node_.lock();
+  rclcpp::Time current_time = node->now();
 
   // reduced horizon backup mode
   if (cfg_->recovery.shrink_horizon_backup && goal_idx < static_cast<int>(transformed_plan.size()) - 1 &&
       (no_infeasible_plans_ > 0 || (current_time - time_last_infeasible_plan_).seconds() < cfg_->recovery.shrink_horizon_min_duration))
   // we do not reduce if the goal is already selected (because the orientation might change -> can introduce oscillations) keep short horizon for   at least a few seconds
   {
-    RCLCPP_INFO_COND(logger_, no_infeasible_plans_ == 1, "Activating reduced horizon backup mode for at least %.2f sec (infeasible trajectory detected).", cfg_->recovery.shrink_horizon_min_duration);
+    RCLCPP_INFO_COND(no_infeasible_plans_ == 1, logger_, "Activating reduced horizon backup mode for at least %.2f sec (infeasible trajectory detected).", cfg_->recovery.shrink_horizon_min_duration);
 
     // Shorten horizon if requested
     // reduce to 50 percent:
     int horizon_reduction = goal_idx / 2;
 
     if (no_infeasible_plans_ > 9) {
-      RCLCPP_INFO_COND(logger_, no_infeasible_plans_ == 10, "Infeasible trajectory detected 10 times in a row: further reducing horizon...");
+      RCLCPP_INFO_COND(no_infeasible_plans_ == 10, logger_, "Infeasible trajectory detected 10 times in a row: further reducing horizon...");
       horizon_reduction /= 2;
     }
 
@@ -1198,7 +1180,7 @@ void HATebLocalPlannerROS::configureBackupModes(std::vector<geometry_msgs::msg::
     failure_detector_.update(last_cmd_, cfg_->robot.max_vel_x, cfg_->robot.max_vel_x_backwards, max_vel_theta, cfg_->recovery.oscillation_v_eps, cfg_->recovery.oscillation_omega_eps);
 
     bool oscillating = failure_detector_.isOscillating();
-    bool recently_oscillated = (node_->now() - time_last_oscillation_).seconds() < cfg_->recovery.oscillation_recovery_min_duration;  // check if we have already detected an oscillation recently
+    bool recently_oscillated = (node->now() - time_last_oscillation_).seconds() < cfg_->recovery.oscillation_recovery_min_duration;  // check if we have already detected an oscillation recently
 
     if (oscillating) {
       if (!recently_oscillated) {
@@ -1210,7 +1192,7 @@ void HATebLocalPlannerROS::configureBackupModes(std::vector<geometry_msgs::msg::
         RCLCPP_WARN(logger_,
                     "HATebLocalPlannerROS: possible oscillation (of the robot or its local plan) detected. Activating recovery strategy (prefer current turning direction during optimization).");
       }
-      time_last_oscillation_ = node_->now();
+      time_last_oscillation_ = node->now();
       planner_->setPreferredTurningDir(last_preferred_rotdir_);
     } else if (!recently_oscillated && last_preferred_rotdir_ != RotType::none)  // clear recovery behavior
     {
@@ -1222,7 +1204,7 @@ void HATebLocalPlannerROS::configureBackupModes(std::vector<geometry_msgs::msg::
 }
 
 void HATebLocalPlannerROS::customObstacleCB(const costmap_converter_msgs::msg::ObstacleArrayMsg::SharedPtr obst_msg) {
-  std::mutex::scoped_lock l(custom_obst_mutex_);
+  std::scoped_lock l(custom_obst_mutex_);
   custom_obstacle_msg_ = *obst_msg;
 }
 
@@ -1234,7 +1216,7 @@ void HATebLocalPlannerROS::customViaPointsCB(const nav_msgs::msg::Path::SharedPt
     return;
   }
 
-  std::mutex::scoped_lock l(via_point_mutex_);
+  std::scoped_lock l(via_point_mutex_);
   via_points_.clear();
   for (const geometry_msgs::msg::PoseStamped& pose : via_points_msg->poses) {
     via_points_.emplace_back(pose.pose.position.x, pose.pose.position.y);
@@ -1355,12 +1337,13 @@ FootprintModelPtr HATebLocalPlannerROS::getRobotFootprintFromParamServer(const r
  *************************************************************************************************/
 
 void HATebLocalPlannerROS::updateObstacleContainerWithInvHumans() {
+  auto node = node_.lock();
   if (!cfg_->hateb.add_invisible_humans) {
     return;
   }
 
   // Add custom obstacles obtained via message
-  std::mutex::scoped_lock l(inv_human_mutex_);
+  std::scoped_lock l(inv_human_mutex_);
 
   if (!inv_humans_msg_.obstacles.empty()) {
     // We only use the global header to specify the obstacle coordinate system
@@ -1373,7 +1356,7 @@ void HATebLocalPlannerROS::updateObstacleContainerWithInvHumans() {
     std::vector<std::pair<double, int>> dist_idx;
 
     try {
-      geometry_msgs::msg::TransformStamped obstacle_to_map = tf_->lookupTransform(global_frame_, inv_humans_msg_.header.frame_id, node_->now(), tf2::durationFromSec(0.8));
+      geometry_msgs::msg::TransformStamped obstacle_to_map = tf_->lookupTransform(global_frame_, inv_humans_msg_.header.frame_id, node->now(), tf2::durationFromSec(0.8));
 
       obstacle_to_map_eig = tf2::transformToEigen(obstacle_to_map);
 
@@ -1472,6 +1455,7 @@ void HATebLocalPlannerROS::updateAgentViaPointsContainers(const AgentPlanVelMap&
 bool HATebLocalPlannerROS::transformAgentPlan(const geometry_msgs::msg::PoseStamped& robot_pose, const nav2_costmap_2d::Costmap2D& costmap, const std::string& global_frame,
                                               const std::vector<geometry_msgs::msg::PoseWithCovarianceStamped>& agent_plan, AgentPlanCombined& transformed_agent_plan_combined,
                                               geometry_msgs::msg::TwistStamped& transformed_agent_twist, tf2::Stamped<tf2::Transform>* tf_agent_plan_to_global) const {
+  auto node = node_.lock();
   try {
     if (agent_plan.empty()) {
       RCLCPP_ERROR(logger_, "Received agent plan with zero length");
@@ -1506,7 +1490,14 @@ bool HATebLocalPlannerROS::transformAgentPlan(const geometry_msgs::msg::PoseStam
       tf_pose_stamped.setData(agent_plan_to_global_transform_ * tf_pose);
       tf_pose_stamped.stamp_ = agent_plan_to_global_transform_.stamp_;
       tf_pose_stamped.frame_id_ = global_frame;
-      transformed_pose = tf2::toMsg(tf_pose_stamped);
+      auto trans_stamped = tf2::toMsg(tf_pose_stamped);
+
+      // ROS does not provide a direct method to transform PoseWithCovarianceStamped, so we only transform the pose part here
+      transformed_pose.header = trans_stamped.header;
+      transformed_pose.pose.position.x = trans_stamped.transform.translation.x;
+      transformed_pose.pose.position.y = trans_stamped.transform.translation.y;
+      transformed_pose.pose.position.z = trans_stamped.transform.translation.z;
+      transformed_pose.pose.orientation = trans_stamped.transform.rotation;
 
       transformed_agent_plan.push_back(transformed_pose);
     }
@@ -1514,7 +1505,7 @@ bool HATebLocalPlannerROS::transformAgentPlan(const geometry_msgs::msg::PoseStam
     // transform agent twist to local planning frame
     geometry_msgs::msg::Twist agent_to_global_twist;
     // Use ROS2 implementation from ros2_helpers/utils.hpp
-    lookupTwist(global_frame, transformed_agent_twist.header.frame_id, tf2::TimePointZero, tf2::durationFromSec(0.5), agent_to_global_twist, tf_);
+    lookupTwist(global_frame, transformed_agent_twist.header.frame_id, node->now(), tf2::durationFromSec(0.5), agent_to_global_twist, tf_);
     transformed_agent_twist.twist.linear.x -= agent_to_global_twist.linear.x;
     transformed_agent_twist.twist.linear.y -= agent_to_global_twist.linear.y;
     transformed_agent_twist.twist.angular.z -= agent_to_global_twist.angular.z;
@@ -1587,7 +1578,7 @@ bool HATebLocalPlannerROS::transformAgentPlan(const geometry_msgs::msg::PoseStam
 }
 
 void HATebLocalPlannerROS::InvHumansCB(const costmap_converter_msgs::msg::ObstacleArrayMsg::SharedPtr obst_msg) {
-  std::mutex::scoped_lock l(inv_human_mutex_);
+  std::scoped_lock l(inv_human_mutex_);
   inv_humans_msg_ = *obst_msg;
 }
 
@@ -1607,6 +1598,7 @@ void HATebLocalPlannerROS::resetAgentsPrediction() {
 }
 
 bool HATebLocalPlannerROS::optimizeStandalone(const std::shared_ptr<cohan_msgs::srv::Optimize::Request> req, std::shared_ptr<cohan_msgs::srv::Optimize::Response> res) {
+  auto node = node_.lock();
   // check if plugin initialized
   if (!initialized_) {
     res->success = false;
@@ -1624,7 +1616,7 @@ bool HATebLocalPlannerROS::optimizeStandalone(const std::shared_ptr<cohan_msgs::
   int goal_idx;
   geometry_msgs::msg::TransformStamped tf_robot_plan_to_global;
 
-  if (!transformGlobalPlan(*tf_, req->robot_plan.poses, robot_pose_tf, *costmap_, global_frame_, cfg_->trajectory.max_global_plan_lookahead_dist, transformed_plan_combined, &goal_idx,
+  if (!transformGlobalPlan(req->robot_plan.poses, robot_pose_tf, *costmap_, global_frame_, cfg_->trajectory.max_global_plan_lookahead_dist, transformed_plan_combined, &goal_idx,
                            &tf_robot_plan_to_global)) {
     res->success = false;
     res->message = "Could not transform the global plan to the local frame";
@@ -1653,15 +1645,15 @@ bool HATebLocalPlannerROS::optimizeStandalone(const std::shared_ptr<cohan_msgs::
   updateViaPointsContainer(transformed_plan, cfg_->trajectory.global_plan_viapoint_sep);
 
   // do not allow config changes from now until end of optimization
-  std::mutex::scoped_lock cfg_lock(cfg_->configMutex());
+  std::scoped_lock cfg_lock(cfg_->configMutex());
 
   // update agents
   AgentPlanVelMap transformed_agent_plan_vel_map;
   std::vector<AgentPlanCombined> transformed_agent_plans;
   tf2::Stamped<tf2::Transform> tf_agent_plan_to_global;
 
-  if (!req.agent_plan_array.paths.empty()) {
-    for (const auto& agent_path : req.agent_plan_array.paths) {
+  if (!req->agent_plan_array.paths.empty()) {
+    for (const auto& agent_path : req->agent_plan_array.paths) {
       AgentPlanCombined agent_plan_combined;
       geometry_msgs::msg::TwistStamped transformed_vel;
       transformed_vel.header.frame_id = global_frame_;
@@ -1690,23 +1682,19 @@ bool HATebLocalPlannerROS::optimizeStandalone(const std::shared_ptr<cohan_msgs::
       transformed_agent_plan_vel_map[agent_plan_combined.id] = plan_start_vel_goal_vel;
     }
   } else if (!req->agents_ids.empty()) {
-    agent_path_prediction::AgentPosePredict predict_srv;
-    predict_srv.request.ids = req->agents_ids;
+    auto predict_srv = std::make_shared<agent_path_prediction::srv::AgentPosePredict::Request>();
+
+    predict_srv->ids = req->agents_ids;
     double traj_size = 10;
     double predict_time = 5.0;  // TODO(unknown): make these values configurable
     for (double i = 1.0; i <= traj_size; i++) {
-      predict_srv.request.predict_times.push_back(predict_time * (i / traj_size));
+      predict_srv->predict_times.push_back(predict_time * (i / traj_size));
     }
-    predict_srv.request.type = agent_path_prediction::AgentPosePredictRequest::VELOCITY_OBSTACLE;
+    predict_srv->type = agent_path_prediction::srv::AgentPosePredict::Request::VELOCITY_OBSTACLE;
 
     if (predict_agents_client_) {
-      auto request = std::make_shared<cohan_msgs::srv::AgentPosePredict::Request>();
-      request->ids = predict_srv.request.ids;
-      request->predict_times = predict_srv.request.predict_times;
-      request->type = predict_srv.request.type;
-
-      auto future = predict_agents_client_->async_send_request(request);
-      if (rclcpp::spin_until_future_complete(node_.lock(), future, std::chrono::milliseconds(100)) == rclcpp::FutureReturnCode::SUCCESS) {
+      auto future = predict_agents_client_->async_send_request(predict_srv);
+      if (rclcpp::spin_until_future_complete(node, future, std::chrono::milliseconds(100)) == rclcpp::FutureReturnCode::SUCCESS) {
         auto response = future.get();
 
         for (auto predicted_agents_poses : response->predicted_agents_poses) {
@@ -1743,13 +1731,8 @@ bool HATebLocalPlannerROS::optimizeStandalone(const std::shared_ptr<cohan_msgs::
   updateAgentViaPointsContainers(transformed_agent_plan_vel_map, cfg_->trajectory.global_plan_viapoint_sep);
 
   // now perform the actual planning
-  geometry_msgs::msg::Twist robot_vel_twist;
-  geometry_msgs::msg::PoseStamped robot_vel_tf;
-  robot_vel_tf = odom_helper_->getRobotVel();
-  robot_vel_.linear.x = robot_vel_tf.pose.position.x;
-  robot_vel_.linear.y = robot_vel_tf.pose.position.y;
-  robot_vel_.angular.z = tf2::getYaw(robot_vel_tf.pose.orientation);
-  hateb_local_planner::OptimizationCostArray op_costs;
+  robot_vel_ = odom_helper_->getTwist();
+  hateb_local_planner::msg::OptimizationCostArray op_costs;
 
   double dt_resize = cfg_->trajectory.dt_ref;
   double dt_hyst_resize = cfg_->trajectory.dt_hysteresis;
@@ -1775,7 +1758,7 @@ bool HATebLocalPlannerROS::optimizeStandalone(const std::shared_ptr<cohan_msgs::
   std::vector<AgentPlanTrajCombined> agent_plans_traj_array;
   for (auto& agent_plan_combined : transformed_agent_plans) {
     AgentPlanTrajCombined agent_plan_traj_combined;
-    cohan_msgs::AgentTrajectory agent_trajectory;
+    cohan_msgs::msg::AgentTrajectory agent_trajectory;
     auto trajectory = planner_->getFullAgentTrajectory(agent_plan_combined.id);
     agent_plan_traj_combined.id = agent_plan_combined.id;
     agent_plan_traj_combined.plan_before = agent_plan_combined.plan_before;
@@ -1785,7 +1768,7 @@ bool HATebLocalPlannerROS::optimizeStandalone(const std::shared_ptr<cohan_msgs::
 
     // Add human trajectories to the result
     agent_trajectory.id = agent_plan_combined.id;
-    agent_trajectory.type = cohan_msgs::AgentType::HUMAN;
+    agent_trajectory.type = cohan_msgs::msg::AgentType::HUMAN;
     agent_trajectory.trajectory = trajectory;
     res->human_trajectories.trajectories.push_back(agent_trajectory);
   }
@@ -1794,7 +1777,7 @@ bool HATebLocalPlannerROS::optimizeStandalone(const std::shared_ptr<cohan_msgs::
   // now visualize everything
   visualization_->publishObstacles(obstacles_);
   visualization_->publishViaPoints(via_points_);
-  visualization_->publishGlobalPlan(global_plan_);
+  visualization_->publishGlobalPlan(global_plan_.poses);
   visualization_->publishAgentGlobalPlans(transformed_agent_plans);
   // Note: Do not call this before publishAgentTrajectories --> will lead to segFault
   planner_->visualize();
@@ -1803,7 +1786,7 @@ bool HATebLocalPlannerROS::optimizeStandalone(const std::shared_ptr<cohan_msgs::
   res->message = "planning successful";
 
   // check feasibility of robot plan
-  bool feasible = planner_->isTrajectoryFeasible(costmap_model_.get(), footprint_spec_, robot_inscribed_radius_, robot_circumscribed_radius_, cfg_->trajectory.feasibility_check_no_poses);
+  bool feasible = planner_->isTrajectoryFeasible(collision_checker_, footprint_spec_, robot_inscribed_radius_, robot_circumscribed_radius_, cfg_->trajectory.feasibility_check_no_poses);
   if (!feasible) {
     res->message += "\nhowever, trajectory is not feasible";
   }

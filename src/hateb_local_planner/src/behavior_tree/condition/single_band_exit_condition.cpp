@@ -32,11 +32,12 @@ SingleBandExitCondition::SingleBandExitCondition(const std::string& condition_na
   // Initialize the node
   name_ = condition_name;
   dist_max_ = 999;
+  BT_INFO(name_, "Starting the SingleBandExitCondition BT Node");
 }
 
 SingleBandExitCondition::~SingleBandExitCondition() {
-  // ROS_INFO in destructor
-  ROS_INFO("Shutting downd the SingleBandExitCondition BT Node");
+  // BT_INFO in destructor
+  BT_INFO(name_, "Shutting down the SingleBandExitCondition BT Node");
 }
 
 BT::NodeStatus SingleBandExitCondition::tick() {

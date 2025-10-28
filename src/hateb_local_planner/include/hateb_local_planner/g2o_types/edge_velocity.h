@@ -50,8 +50,8 @@
 #include <hateb_local_planner/g2o_types/penalties.h>
 #include <hateb_local_planner/g2o_types/vertex_pose.h>
 #include <hateb_local_planner/g2o_types/vertex_timediff.h>
-#include <hateb_local_planner/hateb_config.h>
 
+#include <hateb_local_planner/hateb_config.hpp>
 #include <iostream>
 
 namespace hateb_local_planner {
@@ -85,9 +85,9 @@ class EdgeVelocity : public BaseTebMultiEdge<2, double> {
    */
   void computeError() override {
     HATEB_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeVelocity()");
-    const auto *conf1 = static_cast<const VertexPose *>(_vertices[0]);
-    const auto *conf2 = static_cast<const VertexPose *>(_vertices[1]);
-    const auto *delta_t = static_cast<const VertexTimeDiff *>(_vertices[2]);
+    const auto* conf1 = static_cast<const VertexPose*>(_vertices[0]);
+    const auto* conf2 = static_cast<const VertexPose*>(_vertices[1]);
+    const auto* delta_t = static_cast<const VertexTimeDiff*>(_vertices[2]);
 
     double vel_linear = cfg_->robot.max_vel_x;
     double vel_theta = cfg_->robot.max_vel_theta;
@@ -117,15 +117,15 @@ class EdgeVelocity : public BaseTebMultiEdge<2, double> {
     HATEB_ASSERT_MSG(std::isfinite(_error[0]), "EdgeVelocity::computeError() _error[0]=%f _error[1]=%f\n", _error[0], _error[1]);
   }
 
-  void setParameters(const HATebConfig &cfg, const BaseFootprintModel *robot_model, const int isMode) {
+  void setParameters(const HATebConfig& cfg, const BaseFootprintModel* robot_model, const int isMode) {
     cfg_ = &cfg;
     robot_model_ = robot_model;
     mode_ = isMode;
   }
 
  protected:
-  const BaseFootprintModel *robot_model_;
-  Obstacle *obs_ = new PointObstacle();
+  const BaseFootprintModel* robot_model_;
+  Obstacle* obs_ = new PointObstacle();
   int mode_ = 0;
 
 #ifdef USE_ANALYTIC_JACOBI
@@ -230,9 +230,9 @@ class EdgeVelocityHolonomic : public BaseTebMultiEdge<3, double> {
    */
   void computeError() override {
     HATEB_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeVelocityHolonomic()");
-    const auto *conf1 = static_cast<const VertexPose *>(_vertices[0]);
-    const auto *conf2 = static_cast<const VertexPose *>(_vertices[1]);
-    const auto *delta_t = static_cast<const VertexTimeDiff *>(_vertices[2]);
+    const auto* conf1 = static_cast<const VertexPose*>(_vertices[0]);
+    const auto* conf2 = static_cast<const VertexPose*>(_vertices[1]);
+    const auto* delta_t = static_cast<const VertexTimeDiff*>(_vertices[2]);
 
     double vel_linear_x = cfg_->robot.max_vel_x;
     double vel_linear_y = cfg_->robot.max_vel_y;
@@ -262,18 +262,18 @@ class EdgeVelocityHolonomic : public BaseTebMultiEdge<3, double> {
     _error[2] = penaltyBoundToInterval(omega, vel_theta, cfg_->optim.penalty_epsilon);
 
     HATEB_ASSERT_MSG(std::isfinite(_error[0]) && std::isfinite(_error[1]) && std::isfinite(_error[2]), "EdgeVelocityHolonomic::computeError() _error[0]=%f _error[1]=%f _error[2]=%f\n", _error[0],
-                   _error[1], _error[2]);
+                     _error[1], _error[2]);
   }
 
-  void setParameters(const HATebConfig &cfg, const BaseFootprintModel *robot_model, const int isMode) {
+  void setParameters(const HATebConfig& cfg, const BaseFootprintModel* robot_model, const int isMode) {
     cfg_ = &cfg;
     robot_model_ = robot_model;
     mode_ = isMode;
   }
 
  protected:
-  const BaseFootprintModel *robot_model_;
-  Obstacle *obs_ = new PointObstacle();
+  const BaseFootprintModel* robot_model_;
+  Obstacle* obs_ = new PointObstacle();
   int mode_ = 0;
 
  public:
@@ -298,9 +298,9 @@ class EdgeVelocityHolonomicAgent : public BaseTebMultiEdge<4, double> {
    */
   void computeError() override {
     HATEB_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeVelocityHolonomic()");
-    const auto *conf1 = static_cast<const VertexPose *>(_vertices[0]);
-    const auto *conf2 = static_cast<const VertexPose *>(_vertices[1]);
-    const auto *delta_t = static_cast<const VertexTimeDiff *>(_vertices[2]);
+    const auto* conf1 = static_cast<const VertexPose*>(_vertices[0]);
+    const auto* conf2 = static_cast<const VertexPose*>(_vertices[1]);
+    const auto* delta_t = static_cast<const VertexTimeDiff*>(_vertices[2]);
     Eigen::Vector2d delta_s = conf2->position() - conf1->position();
 
     double vel = delta_s.norm() / delta_t->estimate();
@@ -325,11 +325,11 @@ class EdgeVelocityHolonomicAgent : public BaseTebMultiEdge<4, double> {
       _error[3] = 0.0;
     }
 
-    HATEB_ASSERT_MSG(std::isfinite(_error[0]) && std::isfinite(_error[1]) && std::isfinite(_error[2]), "EdgeVelocityHolonomicAgent::computeError() _error[0]=%f _error[1]=%f _error[2]=%f _error[3]=%f\n",
-                   _error[0], _error[1], _error[2], _error[3]);
+    HATEB_ASSERT_MSG(std::isfinite(_error[0]) && std::isfinite(_error[1]) && std::isfinite(_error[2]),
+                     "EdgeVelocityHolonomicAgent::computeError() _error[0]=%f _error[1]=%f _error[2]=%f _error[3]=%f\n", _error[0], _error[1], _error[2], _error[3]);
   }
 
-  void setParameters(const HATebConfig &cfg, const double nominal_vel) {
+  void setParameters(const HATebConfig& cfg, const double nominal_vel) {
     cfg_ = &cfg;
     nominal_vel_ = nominal_vel;
   }
@@ -350,9 +350,9 @@ class EdgeVelocityAgent : public BaseTebMultiEdge<3, double> {
 
   void computeError() override {
     HATEB_ASSERT_MSG(cfg_, "You must call setHATebConfig on EdgeVelocityAgent()");
-    const auto *conf1 = static_cast<const VertexPose *>(_vertices[0]);
-    const auto *conf2 = static_cast<const VertexPose *>(_vertices[1]);
-    const auto *delta_t = static_cast<const VertexTimeDiff *>(_vertices[2]);
+    const auto* conf1 = static_cast<const VertexPose*>(_vertices[0]);
+    const auto* conf2 = static_cast<const VertexPose*>(_vertices[1]);
+    const auto* delta_t = static_cast<const VertexTimeDiff*>(_vertices[2]);
 
     Eigen::Vector2d delta_s = conf2->estimate().position() - conf1->estimate().position();
 
@@ -381,7 +381,7 @@ class EdgeVelocityAgent : public BaseTebMultiEdge<3, double> {
     HATEB_ASSERT_MSG(std::isfinite(_error[0]), "EdgeVelocityAgent::computeError() _error[0]=%f _error[1]=%f\n", _error[0], _error[1]);
   }
 
-  void setParameters(const HATebConfig &cfg, const double nominal_vel) {
+  void setParameters(const HATebConfig& cfg, const double nominal_vel) {
     cfg_ = &cfg;
     nominal_vel_ = nominal_vel;
   }

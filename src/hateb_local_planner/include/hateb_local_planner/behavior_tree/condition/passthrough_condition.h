@@ -29,10 +29,11 @@
 #include <rclcpp/rclcpp.hpp>
 
 // New
-#include <agent_path_prediction/AgentsInfo.h>
-#include <agent_path_prediction/agents_class.h>
-#include <cohan_msgs/PassageType.h>
 #include <hateb_local_planner/behavior_tree/bt_core.h>
+
+#include <agent_path_prediction/agents_class.hpp>
+#include <agent_path_prediction/msg/agents_info.hpp>
+#include <cohan_msgs/msg/passage_type.hpp>
 
 namespace hateb_local_planner {
 

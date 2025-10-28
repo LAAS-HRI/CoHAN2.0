@@ -28,15 +28,14 @@
 
 namespace hateb_local_planner {
 
-SetMode::SetMode(::SharedPtr node, const std::string& name, const BT::NodeConfig& config) : StatefulActionNodeROS(node, name, config) {
-  // set the name of the node
+SetMode::SetMode(const std::string& name, const BT::NodeConfiguration& config) : BT::StatefulActionNode(name, config) {
   name_ = name;
-  // planning_mode_pub_ = node_->create_publisher<hateb_local_planner::msg::PlanningMode>("planning_mode", 10);
+  BT_INFO(name_, "Starting the SetMode BT Node");
 }
 
 SetMode::~SetMode() {
   // Set the RCLCPP_INFO while shutting down the node
-  RCLCPP_INFO(node_->get_logger(), "Shutting down the setMode BT Node");
+  BT_INFO(name_, "Shutting down the SetMode BT Node");
 }
 
 BT::NodeStatus SetMode::onStart() {

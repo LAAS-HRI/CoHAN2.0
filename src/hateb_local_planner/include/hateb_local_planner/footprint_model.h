@@ -115,9 +115,9 @@ class BaseFootprintModel {
 };
 
 //! Abbrev. for shared obstacle pointers
-using FootprintModelPtr = boost::shared_ptr<BaseFootprintModel>;
+using FootprintModelPtr = std::shared_ptr<BaseFootprintModel>;
 //! Abbrev. for shared obstacle const pointers
-using FootprintModelConstPtr = boost::shared_ptr<const BaseFootprintModel>;
+using FootprintModelConstPtr = std::shared_ptr<const BaseFootprintModel>;
 
 /**
  * @class PointShape
@@ -294,7 +294,7 @@ class CircularFootprint : public BaseFootprintModel {
  private:
   double radius_;
 };
-using CircularFootprintPtr = boost::shared_ptr<CircularFootprint>;
+using CircularFootprintPtr = std::shared_ptr<CircularFootprint>;
 
 /**
  * @class TwoCirclesFootprint

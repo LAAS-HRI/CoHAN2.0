@@ -44,12 +44,23 @@
 
 #include <hateb_local_planner/optimal_planner.h>
 
-#include <cohan_msgs/msg/tracked_agents.hpp>
-#include <cohan_msgs/msg/tracked_segment_type.hpp>
-#include <hateb_local_planner/msg/feedback_msg.hpp>
-#include <hateb_local_planner/visualization.hpp>
-
 namespace hateb_local_planner {
+
+void publishPlan(const std::vector<geometry_msgs::msg::PoseStamped>& path, std::shared_ptr<rclcpp::Publisher<nav_msgs::msg::Path>> pub) {
+  if (path.empty()) return;
+
+  nav_msgs::msg::Path gui_path;
+  gui_path.poses.resize(path.size());
+  gui_path.header.frame_id = path[0].header.frame_id;
+  gui_path.header.stamp = path[0].header.stamp;
+
+  // Extract the plan in world co-ordinates, we assume the path is all in the same frame
+  for (unsigned int i = 0; i < path.size(); i++) {
+    gui_path.poses[i] = path[i];
+  }
+
+  pub->publish(gui_path);
+}
 
 TebVisualization::TebVisualization() : initialized_(false) {}
 
@@ -64,31 +75,32 @@ void TebVisualization::initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr nod
   cfg_ = cfg;
 
   // Initialize tf2 listener with buffer
-  tf_listener_ = std::make_unique<tf2_ros::TransformListener>(tf_);
+  tf_ = std::make_shared<tf2_ros::Buffer>(node_->get_clock());
+  tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_);
 
   // register topics - create publishers
   global_plan_pub_ = node_->create_publisher<nav_msgs::msg::Path>(GLOBAL_PLAN_TOPIC, 1);
   local_plan_pub_ = node_->create_publisher<nav_msgs::msg::Path>(LOCAL_PLAN_TOPIC, 1);
   local_traj_pub_ = node_->create_publisher<cohan_msgs::msg::TrajectoryStamped>(LOCAL_TRAJ_TOPIC, 1);
   teb_poses_pub_ = node_->create_publisher<geometry_msgs::msg::PoseArray>(LOCAL_PLAN_POSES_TOPIC, 1);
-  teb_fp_poses_pub_ = node_->create_publisher<geometry_msgs::msg::PoseArray>(LOCAL_PLAN_FP_POSES_TOPIC, 1);
+  teb_fp_poses_pub_ = node_->create_publisher<visualization_msgs::msg::MarkerArray>(LOCAL_PLAN_FP_POSES_TOPIC, 1);
   agents_global_plans_pub_ = node_->create_publisher<cohan_msgs::msg::AgentPathArray>(AGENT_GLOBAL_PLANS_TOPIC, 1);
   agents_local_plans_pub_ = node_->create_publisher<cohan_msgs::msg::AgentPathArray>(AGENT_LOCAL_PLANS_TOPIC, 1);
   agents_local_trajs_pub_ = node_->create_publisher<cohan_msgs::msg::AgentTrajectoryArray>(AGENT_LOCAL_TRAJS_TOPIC, 1);
   agents_tebs_poses_pub_ = node_->create_publisher<geometry_msgs::msg::PoseArray>(AGENT_LOCAL_PLANS_POSES_TOPIC, 1);
-  agents_tebs_fp_poses_pub_ = node_->create_publisher<geometry_msgs::msg::PoseArray>(AGENT_LOCAL_PLANS_FP_POSES_TOPIC, 1);
-  robot_traj_time_pub_ = node_->create_publisher<std_msgs::msg::Float32>(ROBOT_TRAJ_TIME_TOPIC, 1);
-  robot_path_time_pub_ = node_->create_publisher<std_msgs::msg::Float32>(ROBOT_PATH_TIME_TOPIC, 1);
+  agents_tebs_fp_poses_pub_ = node_->create_publisher<visualization_msgs::msg::MarkerArray>(AGENT_LOCAL_PLANS_FP_POSES_TOPIC, 1);
+  robot_traj_time_pub_ = node_->create_publisher<cohan_msgs::msg::AgentTimeToGoal>(ROBOT_TRAJ_TIME_TOPIC, 1);
+  robot_path_time_pub_ = node_->create_publisher<cohan_msgs::msg::AgentTimeToGoal>(ROBOT_PATH_TIME_TOPIC, 1);
   agent_trajs_time_pub_ = node_->create_publisher<cohan_msgs::msg::AgentTimeToGoalArray>(AGENT_TRAJS_TIME_TOPIC, 1);
   agent_paths_time_pub_ = node_->create_publisher<cohan_msgs::msg::AgentTimeToGoalArray>(AGENT_PATHS_TIME_TOPIC, 1);
   agent_marker_pub_ = node_->create_publisher<visualization_msgs::msg::MarkerArray>(AGENT_MARKER_TOPIC, 1);
   agent_arrow_pub_ = node_->create_publisher<visualization_msgs::msg::MarkerArray>(AGENT_ARROW_TOPIC, 1);
   robot_next_pose_pub_ = node_->create_publisher<geometry_msgs::msg::PoseStamped>(ROBOT_NEXT_POSE_TOPIC, 1);
-  agent_next_pose_pub_ = node_->create_publisher<geometry_msgs::msg::PoseArray>(AGENT_NEXT_POSE_TOPIC, 1);
+  agent_next_pose_pub_ = node_->create_publisher<geometry_msgs::msg::PoseStamped>(AGENT_NEXT_POSE_TOPIC, 1);
   feedback_pub_ = node_->create_publisher<hateb_local_planner::msg::FeedbackMsg>(FEEDBACK_TOPIC, 10);
   teb_marker_pub_ = node_->create_publisher<visualization_msgs::msg::Marker>(TEB_MARKER_TOPIC, 1000);
   mode_text_pub_ = node_->create_publisher<visualization_msgs::msg::Marker>(MODE_TEXT_TOPIC, 1);
-  ttg_pub_ = node_->create_publisher<cohan_msgs::msg::AgentTimeToGoalArray>(TTG_TOPIC, 10);
+  ttg_pub_ = node_->create_publisher<std_msgs::msg::Float32>(TTG_TOPIC, 10);
   crossing_point_pub_ = node_->create_publisher<geometry_msgs::msg::PoseArray>(CROSSING_POINT_TOPIC, 10);
   crossing_info_pub_ = node_->create_publisher<cohan_msgs::msg::CrossingInfo>(CROSSING_INFO_TOPIC, 10);
 
@@ -125,14 +137,14 @@ void TebVisualization::publishGlobalPlan(const std::vector<geometry_msgs::msg::P
   if (printErrorWhenNotInitialized() || !cfg_->visualization.publish_robot_global_plan) {
     return;
   }
-  base_local_planner::publishPlan(global_plan, global_plan_pub_);
+  publishPlan(global_plan, global_plan_pub_);
 }
 
 void TebVisualization::publishLocalPlan(const std::vector<geometry_msgs::msg::PoseStamped>& local_plan) const {
   if (printErrorWhenNotInitialized()) {
     return;
   }
-  base_local_planner::publishPlan(local_plan, local_plan_pub_);
+  publishPlan(local_plan, local_plan_pub_);
 }
 
 void TebVisualization::publishAgentGlobalPlans(const std::vector<AgentPlanCombined>& agents_plans) const {
@@ -171,7 +183,7 @@ void TebVisualization::publishAgentGlobalPlans(const std::vector<AgentPlanCombin
       path.poses[i + index] = agent_plan_combined.plan_after[i];
     }
 
-    cohan_msgs::AgentPath agent_path;
+    cohan_msgs::msg::AgentPath agent_path;
     agent_path.header.stamp = now;
     agent_path.header.frame_id = frame_id;
     agent_path.id = agent_plan_combined.id;
@@ -258,7 +270,7 @@ void TebVisualization::publishLocalPlanAndPoses(const TimedElasticBand& teb, con
           setMarkerColour(marker, static_cast<double>(idx), fp_size);
           marker.scale.x = 0.2;
           marker.scale.y = 0.2;
-          marker.lifetime = rclcpp::Duration(2.0);
+          marker.lifetime = rclcpp::Duration::from_seconds(2.0);
           teb_fp_poses.markers.push_back(marker);
         }
       }
@@ -300,17 +312,17 @@ void TebVisualization::publishTrajectory(const PlanTrajCombined& plan_traj_combi
   robot_time_to_goal_full.header.stamp = now;
 
   for (const auto& pose : plan_traj_combined.plan_before) {
-    cohan_msgs::TrajectoryPoint trajectory_point;
+    cohan_msgs::msg::TrajectoryPoint trajectory_point;
     trajectory_point.pose.position.x = pose.pose.position.x;
     trajectory_point.pose.position.y = pose.pose.position.y;
     trajectory_point.pose.position.z = pose.pose.position.z;
     trajectory_point.pose.orientation = pose.pose.orientation;
-    trajectory_point.time_from_start.fromSec(-1.0);
+    trajectory_point.time_from_start = -1.0;
     trajectory.points.push_back(trajectory_point);
   }
 
   for (const auto& traj_point : plan_traj_combined.optimized_trajectory) {
-    cohan_msgs::TrajectoryPoint trajectory_point;
+    cohan_msgs::msg::TrajectoryPoint trajectory_point;
     trajectory_point.pose.position.x = traj_point.pose.position.x;
     trajectory_point.pose.position.y = traj_point.pose.position.y;
     trajectory_point.pose.position.z = traj_point.pose.position.z;
@@ -324,20 +336,20 @@ void TebVisualization::publishTrajectory(const PlanTrajCombined& plan_traj_combi
   }
 
   if (plan_traj_combined.optimized_trajectory.size() > 0) {
-    robot_time_to_goal.time_to_goal = rclcpp::Duration(trajectory.points.back().time_from_start);
+    robot_time_to_goal.time_to_goal = trajectory.points.back().time_from_start;
   } else {
-    robot_time_to_goal.time_to_goal = rclcpp::Duration(0);
+    robot_time_to_goal.time_to_goal = 0;
   }
 
   double remaining_path_dist = 0.0;
   const geometry_msgs::msg::PoseStamped* previous_pose = nullptr;
   for (const auto& pose : plan_traj_combined.plan_after) {
-    cohan_msgs::TrajectoryPoint trajectory_point;
+    cohan_msgs::msg::TrajectoryPoint trajectory_point;
     trajectory_point.pose.position.x = pose.pose.position.x;
     trajectory_point.pose.position.y = pose.pose.position.y;
     trajectory_point.pose.position.z = pose.pose.position.z;
     trajectory_point.pose.orientation = pose.pose.orientation;
-    trajectory_point.time_from_start.fromSec(-1.0);
+    trajectory_point.time_from_start = -1.0;
     trajectory.points.push_back(trajectory_point);
 
     if (previous_pose != nullptr) {
@@ -346,10 +358,10 @@ void TebVisualization::publishTrajectory(const PlanTrajCombined& plan_traj_combi
     previous_pose = &pose;
   }
 
-  robot_time_to_goal_full.time_to_goal = robot_time_to_goal.time_to_goal + rclcpp::Duration(remaining_path_dist / cfg_->robot.max_vel_x);
+  robot_time_to_goal_full.time_to_goal = robot_time_to_goal.time_to_goal + (remaining_path_dist / cfg_->robot.max_vel_x);
 
   std_msgs::msg::Float32 ttg_msg;
-  ttg_msg.data = robot_time_to_goal_full.time_to_goal.toSec();
+  ttg_msg.data = robot_time_to_goal_full.time_to_goal;
   ttg_pub_->publish(ttg_msg);
 
   if (!trajectory.points.empty()) {
@@ -381,7 +393,7 @@ void TebVisualization::publishAgentLocalPlansAndPoses(const std::map<uint64_t, T
     const auto& agent_id = agent_teb_kv.first;
     const auto& agent_teb = agent_teb_kv.second;
 
-    cohan_msgs::AgentPath path;
+    cohan_msgs::msg::AgentPath path;
     path.header.stamp = now;
     path.header.frame_id = frame_id;
 
@@ -440,7 +452,7 @@ void TebVisualization::publishAgentLocalPlansAndPoses(const std::map<uint64_t, T
           setMarkerColour(agent_marker, static_cast<double>(idx), fp_size);
           agent_marker.scale.x = 0.2;
           agent_marker.scale.y = 0.2;
-          agent_marker.lifetime = rclcpp::Duration(2.0);
+          agent_marker.lifetime = rclcpp::Duration::from_seconds(2.0);
           agents_teb_fp_poses.markers.push_back(agent_marker);
         }
       }
@@ -533,24 +545,24 @@ void TebVisualization::publishAgentTrajectories(const std::vector<AgentPlanTrajC
   agent_time_to_goal_array_full.header.frame_id = frame_id;
 
   for (const auto& agent_plan_traj_combined : agents_plans_combined) {
-    cohan_msgs::AgentTrajectory agent_path_trajectory;
+    cohan_msgs::msg::AgentTrajectory agent_path_trajectory;
 
     cohan_msgs::msg::AgentTimeToGoal agent_time_to_goal;
     agent_time_to_goal.header.stamp = now;
     agent_time_to_goal.header.frame_id = frame_id;
 
     for (const auto& agent_pose : agent_plan_traj_combined.plan_before) {
-      cohan_msgs::TrajectoryPoint agent_path_trajectory_point;
+      cohan_msgs::msg::TrajectoryPoint agent_path_trajectory_point;
       agent_path_trajectory_point.pose.position.x = agent_pose.pose.position.x;
       agent_path_trajectory_point.pose.position.y = agent_pose.pose.position.y;
       agent_path_trajectory_point.pose.position.z = agent_pose.pose.position.z;
       agent_path_trajectory_point.pose.orientation = agent_pose.pose.orientation;
-      agent_path_trajectory_point.time_from_start.fromSec(-1.0);
+      agent_path_trajectory_point.time_from_start = -1.0;
       agent_path_trajectory.trajectory.points.push_back(agent_path_trajectory_point);
     }
 
     for (const auto& agent_traj_point : agent_plan_traj_combined.optimized_trajectory) {
-      cohan_msgs::TrajectoryPoint agent_path_trajectory_point;
+      cohan_msgs::msg::TrajectoryPoint agent_path_trajectory_point;
       agent_path_trajectory_point.pose.position.x = agent_traj_point.pose.position.x;
       agent_path_trajectory_point.pose.position.y = agent_traj_point.pose.position.y;
       agent_path_trajectory_point.pose.position.z = agent_traj_point.pose.position.z;
@@ -564,20 +576,21 @@ void TebVisualization::publishAgentTrajectories(const std::vector<AgentPlanTrajC
     }
 
     if (agent_plan_traj_combined.optimized_trajectory.size() > 0) {
-      agent_time_to_goal.time_to_goal = rclcpp::Duration(agent_path_trajectory.trajectory.points.back().time_from_start);
+      agent_time_to_goal.time_to_goal = agent_path_trajectory.trajectory.points.back().time_from_start;
+
     } else {
-      agent_time_to_goal.time_to_goal = rclcpp::Duration(0);
+      agent_time_to_goal.time_to_goal = 0;
     }
 
     double remaining_path_dist = 0.0;
     const geometry_msgs::msg::PoseStamped* previous_agent_pose = nullptr;
     for (const auto& agent_pose : agent_plan_traj_combined.plan_after) {
-      cohan_msgs::TrajectoryPoint agent_path_trajectory_point;
+      cohan_msgs::msg::TrajectoryPoint agent_path_trajectory_point;
       agent_path_trajectory_point.pose.position.x = agent_pose.pose.position.x;
       agent_path_trajectory_point.pose.position.y = agent_pose.pose.position.y;
       agent_path_trajectory_point.pose.position.z = agent_pose.pose.position.z;
       agent_path_trajectory_point.pose.orientation = agent_pose.pose.orientation;
-      agent_path_trajectory_point.time_from_start.fromSec(-1.0);
+      agent_path_trajectory_point.time_from_start = -1.0;
       agent_path_trajectory.trajectory.points.push_back(agent_path_trajectory_point);
       if (previous_agent_pose != nullptr) {
         remaining_path_dist += std::hypot(agent_pose.pose.position.x - previous_agent_pose->pose.position.x, agent_pose.pose.position.y - previous_agent_pose->pose.position.y);
@@ -592,7 +605,7 @@ void TebVisualization::publishAgentTrajectories(const std::vector<AgentPlanTrajC
       agent_time_to_goal.id = agent_plan_traj_combined.id;
       agent_time_to_goal_array.times_to_goal.push_back(agent_time_to_goal);
 
-      agent_time_to_goal.time_to_goal += rclcpp::Duration(remaining_path_dist / cfg_->agent.max_vel_x);
+      agent_time_to_goal.time_to_goal += (remaining_path_dist / cfg_->agent.max_vel_x);
       agent_time_to_goal_array_full.times_to_goal.push_back(agent_time_to_goal);
     }
   }
@@ -613,7 +626,7 @@ void TebVisualization::publishMode(int mode) {
       base = ns_ + "/" + base;
     }
 
-    robot_to_map_tr = tf_.lookupTransform("map", base, tf2::TimePointZero, tf2::durationFromSec(0.1));
+    robot_to_map_tr = tf_->lookupTransform("map", base, tf2::TimePointZero, tf2::durationFromSec(0.1));
     transform_found = true;
 
   } catch (tf2::LookupException& ex) {
@@ -669,7 +682,7 @@ void TebVisualization::publishMode(int mode) {
   mode_text.color.b = 0.0f;
   mode_text.color.a = 0.9;
 
-  mode_text.lifetime = rclcpp::Duration(2.0);
+  mode_text.lifetime = rclcpp::Duration::from_seconds(2.0);
   mode_text_pub_->publish(mode_text);
 }
 
@@ -732,8 +745,8 @@ void TebVisualization::publishTrackedAgents(cohan_msgs::msg::TrackedAgents::Cons
       arrow.color.b = 0.0f;
       arrow.color.a = 1.0;
 
-      marker.lifetime = rclcpp::Duration(2.0);
-      arrow.lifetime = rclcpp::Duration(2.0);
+      marker.lifetime = rclcpp::Duration::from_seconds(2.0);
+      arrow.lifetime = rclcpp::Duration::from_seconds(2.0);
       marker_arr.markers.push_back(marker);
       arrow_arr.markers.push_back(arrow);
       i++;
@@ -787,7 +800,7 @@ void TebVisualization::publishRobotFootprintModel(const PoseSE2& current_pose, c
     marker_it->action = visualization_msgs::msg::Marker::ADD;
     marker_it->ns = ns;
     marker_it->id = idx;
-    marker_it->lifetime = rclcpp::Duration(2.0);
+    marker_it->lifetime = rclcpp::Duration::from_seconds(2.0);
     teb_marker_pub_->publish(*marker_it);
   }
 }
@@ -810,7 +823,7 @@ void TebVisualization::publishObstacles(const ObstContainer& obstacles) const {
     marker.id = 0;
     marker.type = visualization_msgs::msg::Marker::POINTS;
     marker.action = visualization_msgs::msg::Marker::ADD;
-    marker.lifetime = rclcpp::Duration(2.0);
+    marker.lifetime = rclcpp::Duration::from_seconds(2.0);
 
     for (const auto& obstacle : obstacles) {
       boost::shared_ptr<PointObstacle> pobst = boost::dynamic_pointer_cast<PointObstacle>(obstacle);
@@ -819,7 +832,7 @@ void TebVisualization::publishObstacles(const ObstContainer& obstacles) const {
       }
 
       if (cfg_->trajectory.visualize_with_time_as_z_axis_scale < 0.001) {
-        geometry_msgs::Point point;
+        geometry_msgs::msg::Point point;
         point.x = pobst->x();
         point.y = pobst->y();
         point.z = 0;
@@ -827,13 +840,13 @@ void TebVisualization::publishObstacles(const ObstContainer& obstacles) const {
       } else  // Spatiotemporally point obstacles become a line
       {
         marker.type = visualization_msgs::msg::Marker::LINE_LIST;
-        geometry_msgs::Point start;
+        geometry_msgs::msg::Point start;
         start.x = pobst->x();
         start.y = pobst->y();
         start.z = 0;
         marker.points.push_back(start);
 
-        geometry_msgs::Point end;
+        geometry_msgs::msg::Point end;
         double t = 20;
         Eigen::Vector2d pred;
         pobst->predictCentroidConstantVelocity(t, pred);
@@ -870,13 +883,13 @@ void TebVisualization::publishObstacles(const ObstContainer& obstacles) const {
       marker.id = idx++;
       marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
       marker.action = visualization_msgs::msg::Marker::ADD;
-      marker.lifetime = rclcpp::Duration(2.0);
-      geometry_msgs::Point start;
+      marker.lifetime = rclcpp::Duration::from_seconds(2.0);
+      geometry_msgs::msg::Point start;
       start.x = pobst->start().x();
       start.y = pobst->start().y();
       start.z = 0;
       marker.points.push_back(start);
-      geometry_msgs::Point end;
+      geometry_msgs::msg::Point end;
       end.x = pobst->end().x();
       end.y = pobst->end().y();
       end.z = 0;
@@ -909,10 +922,10 @@ void TebVisualization::publishObstacles(const ObstContainer& obstacles) const {
       marker.id = idx++;
       marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
       marker.action = visualization_msgs::msg::Marker::ADD;
-      marker.lifetime = rclcpp::Duration(2.0);
+      marker.lifetime = rclcpp::Duration::from_seconds(2.0);
 
       for (const auto& vertex : pobst->vertices()) {
-        geometry_msgs::Point point;
+        geometry_msgs::msg::Point point;
         point.x = vertex.x();
         point.y = vertex.y();
         point.z = 0;
@@ -922,7 +935,7 @@ void TebVisualization::publishObstacles(const ObstContainer& obstacles) const {
       // Also add last point to close the polygon
       // but only if polygon has more than 2 points (it is not a line)
       if (pobst->vertices().size() > 2) {
-        geometry_msgs::Point point;
+        geometry_msgs::msg::Point point;
         point.x = pobst->vertices().front().x();
         point.y = pobst->vertices().front().y();
         point.z = 0;
@@ -940,7 +953,7 @@ void TebVisualization::publishObstacles(const ObstContainer& obstacles) const {
   }
 }
 
-void TebVisualization::publishViaPoints(const std::vector<Eigen::Vector2d, Eigen::aligned_allocator<Eigen::Vector2d> >& via_points, const std::string& ns) const {
+void TebVisualization::publishViaPoints(const std::vector<Eigen::Vector2d, Eigen::aligned_allocator<Eigen::Vector2d>>& via_points, const std::string& ns) const {
   if (via_points.empty() || printErrorWhenNotInitialized()) {
     return;
   }
@@ -952,10 +965,10 @@ void TebVisualization::publishViaPoints(const std::vector<Eigen::Vector2d, Eigen
   marker.id = 0;
   marker.type = visualization_msgs::msg::Marker::POINTS;
   marker.action = visualization_msgs::msg::Marker::ADD;
-  marker.lifetime = rclcpp::Duration(2.0);
+  marker.lifetime = rclcpp::Duration::from_seconds(2.0);
 
   for (const auto& via_point : via_points) {
-    geometry_msgs::Point point;
+    geometry_msgs::msg::Point point;
     point.x = via_point.x();
     point.y = via_point.y();
     point.z = 0;
@@ -972,7 +985,7 @@ void TebVisualization::publishViaPoints(const std::vector<Eigen::Vector2d, Eigen
   teb_marker_pub_->publish(marker);
 }
 
-void TebVisualization::publishTebContainer(const TebOptPlannerContainer& teb_planner, const std::string& ns) {
+void TebVisualization::publishTebContainer(const std::vector<std::shared_ptr<HATebOptimalPlanner>>& teb_planner, const std::string& ns) {
   if (printErrorWhenNotInitialized()) {
     return;
   }
@@ -995,7 +1008,7 @@ void TebVisualization::publishTebContainer(const TebOptPlannerContainer& teb_pla
     double time = 0;
 
     while (it_pose != it_pose_end) {
-      geometry_msgs::Point point_start;
+      geometry_msgs::msg::Point point_start;
       point_start.x = (*it_pose)->x();
       point_start.y = (*it_pose)->y();
       point_start.z = cfg_->trajectory.visualize_with_time_as_z_axis_scale * time;
@@ -1003,7 +1016,7 @@ void TebVisualization::publishTebContainer(const TebOptPlannerContainer& teb_pla
 
       time += (*it_timediff)->dt();
 
-      geometry_msgs::Point point_end;
+      geometry_msgs::msg::Point point_end;
       point_end.x = (*boost::next(it_pose))->x();
       point_end.y = (*boost::next(it_pose))->y();
       point_end.z = cfg_->trajectory.visualize_with_time_as_z_axis_scale * time;
@@ -1021,8 +1034,8 @@ void TebVisualization::publishTebContainer(const TebOptPlannerContainer& teb_pla
   teb_marker_pub_->publish(marker);
 }
 
-void TebVisualization::publishFeedbackMessage(const std::vector<boost::shared_ptr<TebOptimalPlanner> >& teb_planners, unsigned int selected_trajectory_idx, const ObstContainer& obstacles) {
-  FeedbackMsg msg;
+void TebVisualization::publishFeedbackMessage(const std::vector<std::shared_ptr<HATebOptimalPlanner>>& teb_planners, unsigned int selected_trajectory_idx, const ObstContainer& obstacles) {
+  hateb_local_planner::msg::FeedbackMsg msg;
   msg.header.stamp = node_->now();
   msg.header.frame_id = cfg_->map_frame;
   msg.selected_trajectory_idx = selected_trajectory_idx;
@@ -1057,8 +1070,8 @@ void TebVisualization::publishFeedbackMessage(const std::vector<boost::shared_pt
   feedback_pub_->publish(msg);
 }
 
-void TebVisualization::publishFeedbackMessage(const TebOptimalPlanner& teb_planner, const ObstContainer& obstacles) {
-  FeedbackMsg msg;
+void TebVisualization::publishFeedbackMessage(const HATebOptimalPlanner& teb_planner, const ObstContainer& obstacles) {
+  hateb_local_planner::msg::FeedbackMsg msg;
   msg.header.stamp = node_->now();
   msg.header.frame_id = cfg_->map_frame;
   msg.selected_trajectory_idx = 0;
@@ -1159,7 +1172,7 @@ void TebVisualization::clearingTimerCB() {
 
   if ((last_publish_agents_local_plans_ != cfg_->visualization.publish_agents_local_plans) && !cfg_->visualization.publish_agents_local_plans) {
     // clear agent local plans
-    cohan_msgs::msg::AgentTrajectoryArray empty_trajectory_array;
+    cohan_msgs::msg::AgentPathArray empty_trajectory_array;
     // empty_trajectory_array.header.stamp = node_->now();
     // empty_trajectory_array.header.frame_id = cfg_->map_frame;
     agents_local_plans_pub_->publish(empty_trajectory_array);

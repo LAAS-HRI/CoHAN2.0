@@ -31,18 +31,19 @@ namespace hateb_local_planner {
 PassThroughCondition::PassThroughCondition(const std::string& condition_name, const BT::NodeConfiguration& conf) : BT::ConditionNode(condition_name, conf) {
   // Initialize the node
   name_ = condition_name;
+  BT_INFO(name_, "Starting the PassThroughCondition BT Node");
 }
 
 PassThroughCondition::~PassThroughCondition() {
-  // ROS_INFO in destructor
-  ROS_INFO("Shutting downd the PassThroughCondition BT Node");
+  // BT_INFO in destructor
+  BT_INFO(name_, "Shutting down the PassThroughCondition BT Node");
 }
 
 BT::NodeStatus PassThroughCondition::tick() {
   getInput("passage_type", psg_type_);
 
   // PassThrough is activated when a DOOR or PILLAR is detected
-  if (psg_type_ == cohan_msgs::PassageType::DOOR || psg_type_ == cohan_msgs::PassageType::PILLAR) {
+  if (psg_type_ == cohan_msgs::msg::PassageType::DOOR || psg_type_ == cohan_msgs::msg::PassageType::PILLAR) {
     BT_INFO(name_, "Passage detected!")
     return BT::NodeStatus::SUCCESS;
   }

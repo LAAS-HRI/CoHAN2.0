@@ -29,9 +29,10 @@
 #include <rclcpp/rclcpp.hpp>
 
 // New
-#include <agent_path_prediction/AgentsInfo.h>
-#include <agent_path_prediction/agents_class.h>
 #include <hateb_local_planner/behavior_tree/bt_core.h>
+
+#include <agent_path_prediction/agents_class.hpp>
+#include <agent_path_prediction/msg/agents_info.hpp>
 
 namespace hateb_local_planner {
 
@@ -90,6 +91,7 @@ class DualBandExitCondition : public BT::ConditionNode {
 
   // Class Variables
   double goal_dist_;           //!< Distance to goal for progress tracking
+  rclcpp::Clock clock_;        // clock instance for time tracking
   rclcpp::Time stopped_time_;  //!< Time when robot was last detected as stopped
 
   std::string name_;  //!< Name of the node

@@ -51,7 +51,7 @@ class BackoffConfig {
   /**
    * @brief Initializes the parameter helper for this config
    */
-  void initialize(::SharedPtr node) {
+  void initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node) {
     param_helper_.initialize(node);
     RCLCPP_INFO(node->get_logger(), "Initializing BackoffConfig parameters...");
   }

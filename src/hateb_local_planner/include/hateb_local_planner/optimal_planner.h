@@ -54,11 +54,12 @@
 
 // teb stuff
 #include <hateb_local_planner/footprint_model.h>
-#include <hateb_local_planner/hateb_config.h>
 #include <hateb_local_planner/misc.h>
 #include <hateb_local_planner/planner_interface.h>
-#include <hateb_local_planner/timed_elastic_band.h>
-#include <hateb_local_planner/visualization.h>
+
+#include <hateb_local_planner/hateb_config.hpp>
+#include <hateb_local_planner/timed_elastic_band.hpp>
+#include <hateb_local_planner/visualization.hpp>
 
 // g2o lib stuff
 #include <g2o/core/block_solver.h>
@@ -176,7 +177,7 @@ class HATebOptimalPlanner : public PlannerInterface {
    * @return \c true if planning was successful, \c false otherwise
    */
   bool plan(const std::vector<geometry_msgs::msg::PoseStamped>& initial_plan, const geometry_msgs::msg::Twist* start_vel = nullptr, bool free_goal_vel = false,
-            const AgentPlanVelMap* initial_agent_plan_vel_map = nullptr, hateb_local_planner::OptimizationCostArray* op_costs = nullptr, double dt_ref = 0.4, double dt_hyst = 0.1,
+            const AgentPlanVelMap* initial_agent_plan_vel_map = nullptr, hateb_local_planner::msg::OptimizationCostArray* op_costs = nullptr, double dt_ref = 0.4, double dt_hyst = 0.1,
             int Mode = 0) override;
 
   /**
@@ -196,7 +197,7 @@ class HATebOptimalPlanner : public PlannerInterface {
    * @return \c true if planning was successful, \c false otherwise
    */
   bool plan(const PoseSE2& start, const PoseSE2& goal, const geometry_msgs::msg::Twist* start_vel = nullptr, bool free_goal_vel = false, double pre_plan_time = 0.0,
-            hateb_local_planner::OptimizationCostArray* op_costs = nullptr, double dt_ref = 0.4, double dt_hyst = 0.1, int Mode = 0) override;
+            hateb_local_planner::msg::OptimizationCostArray* op_costs = nullptr, double dt_ref = 0.4, double dt_hyst = 0.1, int Mode = 0) override;
 
   /**
    * @brief Get the velocity command from a previously optimized plan to control the robot at the current sampling interval.
@@ -236,10 +237,10 @@ class HATebOptimalPlanner : public PlannerInterface {
    * otherwise
    */
   bool optimizeTEB(int iterations_innerloop, int iterations_outerloop, bool compute_cost_afterwards = true, double obst_cost_scale = 1.0, double viapoint_cost_scale = 1.0,
-                   bool alternative_time_cost = false, hateb_local_planner::OptimizationCostArray* op_costs = nullptr, double dt_ref = 0.4, double dt_hyst = 0.1);
+                   bool alternative_time_cost = false, hateb_local_planner::msg::OptimizationCostArray* op_costs = nullptr, double dt_ref = 0.4, double dt_hyst = 0.1);
 
   bool optimizeTEB(int iterations_innerloop, int iterations_outerloop, bool compute_cost_afterwards = true, double obst_cost_scale = 1.0, double viapoint_cost_scale = 1.0,
-                   bool alternative_time_cost = false, hateb_local_planner::OptimizationCostArray* op_costs = nullptr);
+                   bool alternative_time_cost = false, hateb_local_planner::msg::OptimizationCostArray* op_costs = nullptr);
 
   //@}
 
@@ -408,7 +409,7 @@ class HATebOptimalPlanner : public PlannerInterface {
    * @param alternative_time_cost Replace the cost for the time optimal objective by the actual (weighted) transition time.
    * @return TebCostVec containing the cost values
    */
-  void computeCurrentCost(double obst_cost_scale = 1.0, double viapoint_cost_scale = 1.0, bool alternative_time_cost = false, hateb_local_planner::OptimizationCostArray* op_costs = NULL);
+  void computeCurrentCost(double obst_cost_scale = 1.0, double viapoint_cost_scale = 1.0, bool alternative_time_cost = false, hateb_local_planner::msg::OptimizationCostArray* op_costs = NULL);
 
   /**
    * Compute and return the cost of the current optimization graph (supports multiple trajectories)
@@ -494,7 +495,7 @@ class HATebOptimalPlanner : public PlannerInterface {
    *
    * This method currently checks only that the trajectory, or a part of the trajectory is collision free.
    * Obstacles are here represented as costmap instead of the internal ObstacleContainer.
-   * @param costmap_model Pointer to the costmap model
+   * @param collision_checker Pointer to the collision checker associated with a costmap
    * @param footprint_spec The specification of the footprint of the robot in world coordinates
    * @param inscribed_radius The radius of the inscribed circle of the robot
    * @param circumscribed_radius The radius of the circumscribed circle of the robot
@@ -502,8 +503,8 @@ class HATebOptimalPlanner : public PlannerInterface {
    * @return \c true, if the robot footprint along the first part of the trajectory intersects with
    *         any obstacle in the costmap, \c false otherwise.
    */
-  bool isTrajectoryFeasible(nav2_costmap_2d::CostmapModel* costmap_model, const std::vector<geometry_msgs::msg::Point>& footprint_spec, double inscribed_radius = 0.0,
-                            double circumscribed_radius = 0.0, int look_ahead_idx = -1) override;
+  bool isTrajectoryFeasible(std::shared_ptr<nav2_costmap_2d::FootprintCollisionChecker<nav2_costmap_2d::Costmap2D*>> collision_checker, const std::vector<geometry_msgs::msg::Point>& footprint_spec,
+                            double inscribed_radius = 0.0, double circumscribed_radius = 0.0, int look_ahead_idx = -1) override;
 
   //@}
 

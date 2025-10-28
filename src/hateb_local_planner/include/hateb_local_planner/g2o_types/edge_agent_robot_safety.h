@@ -36,8 +36,9 @@
 #include <hateb_local_planner/g2o_types/base_teb_edges.h>
 #include <hateb_local_planner/g2o_types/penalties.h>
 #include <hateb_local_planner/g2o_types/vertex_pose.h>
-#include <hateb_local_planner/hateb_config.h>
 #include <hateb_local_planner/obstacles.h>
+
+#include <hateb_local_planner/hateb_config.hpp>
 
 namespace hateb_local_planner {
 
@@ -66,9 +67,9 @@ class EdgeAgentRobotSafety : public BaseTebBinaryEdge<1, double, VertexPose, Ver
    */
   void computeError() override {
     HATEB_ASSERT_MSG(cfg_, "You must call setHATebConfig() on EdgeAgentRobotSafety()");
-    const auto *robot_bandpt = static_cast<const VertexPose *>(_vertices[0]);
-    const auto *agent_bandpt = static_cast<const VertexPose *>(_vertices[1]);
-    static_cast<PointObstacle *>(obs_)->setCentroid(agent_bandpt->x(), agent_bandpt->y());
+    const auto* robot_bandpt = static_cast<const VertexPose*>(_vertices[0]);
+    const auto* agent_bandpt = static_cast<const VertexPose*>(_vertices[1]);
+    static_cast<PointObstacle*>(obs_)->setCentroid(agent_bandpt->x(), agent_bandpt->y());
 
     // The distance is taken according to the footprint model of the robot. Could have some errors
     double agent_radius = cfg_->human_model->getCircumscribedRadius();
@@ -84,7 +85,7 @@ class EdgeAgentRobotSafety : public BaseTebBinaryEdge<1, double, VertexPose, Ver
   /**
    * @brief Obstacle pointer used to represent the agent as a point obstacle for distance calculation.
    */
-  Obstacle *obs_ = new PointObstacle();
+  Obstacle* obs_ = new PointObstacle();
 
  public:
   /**

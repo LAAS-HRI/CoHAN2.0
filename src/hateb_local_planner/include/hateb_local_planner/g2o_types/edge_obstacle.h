@@ -43,13 +43,14 @@
 #ifndef EDGE_OBSTACLE_H_
 #define EDGE_OBSTACLE_H_
 
-#include <cohan_msgs/AgentType.h>
 #include <hateb_local_planner/footprint_model.h>
 #include <hateb_local_planner/g2o_types/base_teb_edges.h>
 #include <hateb_local_planner/g2o_types/penalties.h>
 #include <hateb_local_planner/g2o_types/vertex_pose.h>
-#include <hateb_local_planner/hateb_config.h>
 #include <hateb_local_planner/obstacles.h>
+
+#include <cohan_msgs/msg/agent_type.hpp>
+#include <hateb_local_planner/hateb_config.hpp>
 
 namespace hateb_local_planner {
 
@@ -81,11 +82,11 @@ class EdgeObstacle : public BaseTebUnaryEdge<1, const Obstacle*, VertexPose> {
 
     double dist = 0;
 
-    if (type_ == static_cast<int>(cohan_msgs::AgentType::ROBOT)) {
+    if (type_ == static_cast<int>(cohan_msgs::msg::AgentType::ROBOT)) {
       dist = cfg_->robot_model->calculateDistance(bandpt->pose(), _measurement);
     }
 
-    if (type_ == static_cast<int>(cohan_msgs::AgentType::HUMAN)) {
+    if (type_ == static_cast<int>(cohan_msgs::msg::AgentType::HUMAN)) {
       dist = cfg_->human_model->calculateDistance(bandpt->pose(), _measurement);
     }
 
@@ -197,11 +198,11 @@ class EdgeInflatedObstacle : public BaseTebUnaryEdge<2, const Obstacle*, VertexP
 
     double dist = 0;
 
-    if (type_ == static_cast<int>(cohan_msgs::AgentType::ROBOT)) {
+    if (type_ == static_cast<int>(cohan_msgs::msg::AgentType::ROBOT)) {
       dist = cfg_->robot_model->calculateDistance(bandpt->pose(), _measurement);
     }
 
-    if (type_ == static_cast<int>(cohan_msgs::AgentType::HUMAN)) {
+    if (type_ == static_cast<int>(cohan_msgs::msg::AgentType::HUMAN)) {
       dist = cfg_->human_model->calculateDistance(bandpt->pose(), _measurement);
     }
 

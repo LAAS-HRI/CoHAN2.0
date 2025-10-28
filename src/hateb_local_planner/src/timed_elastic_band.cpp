@@ -36,11 +36,7 @@
  * Author: Christoph Rösmann
  *********************************************************************/
 
-#include <hateb_local_planner/timed_elastic_band.h>
-
-#include <limits>
-#include <rclcpp/logging.hpp>
-#include <ros2_helpers/utils.hpp>
+#include <hateb_local_planner/timed_elastic_band.hpp>
 
 namespace hateb_local_planner {
 
@@ -86,7 +82,7 @@ void TimedElasticBand::addPose(double x, double y, double theta, bool fixed) {
 }
 
 void TimedElasticBand::addTimeDiff(double dt, bool fixed) {
-  RCLCPP_ASSERT_MSG(dt > 0. && "Adding a timediff requires a positive dt");
+  RCLCPP_ASSERT_MSG(dt > 0., "Adding a timediff requires a positive dt");
   auto* timediff_vertex = new VertexTimeDiff(dt, fixed);
   timediff_vec_.push_back(timediff_vertex);
 }

@@ -27,8 +27,7 @@
 #ifndef MODE_SWITCH_HH_
 #define MODE_SWITCH_HH_
 
-#include <agent_path_prediction/agents_class.h>
-
+#include <agent_path_prediction/agents_class.hpp>
 #include <rclcpp/rclcpp.hpp>
 
 #include "behaviortree_cpp/bt_factory.h"
@@ -48,7 +47,6 @@
 #include <hateb_local_planner/behavior_tree/bt_core.h>
 #include <hateb_local_planner/behavior_tree/condition/backoff_exit_condition.h>
 #include <hateb_local_planner/behavior_tree/condition/dual_band_exit_condition.h>
-#include <hateb_local_planner/behavior_tree/condition/is_goal_reached.h>
 #include <hateb_local_planner/behavior_tree/condition/is_goal_updated.h>
 #include <hateb_local_planner/behavior_tree/condition/passthrough_condition.h>
 #include <hateb_local_planner/behavior_tree/condition/single_band_exit_condition.h>
