@@ -28,7 +28,6 @@
 
 #include <hateb_local_planner/msg/planning_mode.hpp>
 #include <memory>
-#include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <string>
 
 namespace hateb_local_planner {
@@ -48,9 +47,6 @@ class SetMode : public BT::StatefulActionNode {
    * @param config Configuration for the behavior tree node
    */
   SetMode(const std::string& name, const BT::NodeConfiguration& config);
-
-  // ROS2-compatible constructor
-  SetMode(const std::shared_ptr<rclcpp_lifecycle::LifecycleNode>& node, const std::string& name, const BT::NodeConfig& config);
 
   /**
    * @brief Deleted default constructor to enforce proper initialization

@@ -151,6 +151,7 @@ class Backoff {
 
   rclcpp_lifecycle::LifecycleNode::SharedPtr node_;  //!< ROS2 node pointer
   std::shared_ptr<BackoffConfig> cfg_;               //!< Configuration parameters for backoff behavior
+  std::string ns_;                                   //!< Namespace for the node
 
   geometry_msgs::msg::PoseStamped goal_;      //!< Current navigation goal
   geometry_msgs::msg::PoseStamped old_goal_;  //!< Previous navigation goal

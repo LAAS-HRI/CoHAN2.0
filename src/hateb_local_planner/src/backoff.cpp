@@ -56,12 +56,15 @@ void Backoff::initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node, std::s
   tf_ = std::make_shared<tf2_ros::Buffer>(node_->get_clock());
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_);
 
+  // Get the namespace from the parameter server
+  node->get_parameter_or("ns", ns_, std::string(""));
+
   // If a namespace is associated update some topics accordingly
-  if (!cfg_->ns.empty()) {
-    cfg_->footprint_frame = cfg_->ns + "/" + cfg_->footprint_frame;
-    cfg_->current_goal_topic = "/" + cfg_->ns + cfg_->current_goal_topic;
-    cfg_->publish_goal_topic = "/" + cfg_->ns + cfg_->publish_goal_topic;
-    cfg_->get_plan_srv_name = "/" + cfg_->ns + cfg_->get_plan_srv_name;
+  if (!ns_.empty()) {
+    cfg_->footprint_frame = ns_ + "/" + cfg_->footprint_frame;
+    cfg_->current_goal_topic = "/" + ns_ + cfg_->current_goal_topic;
+    cfg_->publish_goal_topic = "/" + ns_ + cfg_->publish_goal_topic;
+    cfg_->get_plan_srv_name = "/" + ns_ + cfg_->get_plan_srv_name;
   }
 
   // Get costmap

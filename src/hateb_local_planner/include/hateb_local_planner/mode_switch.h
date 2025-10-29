@@ -27,7 +27,7 @@
 #ifndef MODE_SWITCH_HH_
 #define MODE_SWITCH_HH_
 
-#include <agent_path_prediction/agents_class.hpp>
+#include <hateb_local_planner/agents_class.hpp>
 #include <rclcpp/rclcpp.hpp>
 
 #include "behaviortree_cpp/bt_factory.h"
@@ -88,7 +88,7 @@ class ModeSwitch {
    * @param agents_ptr Pointer to the agents management class
    * @param backoff_ptr Pointer to the backoff behavior handler
    */
-  void initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node, std::string& xml_path, std::shared_ptr<agents::Agents>& agents_ptr, std::shared_ptr<Backoff>& backoff_ptr);
+  void initialize(rclcpp::Node::SharedPtr node, std::string& xml_path, std::shared_ptr<hateb_local_planner::Agents>& agents_ptr, std::shared_ptr<Backoff>& backoff_ptr);
 
   /**
    * @brief Executes one tick of the behavior tree
@@ -129,7 +129,7 @@ class ModeSwitch {
    * @brief Callback for processing new navigation goals
    * @param goal_msg Message containing the new goal
    */
-  void goalNavigateToPoseCB(const nav2_msgs::action::NavigateToPose::Goal::SharedPtr goal_msg);
+  void goalNavigateToPoseCB(const geometry_msgs::msg::PoseStamped::SharedPtr goal_msg);
 
   /**
    * @brief Callback for processing navigation results
@@ -166,9 +166,9 @@ class ModeSwitch {
   bool goal_update_;   //!< Flag indicating if goal was updated
 
   // ROS communication members
-  rclcpp_lifecycle::LifecycleNode::SharedPtr node_;                                          //!< ROS 2 node shared pointer
+  rclcpp::Node::SharedPtr node_;                                                             //!< ROS 2 node shared pointer
   rclcpp::Subscription<agent_path_prediction::msg::AgentsInfo>::SharedPtr agents_info_sub_;  //!< Subscriber for agent information
-  rclcpp::Subscription<nav2_msgs::action::NavigateToPose::Goal>::SharedPtr goal_sub_;        //!< Subscriber for navigation goals
+  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_sub_;                //!< Subscriber for navigation goals
   rclcpp::Subscription<action_msgs::msg::GoalStatusArray>::SharedPtr result_sub_;            //!< Subscriber for navigation results
   rclcpp::Subscription<cohan_msgs::msg::PassageType>::SharedPtr passage_detect_sub_;         //!< Subscriber for passage detection
   rclcpp::Publisher<hateb_local_planner::msg::PlanningMode>::SharedPtr planning_mode_pub_;   //!< Publisher for current planning mode

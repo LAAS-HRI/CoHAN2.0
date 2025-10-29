@@ -52,7 +52,7 @@ BT::NodeStatus SingleBandExitCondition::tick() {
     // If any human inside planning radius is moving, switch to dual band mode
     if (dist < dist_max_) {
       for (auto& human : agents_info_.humans) {
-        if (human.state != agents::AgentState::STATIC && human.state != agents::AgentState::STOPPED) {  //<! the STOPPED condition to reset things properly
+        if (human.state != hateb_local_planner::AgentState::STATIC && human.state != hateb_local_planner::AgentState::STOPPED) {  //<! the STOPPED condition to reset things properly
           BT_INFO(name_, "Exiting Single Band!")
           return BT::NodeStatus::SUCCESS;
         }

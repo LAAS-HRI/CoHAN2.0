@@ -52,7 +52,7 @@ BT::NodeStatus DualBandExitCondition::tick() {
     if (!agents_info_.humans.empty()) {
       auto human = agents_info_.humans[0];
       // Only exit the band if the human is under the dist_threshold
-      if (human.dist <= dist_threshold_ && (human.state == agents::AgentState::STOPPED)) {
+      if (human.dist <= dist_threshold_ && (human.state == hateb_local_planner::AgentState::STOPPED)) {
         BT_INFO(name_, "The robot is stuck and human is still, Exiting Dual Band!")
         return BT::NodeStatus::SUCCESS;
       }

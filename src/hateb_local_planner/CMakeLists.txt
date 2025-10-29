@@ -123,13 +123,21 @@ add_library(hateb_local_planner_core SHARED
   src/behavior_tree/condition/passthrough_condition.cpp
   src/behavior_tree/action/set_mode.cpp
   src/mode_switch.cpp
+  src/agents_class.cpp
 )
+
+# set_target_properties(hateb_local_planner_core PROPERTIES
+#   BUILD_WITH_INSTALL_RPATH TRUE
+#   INSTALL_RPATH "$ORIGIN/../../agent_path_prediction/lib"
+#   INSTALL_RPATH_USE_LINK_PATH TRUE
+# )
 
 ament_target_dependencies(hateb_local_planner_core
   ${dependencies}
+  agent_path_prediction
 )
 
-target_link_libraries(hateb_local_planner_core
+target_link_libraries(hateb_local_planner_core 
   ${EXTERNAL_LIBS}
   "${cpp_typesupport_target}"
 )

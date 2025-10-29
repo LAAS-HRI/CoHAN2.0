@@ -76,10 +76,10 @@
 
 // agent data
 #include <agent_path_prediction/agent_path_prediction.hpp>
-#include <agent_path_prediction/agents_class.hpp>
 #include <agent_path_prediction/msg/predicted_goal.hpp>
 #include <agent_path_prediction/srv/agent_pose_predict.hpp>
 #include <cohan_msgs/msg/state_array.hpp>
+#include <hateb_local_planner/agents_class.hpp>
 #include <std_srvs/srv/empty.hpp>
 #include <std_srvs/srv/set_bool.hpp>
 #include <std_srvs/srv/trigger.hpp>
@@ -111,7 +111,7 @@
 #include <vector>
 
 namespace hateb_local_planner {
-enum class AgentState : std::uint8_t { NO_STATE, STATIC, MOVING, STOPPED, BLOCKED };
+// enum class AgentState : std::uint8_t { NO_STATE, STATIC, MOVING, STOPPED, BLOCKED };
 
 /**
  * @class HATebLocalPlannerROS
@@ -518,7 +518,6 @@ class HATebLocalPlannerROS : public nav2_core::Controller {
   geometry_msgs::msg::Twist robot_vel_;     //!< Store current robot velocities (vx, vy, omega)
   bool goal_reached_;                       //!< Store whether the goal is reached or not
   bool horizon_reduced_;                    //!< Flag indicating if the planning horizon was temporarily reduced
-  rclcpp::Time horizon_reduced_stamp_;      //!< Time when the horizon was reduced
   rclcpp::Time time_last_infeasible_plan_;  //!< Time stamp of last infeasible plan detection
   int no_infeasible_plans_;                 //!< Number of consecutive infeasible plans
   rclcpp::Time time_last_oscillation_;      //!< Time stamp of last oscillation detection
@@ -557,19 +556,19 @@ class HATebLocalPlannerROS : public nav2_core::Controller {
   std::string logs_;                                                         //!< System log messages
   rclcpp::Subscription<cohan_msgs::msg::StateArray>::SharedPtr agents_sub_;  //!< Subscriber for tracked agents
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr log_pub_;              //!< Publisher for system logs
-  std::string ns_;                                                           //!< Namespace for multi-agent support
   std::string invisible_humans_sub_topic_;                                   //!< Name for invisible humans topic
 
   // Helper class instances
-  std::shared_ptr<agents::Agents> agents_ptr_;  //!< Pointer to agents management class
-  std::shared_ptr<Backoff> backoff_ptr_;        //!< Pointer to backoff behavior class
-  ModeSwitch bt_mode_switch_;                   //!< Behavior tree mode switch handler
+  std::shared_ptr<hateb_local_planner::Agents> agents_ptr_;  //!< Pointer to agents management class
+  std::shared_ptr<Backoff> backoff_ptr_;                     //!< Pointer to backoff behavior class
+  ModeSwitch bt_mode_switch_;                                //!< Behavior tree mode switch handler
 
   // ROS 2 logging and time
   rclcpp::Logger logger_{rclcpp::get_logger("HATebLocalPlanner")};  //!< Logger for this plugin
   rclcpp::Clock::SharedPtr clock_;                                  //!< ROS 2 clock
   rclcpp::Node::SharedPtr intra_node_costmap_converter_;            //!< Shared pointer to node for costmap converter
   rclcpp::Node::SharedPtr intra_node_agents_;                       //!< Shared pointer to node for agents
+  rclcpp::Node::SharedPtr intra_node_btree_;                        //!< Shared pointer to node for behavior tree
 
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW

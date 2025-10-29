@@ -30,6 +30,10 @@ if(DEFINED ENV{ROS_VERSION} AND "$ENV{ROS_VERSION}" STREQUAL "2")
   add_library(libsim SHARED src/sim.cpp)
   target_link_libraries(libsim ${SDL2_LIBRARIES} yaml-cpp X11)
 
+  add_executable(simros_node src/simros.cpp)
+  ament_target_dependencies(simros_node rclpy nav_msgs geometry_msgs sensor_msgs tf2_ros)
+  target_link_libraries(simros_node libsim ${SDL2_LIBRARIES} yaml-cpp X11)
+
   ament_package()
 
 else()

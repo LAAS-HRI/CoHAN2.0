@@ -1,4 +1,3 @@
-
 cmake_minimum_required(VERSION 3.8)
 project(agent_path_prediction)
 
@@ -44,13 +43,40 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 # Include directories
 include_directories(include)
 
-# Create executable
-add_executable(agent_path_predict
+# ==============================
+# Library
+# ==============================
+add_library(agent_path_prediction_core SHARED
   src/agent_path_prediction.cpp
   src/predict_goal_ros.cpp
 )
 
-# Dependencies for executable
+ament_target_dependencies(agent_path_prediction_core
+  rclcpp
+  geometry_msgs
+  cohan_msgs
+  nav_msgs
+  std_srvs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
+  nav2_costmap_2d
+  visualization_msgs
+  ros2_helpers
+)
+
+rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(agent_path_prediction_core yaml-cpp "${cpp_typesupport_target}")
+
+# ==============================
+# Executable
+# ==============================
+add_executable(agent_path_predict
+  src/agent_path_prediction.cpp
+  # src/predict_goal_ros.cpp
+)
+target_link_libraries(agent_path_predict agent_path_prediction_core)
+
 ament_target_dependencies(agent_path_predict
   rclcpp
   geometry_msgs
@@ -65,25 +91,26 @@ ament_target_dependencies(agent_path_predict
   ros2_helpers
 )
 
-# Link yaml-cpp
-target_link_libraries(agent_path_predict yaml-cpp)
-
-# Link generated interfaces
-rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
-target_link_libraries(agent_path_predict "${cpp_typesupport_target}")
-
-# Install executable
-install(TARGETS agent_path_predict
-  DESTINATION lib/${PROJECT_NAME}
+# ==============================
+# Install
+# ==============================
+install(TARGETS
+  agent_path_predict
+  agent_path_prediction_core
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
 )
 
-# Install header files
 install(DIRECTORY include/
   DESTINATION include/${PROJECT_NAME}
 )
 
-# Export dependencies
+# ==============================
+# Export
+# ==============================
 ament_export_include_directories(include)
+ament_export_libraries(agent_path_prediction_core)
 ament_export_dependencies(
   rclcpp
   geometry_msgs

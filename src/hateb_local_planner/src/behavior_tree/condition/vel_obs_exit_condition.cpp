@@ -56,7 +56,7 @@ BT::NodeStatus VelObsExitCondition::tick() {
     // Lock the agents pointer before updating
     std::scoped_lock lock(agents_mutex_);
     // Set the human state to BLOCKED
-    agents_ptr_->setState(agents::AgentState::BLOCKED, nearest_human_id_);
+    agents_ptr_->setState(hateb_local_planner::AgentState::BLOCKED, nearest_human_id_);
     // Update the blackboard
     // setOutput("stuck_agent", nearest_human_id_); // Not needed
     return BT::NodeStatus::SUCCESS;
@@ -78,7 +78,7 @@ bool VelObsExitCondition::hasHumanStopped() {
     BT_INFO(name_, (int)agents_info_.humans[0].state);
 
     // If the human has either stopped moving or already blocked, exit the mode and start backoff recovery
-    if (agents_info_.humans[0].state == agents::AgentState::STOPPED || agents_info_.humans[0].state == agents::AgentState::BLOCKED) {
+    if (agents_info_.humans[0].state == hateb_local_planner::AgentState::STOPPED || agents_info_.humans[0].state == hateb_local_planner::AgentState::BLOCKED) {
       return true;
     }
   }

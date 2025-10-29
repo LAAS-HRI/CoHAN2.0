@@ -64,10 +64,11 @@ void HATebConfig::bindParameters() {
   auto param_name = [this](const std::string& name) -> std::string { return plugin_name_.empty() ? name : plugin_name_ + "." + name; };
 
   // General parameters
-  param_helper_.bindStringParam(param_name("ns"), ns_, "Namespace of the planner");
+  param_helper_.bindStringParam(param_name("ns"), ns, "Namespace of the planner");
   param_helper_.bindStringParam(param_name("odom_topic"), odom_topic, "Odometry topic");
   param_helper_.bindStringParam(param_name("map_frame"), map_frame, "Map frame ID");
   param_helper_.bindIntParam(param_name("planning_mode"), planning_mode, 0, 10, "Planning mode");
+  param_helper_.bindStringParam(param_name("bt_xml_path"), bt_xml_path, "Behavior tree XML file path");
 
   // Trajectory parameters
   param_helper_.bindBoolParam(param_name("teb_autosize"), trajectory.teb_autosize, "Enable TEB autosize");
@@ -84,7 +85,7 @@ void HATebConfig::bindParameters() {
   param_helper_.bindFloatParam(param_name("global_plan_prune_distance"), trajectory.global_plan_prune_distance, 0.0, 10.0, "Global plan prune distance");
   param_helper_.bindBoolParam(param_name("exact_arc_length"), trajectory.exact_arc_length, "Use exact arc length");
   param_helper_.bindFloatParam(param_name("force_reinit_new_goal_dist"), trajectory.force_reinit_new_goal_dist, 0.0, 10.0, "Force reinit distance threshold");
-  param_helper_.bindFloatParam(param_name("force_reinit_new_goal_angular"), trajectory.force_reinit_new_goal_angular, 0.0, 6.3, "Force reinit angular threshold");
+  param_helper_.bindFloatParam(param_name("force_reinit_new_goal_angular"), trajectory.force_reinit_new_goal_angular, 0.0, 4.0, "Force reinit angular threshold");
   param_helper_.bindIntParam(param_name("feasibility_check_no_poses"), trajectory.feasibility_check_no_poses, 0, 100, "Number of poses for feasibility check");
   param_helper_.bindBoolParam(param_name("publish_feedback"), trajectory.publish_feedback, "Publish planner feedback");
   param_helper_.bindFloatParam(param_name("min_resolution_collision_check_angular"), trajectory.min_resolution_collision_check_angular, 0.0, 6.3, "Min angular resolution for collision check");

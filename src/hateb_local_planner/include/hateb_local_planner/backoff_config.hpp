@@ -78,7 +78,7 @@ class BackoffConfig {
   std::string footprint_frame;  //!< Name of the robot's footprint frame
 
   // ROS topic and service names
-  std::string ns;                  //!< Namespace for the node
+  // std::string ns;                  //!< Namespace for the node
   std::string publish_goal_topic;  //!< Topic name for publishing backoff goals
   std::string current_goal_topic;  //!< Topic name for current goal
   std::string get_plan_srv_name;   //!< Service name for path planning
@@ -93,7 +93,7 @@ class BackoffConfig {
    */
   void bindParameters() {
     // Set default values for parameters BEFORE binding
-    ns = "";
+    // ns = "";
     map_frame = MAP_FRAME;
     footprint_frame = FOOTPRINT_FRAME;
     publish_goal_topic = PUBLISH_GOAL_TOPIC;
@@ -103,7 +103,7 @@ class BackoffConfig {
     visualize_backoff = false;
 
     // Bind parameters
-    param_helper_.bindStringParam("ns", ns, "Namespace for multiple robots");
+    // param_helper_.bindStringParam("ns", ns, "Namespace for multiple robots"); // Not required as it is set by HATebConfig
     param_helper_.bindStringParam("map_frame", map_frame, "Frame ID for the map");
     param_helper_.bindStringParam("footprint_frame", footprint_frame, "Frame ID for the robot footprint");
     param_helper_.bindStringParam("publish_goal_topic", publish_goal_topic, "Topic name for publishing backoff goals");

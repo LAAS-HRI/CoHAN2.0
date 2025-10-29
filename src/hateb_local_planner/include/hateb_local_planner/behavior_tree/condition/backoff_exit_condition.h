@@ -32,8 +32,8 @@
 #include <hateb_local_planner/backoff.h>
 #include <hateb_local_planner/behavior_tree/bt_core.h>
 
-#include <agent_path_prediction/agents_class.hpp>
 #include <agent_path_prediction/msg/agents_info.hpp>
+#include <hateb_local_planner/agents_class.hpp>
 
 namespace hateb_local_planner {
 
@@ -76,7 +76,7 @@ class BackoffExitCondition : public BT::ConditionNode {
    */
   static BT::PortsList providedPorts() {
     return {BT::InputPort<agent_path_prediction::msg::AgentsInfo>("agents_info"), BT::InputPort<std::shared_ptr<Backoff>>("backoff_ptr"),
-            BT::BidirectionalPort<geometry_msgs::msg::PoseStamped>("nav_goal"), BT::InputPort<std::shared_ptr<agents::Agents>>("agents_ptr"), BT::OutputPort<bool>("recovery")};
+            BT::BidirectionalPort<geometry_msgs::msg::PoseStamped>("nav_goal"), BT::InputPort<std::shared_ptr<hateb_local_planner::Agents>>("agents_ptr"), BT::OutputPort<bool>("recovery")};
   }
 
  private:
@@ -87,12 +87,12 @@ class BackoffExitCondition : public BT::ConditionNode {
   bool isRecoveryComplete();
 
   // Blackboard entries
-  agent_path_prediction::msg::AgentsInfo agents_info_;    //!< Information about agents in the environment
-  geometry_msgs::msg::PoseStamped current_goal_;          //!< Current navigation goal
-  std::shared_ptr<Backoff> backoff_ptr_ = nullptr;        //!< Pointer to backoff behavior handler
-  std::shared_ptr<agents::Agents> agents_ptr_ = nullptr;  //!< Pointer to agents manager
-  int stuck_agent_;                                       //!< ID of the agent that is stuck
-  double dist_max_;                                       //!< Maximum distance threshold
+  agent_path_prediction::msg::AgentsInfo agents_info_;                 //!< Information about agents in the environment
+  geometry_msgs::msg::PoseStamped current_goal_;                       //!< Current navigation goal
+  std::shared_ptr<Backoff> backoff_ptr_ = nullptr;                     //!< Pointer to backoff behavior handler
+  std::shared_ptr<hateb_local_planner::Agents> agents_ptr_ = nullptr;  //!< Pointer to agents manager
+  int stuck_agent_;                                                    //!< ID of the agent that is stuck
+  double dist_max_;                                                    //!< Maximum distance threshold
 
   std::string name_;  //!< Name of the node
 

@@ -31,8 +31,8 @@
 // New
 #include <hateb_local_planner/behavior_tree/bt_core.h>
 
-#include <agent_path_prediction/agents_class.hpp>
 #include <agent_path_prediction/msg/agents_info.hpp>
+#include <hateb_local_planner/agents_class.hpp>
 
 namespace hateb_local_planner {
 

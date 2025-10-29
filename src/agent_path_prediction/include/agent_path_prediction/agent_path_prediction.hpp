@@ -88,7 +88,7 @@ class AgentPathPrediction : public rclcpp::Node {
  public:
   /**
    * @brief  Constructor for AgentPathPrediction class */
-  AgentPathPrediction() : Node(NODE_NAME), cfg_(std::make_shared<AgentPathPredictConfig>()) {}
+  AgentPathPrediction() : Node(NODE_NAME) {}
 
   /**
    * @brief Default destructor for AgentPathPrediction class */

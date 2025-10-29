@@ -31,8 +31,8 @@
 // New
 #include <hateb_local_planner/behavior_tree/bt_core.h>
 
-#include <agent_path_prediction/agents_class.hpp>
 #include <agent_path_prediction/msg/agents_info.hpp>
+#include <hateb_local_planner/agents_class.hpp>
 #include <mutex>
 
 namespace hateb_local_planner {
@@ -72,7 +72,7 @@ class VelObsExitCondition : public BT::ConditionNode {
    */
   static BT::PortsList providedPorts() {
     // This action has a single input port called "agents_info"
-    return {BT::InputPort<agent_path_prediction::msg::AgentsInfo>("agents_info"), BT::InputPort<std::shared_ptr<agents::Agents>>("agents_ptr"), BT::OutputPort<int>("stuck_agent")};
+    return {BT::InputPort<agent_path_prediction::msg::AgentsInfo>("agents_info"), BT::InputPort<std::shared_ptr<hateb_local_planner::Agents>>("agents_ptr"), BT::OutputPort<int>("stuck_agent")};
   }
 
  private:
@@ -85,8 +85,8 @@ class VelObsExitCondition : public BT::ConditionNode {
   // bool isHumanPlaying(); // Add this later
 
   // Blackboard entries
-  agent_path_prediction::msg::AgentsInfo agents_info_;  //!< Current information about all agents in the environment
-  std::shared_ptr<agents::Agents> agents_ptr_;          //!< Pointer to the agents management class
+  agent_path_prediction::msg::AgentsInfo agents_info_;       //!< Current information about all agents in the environment
+  std::shared_ptr<hateb_local_planner::Agents> agents_ptr_;  //!< Pointer to the agents management class
 
   std::string name_;         //!< Name of this behavior tree node
   int nearest_human_id_;     //!< ID of the nearest human agent

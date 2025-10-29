@@ -39,15 +39,14 @@ ModeSwitch::ModeSwitch() {
   initialized_ = false;
 }
 
-void ModeSwitch::initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node, std::string& xml_path, std::shared_ptr<agents::Agents>& agents_ptr, std::shared_ptr<Backoff>& backoff_ptr) {
+void ModeSwitch::initialize(rclcpp::Node::SharedPtr node, std::string& xml_path, std::shared_ptr<hateb_local_planner::Agents>& agents_ptr, std::shared_ptr<Backoff>& backoff_ptr) {
   if (!initialized_) {
     // Initialize the ROS components
     // TODO(sphanit): Check if you need to make them configurable
     node_ = node;
 
     // Get the namespace from the parameter (different from the cfg server)
-    node_->declare_parameter("ns", "");
-    node_->get_parameter("ns", ns_);
+    node->get_parameter_or("ns", ns_, std::string(""));
 
     // Map the subscriptions properly
     agents_info_sub_topic_ = std::string(AGENTS_INFO_SUB);
@@ -62,7 +61,7 @@ void ModeSwitch::initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node, std
     }
 
     agents_info_sub_ = node_->create_subscription<agent_path_prediction::msg::AgentsInfo>(agents_info_sub_topic_, 1, std::bind(&ModeSwitch::agentsInfoCB, this, std::placeholders::_1));
-    goal_sub_ = node_->create_subscription<nav2_msgs::action::NavigateToPose::Goal>(goal_sub_topic_, 1, std::bind(&ModeSwitch::goalNavigateToPoseCB, this, std::placeholders::_1));
+    goal_sub_ = node_->create_subscription<geometry_msgs::msg::PoseStamped>(goal_sub_topic_, 1, std::bind(&ModeSwitch::goalNavigateToPoseCB, this, std::placeholders::_1));
     result_sub_ = node_->create_subscription<action_msgs::msg::GoalStatusArray>(result_sub_topic_, 1, std::bind(&ModeSwitch::resultNavigateToPoseCB, this, std::placeholders::_1));
     passage_detect_sub_ = node_->create_subscription<cohan_msgs::msg::PassageType>(passage_sub_topic_, 1, std::bind(&ModeSwitch::passageCB, this, std::placeholders::_1));
     planning_mode_pub_ = node_->create_publisher<hateb_local_planner::msg::PlanningMode>("planning_mode", 10);
@@ -95,8 +94,9 @@ void ModeSwitch::initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node, std
     bhv_tree_.rootBlackboard()->set("reset", false);
     bhv_tree_.rootBlackboard()->set("recovery", false);
 
-    BT_INFO(name_, "Behavior Tree initialized.")
+    auto status = bhv_tree_.tickOnce();  // This is needed to update all blackboard entries
     initialized_ = true;
+    BT_INFO(name_, "Behavior Tree initialized.")
   } else {
     BT_WARN(name_, "The tree is already initialized!")
   }
@@ -114,14 +114,14 @@ void ModeSwitch::agentsInfoCB(const agent_path_prediction::msg::AgentsInfo::Shar
   bhv_tree_.rootBlackboard()->set("agents_info", agents_info_);
 }
 
-void ModeSwitch::goalNavigateToPoseCB(const nav2_msgs::action::NavigateToPose::Goal::SharedPtr goal_msg) {
+void ModeSwitch::goalNavigateToPoseCB(const geometry_msgs::msg::PoseStamped::SharedPtr goal_msg) {
   // Set the goal status
   BT_INFO(name_, "Goal is set!")
   if (!goal_reached_) {
     bhv_tree_.rootBlackboard()->set("goal_update", true);
     goal_update_ = true;
   }
-  goal_ = goal_msg->pose;
+  goal_ = *goal_msg;
   bhv_tree_.rootBlackboard()->set("nav_goal", goal_);
   goal_reached_ = false;
 }

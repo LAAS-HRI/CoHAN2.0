@@ -1,31 +1,36 @@
 <?xml version="1.0"?>
-<package>
+<package format="3">
   <name>cohan_sim_navigation</name>
   <version>0.0.1</version>
   <description>configuration and launch files for cohan_sim_navigation</description>
 
   <maintainer email="ptsingaman@laas.fr">Phani Teja Singamaneni</maintainer>
-
   <author email="ptsingaman@laas.fr">Phani Teja Singamaneni</author>
-
   <license>MIT</license>
 
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <!-- ROS1 dependencies -->
-  <build_depend>rospy</build_depend>
-  <build_depend>nav_msgs</build_depend>
-  <build_depend>geometry_msgs</build_depend>
-  <build_depend>sensor_msgs</build_depend>
-  <build_depend>tf2_ros</build_depend>
+  <!-- ROS 2 dependencies -->
+  <depend>rclcpp</depend>
+  <depend>rclpy</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>nav2_map_server</depend>
+  <depend>rviz2</depend>
+  <depend>launch</depend>
+  <depend>launch_ros</depend>
 
-  <run_depend>rospy</run_depend>
-  <run_depend>nav_msgs</run_depend>
-  <run_depend>geometry_msgs</run_depend>
-  <run_depend>sensor_msgs</run_depend>
-  <run_depend>tf2_ros</run_depend>
+  <exec_depend>cohan_sim</exec_depend>
+  <exec_depend>agent_path_prediction</exec_depend>
+  <exec_depend>hateb_local_planner</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
 
-  <!-- Python dependencies -->
-  <run_depend>python-yaml</run_depend>
-
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
 </package>

@@ -49,6 +49,8 @@
 #include <rclcpp/rclcpp.hpp>
 #include <ros2_helpers/parameters.hpp>
 
+#define M_PI 3.14
+
 // Definitions
 #define USE_ANALYTIC_JACOBI  // if available for a specific edge, use analytic jacobi
 
@@ -60,9 +62,10 @@ namespace hateb_local_planner {
  */
 class HATebConfig {
  public:
-  std::string ns_;         //!< Namespace of the planner, used for topic, service and parameter names
-  std::string odom_topic;  //!< Topic name of the odometry message, provided by the robot driver or simulator
-  std::string map_frame;   //!< Global planning frame
+  std::string ns;           //!< Namespace of the planner, used for topic, service and parameter names
+  std::string odom_topic;   //!< Topic name of the odometry message, provided by the robot driver or simulator
+  std::string map_frame;    //!< Global planning frame
+  std::string bt_xml_path;  //!< Name of this planner plugin
 
   FootprintModelPtr robot_model;     //!< model of the robot's footprint
   CircularFootprintPtr human_model;  //!< model of the agent's footprint
@@ -270,6 +273,7 @@ class HATebConfig {
   HATebConfig() {
     odom_topic = "odom";
     map_frame = "odom";
+    bt_xml_path = "/home/phani/ros_ws/CoHAN2.0/src/hateb_local_planner/behavior_trees/all_modes.xml";
 
     planning_mode = 1;  // Agent-Aware planning by default
 

@@ -1,18 +1,29 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.5)
 project(cohan_sim_navigation)
 
-find_package(catkin REQUIRED COMPONENTS
+# Default to C++14/20 if needed (optional for Python-only packages)
+# set(CMAKE_CXX_STANDARD 14)
+
+# find dependencies
+find_package(ament_cmake REQUIRED)
+find_package(rclpy REQUIRED)
+
+# Install Python modules
+ament_python_install_package(${PROJECT_NAME})
+
+# Install launch files
+install(
+  DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}/
 )
 
-catkin_package(
+# Install scripts (Python executables)
+install(
+  PROGRAMS
+    scripts/publish_joints.py
+    scripts/agents_bridge.py
+  DESTINATION lib/${PROJECT_NAME}
 )
 
-include_directories(
-  ${catkin_INCLUDE_DIRS}
-)
-
-# install
-foreach(dir maps launch config robots rviz scripts)
-   install(DIRECTORY ${dir}/
-      DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/${dir})
-endforeach(dir)
+# Export dependencies
+ament_package()
