@@ -94,7 +94,6 @@ void HATebLocalPlannerROS::configure(const rclcpp_lifecycle::LifecycleNode::Weak
 
   // Initialize intra process nodes
   intra_node_costmap_converter_ = std::make_shared<rclcpp::Node>("costmap_converter", node->get_namespace(), rclcpp::NodeOptions().use_intra_process_comms(true));
-  intra_node_agents_ = std::make_shared<rclcpp::Node>("agents", node->get_namespace(), rclcpp::NodeOptions().use_intra_process_comms(true));
   intra_node_btree_ = std::make_shared<rclcpp::Node>("behavior_tree_cohan", node->get_namespace(), rclcpp::NodeOptions().use_intra_process_comms(true));
 
   // Reserve some memory for obstacles
@@ -209,7 +208,7 @@ void HATebLocalPlannerROS::configure(const rclcpp_lifecycle::LifecycleNode::Weak
   log_pub_ = node->create_publisher<std_msgs::msg::String>(HATEB_LOG, 1);
 
   // Initialize the pointer to agents, backoff and mode switch
-  agents_ptr_ = std::make_shared<hateb_local_planner::Agents>(intra_node_agents_, tf_, costmap_ros);
+  agents_ptr_ = std::make_shared<hateb_local_planner::Agents>(node, tf_, costmap_ros);
   backoff_ptr_ = std::make_shared<Backoff>(node, costmap_ros);
   backoff_ptr_->initializeOffsets(robot_circumscribed_radius_);
 
@@ -217,7 +216,7 @@ void HATebLocalPlannerROS::configure(const rclcpp_lifecycle::LifecycleNode::Weak
   if (cfg_->bt_xml_path.empty()) {
     RCLCPP_ERROR(logger_, "Please provide the xml path by setting the bt_xml_path param");
   }
-  bt_mode_switch_.initialize(intra_node_btree_, cfg_->bt_xml_path, agents_ptr_, backoff_ptr_);
+  bt_mode_switch_.initialize(node, cfg_->bt_xml_path, agents_ptr_, backoff_ptr_);
 
   // Initialize timers and properties
   last_call_time_ = clock_->now() - rclcpp::Duration::from_seconds(cfg_->hateb.pose_prediction_reset_time);
@@ -251,8 +250,7 @@ void HATebLocalPlannerROS::cleanup() {
   // Reset all shared pointers and release resources
   planner_.reset();
   visualization_.reset();
-  costmap_converter_.reset();
-  costmap_converter_loader_.reset();
+  costmap_converter_->stopWorker();
   collision_checker_.reset();
   agents_ptr_.reset();
   backoff_ptr_.reset();
@@ -592,18 +590,23 @@ bool HATebLocalPlannerROS::tickTreeAndUpdatePlans(const geometry_msgs::msg::Pose
                                                   AgentPlanVelMap& transformed_agent_plan_vel_map) {
   // Ticks the tree once and returns the current planning mode
   auto mode_info = bt_mode_switch_.tickAndGetMode();
+  // hateb_local_planner::msg::PlanningMode mode_info;
 
   // TODO(sphanit): Update this globally across the package
   isMode_ = static_cast<int>(mode_info.plan_mode) - 1;
 
+  RCLCPP_INFO(logger_, "Current Planning Mode: %d", static_cast<int>(mode_info.plan_mode));
+
   if (mode_info.plan_mode == PLAN::BACKOFF) {
     // Stopping the planner from the setting the goal to complete to do the Backoff Recovery
     goal_ctrl_ = false;
+    RCLCPP_INFO(logger_, "Current Planning Mode is BACKOFF: %d", static_cast<int>(PLAN::BACKOFF));
     return true;
   }
 
   goal_ctrl_ = true;
 
+  RCLCPP_INFO(logger_, "Number of moving humans: %d", static_cast<int>(mode_info.moving_humans.size()));
   // Return if there are no moving visible humans
   if (mode_info.moving_humans.empty()) {
     // Check and add static humans
@@ -655,6 +658,7 @@ bool HATebLocalPlannerROS::tickTreeAndUpdatePlans(const geometry_msgs::msg::Pose
       break;
     }
   }
+  RCLCPP_INFO(logger_, "Requesting prediction for %d agents", num_agents);
 
   // Set the prediction method based on the mode
   switch (mode_info.predict_mode) {
@@ -688,9 +692,8 @@ bool HATebLocalPlannerROS::tickTreeAndUpdatePlans(const geometry_msgs::msg::Pose
 
   // Call the predict agents service and update the agents plans
   if (predict_agents_client_) {
-    auto node = node_.lock();
     auto future = predict_agents_client_->async_send_request(predict_srv);
-    if (rclcpp::spin_until_future_complete(node, future, std::chrono::milliseconds(100)) == rclcpp::FutureReturnCode::SUCCESS) {
+    if (future.wait_for(std::chrono::milliseconds(100)) != std::future_status::ready) {
       auto response = future.get();
       tf2::Stamped<tf2::Transform> tf_agent_plan_to_global;
 
@@ -1596,7 +1599,7 @@ void HATebLocalPlannerROS::resetAgentsPrediction() {
   }
 
   auto future = reset_agents_prediction_client_->async_send_request(request);
-  if (future.wait_for(std::chrono::seconds(5)) != std::future_status::ready) {
+  if (future.wait_for(std::chrono::milliseconds(10)) != std::future_status::ready) {
     RCLCPP_WARN_THROTTLE(logger_, *clock_, THROTTLE_RATE * 1000, "Failed to call %s service, is agent prediction server running?", reset_prediction_srv_name_.c_str());
   }
 }
@@ -1698,7 +1701,7 @@ bool HATebLocalPlannerROS::optimizeStandalone(const std::shared_ptr<cohan_msgs::
 
     if (predict_agents_client_) {
       auto future = predict_agents_client_->async_send_request(predict_srv);
-      if (rclcpp::spin_until_future_complete(node, future, std::chrono::milliseconds(100)) == rclcpp::FutureReturnCode::SUCCESS) {
+      if (future.wait_for(std::chrono::seconds(5)) != std::future_status::ready) {
         auto response = future.get();
 
         for (auto predicted_agents_poses : response->predicted_agents_poses) {

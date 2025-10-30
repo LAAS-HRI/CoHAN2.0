@@ -73,7 +73,7 @@ target_link_libraries(agent_path_prediction_core yaml-cpp "${cpp_typesupport_tar
 # ==============================
 add_executable(agent_path_predict
   src/agent_path_prediction.cpp
-  # src/predict_goal_ros.cpp
+  src/predict_goal_ros.cpp
 )
 target_link_libraries(agent_path_predict agent_path_prediction_core)
 

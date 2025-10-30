@@ -10,6 +10,8 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
 # Set to Release in order to speed up the program significantly
 set(CMAKE_BUILD_TYPE Release) # None, Debug, Release, RelWithDebInfo, MinSizeRel
 
@@ -126,11 +128,7 @@ add_library(hateb_local_planner_core SHARED
   src/agents_class.cpp
 )
 
-# set_target_properties(hateb_local_planner_core PROPERTIES
-#   BUILD_WITH_INSTALL_RPATH TRUE
-#   INSTALL_RPATH "$ORIGIN/../../agent_path_prediction/lib"
-#   INSTALL_RPATH_USE_LINK_PATH TRUE
-# )
+
 
 ament_target_dependencies(hateb_local_planner_core
   ${dependencies}

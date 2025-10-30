@@ -19,7 +19,7 @@
 					</ReactiveFallback>
 					<ReactiveFallback>
 						<dualBandExitCond name="dual band mode" agents_info="{agents_info}" dist_threshold="2.5" nav_goal="{nav_goal}"/>
-						<setMode name="dual_band" plan_type="dual" predict_type="behind" mode="{planning_mode}"/>
+						<setMode name="dual_band" plan_type="dual" predict_type="const_vel" mode="{planning_mode}"/>
 					</ReactiveFallback>
 					<ReactiveFallback>
 						<velobsExitCond name="velobs mode" agents_info="{agents_info}" agents_ptr="{agents_ptr}" stuck_agent="{stuck_agent}"/>

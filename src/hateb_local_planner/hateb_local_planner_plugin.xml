@@ -3,5 +3,6 @@
 		<description>
 			The hateb_local_planner package implements a plugin to the nav2_core Controller interface. It implements a human-robot multi-context and multi-agent cooperative navigation planner that predicts trajectories for human/agents and plans accordingly a trajectory for robot that satisfies certain kinodynamic and social constraints.
 		</description>
+		<!-- <library path="libg2o_core.so"/> -->
 	</class>
 </library>

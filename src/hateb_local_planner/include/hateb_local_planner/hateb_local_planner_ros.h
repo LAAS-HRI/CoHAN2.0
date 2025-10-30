@@ -567,7 +567,6 @@ class HATebLocalPlannerROS : public nav2_core::Controller {
   rclcpp::Logger logger_{rclcpp::get_logger("HATebLocalPlanner")};  //!< Logger for this plugin
   rclcpp::Clock::SharedPtr clock_;                                  //!< ROS 2 clock
   rclcpp::Node::SharedPtr intra_node_costmap_converter_;            //!< Shared pointer to node for costmap converter
-  rclcpp::Node::SharedPtr intra_node_agents_;                       //!< Shared pointer to node for agents
   rclcpp::Node::SharedPtr intra_node_btree_;                        //!< Shared pointer to node for behavior tree
 
  public:

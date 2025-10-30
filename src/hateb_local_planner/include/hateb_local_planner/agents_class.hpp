@@ -59,6 +59,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 // Constants
@@ -88,12 +89,17 @@ class Agents {
    * @param tf Pointer to tf buffer
    * @param costmap_ros Pointer to costmap
    */
-  Agents(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<tf2_ros::Buffer> tf, std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros);
+  Agents(rclcpp_lifecycle::LifecycleNode::SharedPtr node, std::shared_ptr<tf2_ros::Buffer> tf, std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros);
 
   /**
    * @brief Destructor of the class
    */
-  ~Agents() = default;
+  ~Agents() {
+    // rclcpp::shutdown();  // Stop spinning
+    // if (spin_thread_.joinable()) {
+    //   spin_thread_.join();
+    // }
+  }
 
   /**
    * @brief Set the state of an agent
@@ -143,6 +149,8 @@ class Agents {
    */
   std::map<int, double> getNominalVels() { return agent_nominal_vels_; }
 
+  void start_spinning() {}
+
   std::shared_ptr<AgentsConfig> cfg_;  //!< Configuration parameters for agent path prediction
 
  private:
@@ -180,7 +188,7 @@ class Agents {
   int stuck_agent_id_;                    //!< ID of agent blocking robot's path
 
   // ROS2
-  std::shared_ptr<rclcpp::Node> node_;                                                    //!< ROS2 node handle
+  rclcpp_lifecycle::LifecycleNode::SharedPtr node_;                                       //!< ROS2 node handle
   parameters::ParameterHelper param_helper_;                                              //!< Helper for managing parameters
   rclcpp::Publisher<agent_path_prediction::msg::AgentsInfo>::SharedPtr agents_info_pub_;  //!< Publisher for agent information
   rclcpp::Subscription<cohan_msgs::msg::TrackedAgents>::SharedPtr tracked_agents_sub_;    //!< Subscriber for tracked agents
@@ -188,6 +196,11 @@ class Agents {
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;                            //!< Pointer to the costmap ros wrapper
   nav2_costmap_2d::Costmap2D* costmap_;                                                   //!< Pointer to the 2d costmap
   double inflation_radius_;                                                               //!< Inflation radius for costmap
+  std::string ns_;                                                                        //!< Namespace for multiple agents
+  std::string map_frame_;                                                                 //!< Frame ID for map
+  int planning_mode_;                                                                     //!< Planning mode for agents
+
+  // std::thread spin_thread_;
 };
 }  // namespace hateb_local_planner
 #endif

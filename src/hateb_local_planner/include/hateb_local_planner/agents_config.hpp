@@ -48,7 +48,7 @@ class AgentsConfig {
   /**
    * @brief Initializes the parameter helper for this config
    */
-  void initialize(rclcpp::Node::SharedPtr node) {
+  void initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node) {
     param_helper_.initialize(node);
     RCLCPP_INFO(node->get_logger(), "Initializing AgentsConfig parameters...");
   }
@@ -70,15 +70,12 @@ class AgentsConfig {
     param_helper_.loadBoundParameters();
   }
 
-  std::string ns;               //!< Topic for tracked agents subscription
   double inflation_radius;      //!< Inflation radius for local costmap
-  int planning_mode;            //!< Planning mode (0: default, 1: social forces, etc.)
   bool use_simulated_fov;       //!< Flag to use simulated field of view
   int window_moving_avg;        //!< Window size for moving average filter
   double human_radius;          //!< Radius of human agents
   double robot_radius;          //!< Radius of the robot
   std::string base_link_frame;  //!< Frame ID for robot base link
-  std::string map_frame;        //!< Frame ID for map
   std::string odom_frame;       //!< Frame ID for odometry
   double planning_radius;       //!< Radius used for planning
 
@@ -88,29 +85,22 @@ class AgentsConfig {
    */
   void bindParameters() {
     // Set default values for parameters BEFORE binding
-    ns = "";
     use_simulated_fov = false;
     base_link_frame = BASE_LINK_FRAME;
-    map_frame = MAP_FRAME;
     odom_frame = ODOM_FRAME;
     planning_radius = PLANNING_RADIUS;
     inflation_radius = 0.1;
-    planning_mode = 1;
     window_moving_avg = WINDOW_MOVING_AVG;
     human_radius = HUM_RADIUS;
     robot_radius = ROBOT_RADIUS;
 
     // ROS topic names and service names
-    param_helper_.bindStringParam("ns", ns, "Namespace for multiple agents");
-
     param_helper_.bindBoolParam("use_simulated_fov", use_simulated_fov, "Flag for using simulated field of view");
     param_helper_.bindStringParam("base_link_frame", base_link_frame, "Frame ID for robot base link");
-    param_helper_.bindStringParam("map_frame", map_frame, "Frame ID for map");
     param_helper_.bindStringParam("odom_frame", odom_frame, "Frame ID for odometry");
 
     param_helper_.bindFloatParam("planning_radius", planning_radius, 0.1, 10.0, "Radius used for planning");
     param_helper_.bindFloatParam("local_costmap/inflater/inflation_radius", inflation_radius, 0.0, 10.0, "Inflation radius for local costmap");
-    param_helper_.bindIntParam("planning_mode", planning_mode, 0, 10, "Mode of planning (different strategies)");
     param_helper_.bindIntParam("window_moving_avg", window_moving_avg, 1, 20, "Window size for moving average filter");
     param_helper_.bindFloatParam("HATebLocalPlannerROS/agent_radius", human_radius, 0.1, 2.0, "Radius of human agents");
     param_helper_.bindFloatParam("HATebLocalPlannerROS/robot_radius", robot_radius, 0.1, 2.0, "Radius of the robot");

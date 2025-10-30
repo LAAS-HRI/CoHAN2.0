@@ -39,7 +39,7 @@ ModeSwitch::ModeSwitch() {
   initialized_ = false;
 }
 
-void ModeSwitch::initialize(rclcpp::Node::SharedPtr node, std::string& xml_path, std::shared_ptr<hateb_local_planner::Agents>& agents_ptr, std::shared_ptr<Backoff>& backoff_ptr) {
+void ModeSwitch::initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node, std::string& xml_path, std::shared_ptr<hateb_local_planner::Agents>& agents_ptr, std::shared_ptr<Backoff>& backoff_ptr) {
   if (!initialized_) {
     // Initialize the ROS components
     // TODO(sphanit): Check if you need to make them configurable
@@ -112,6 +112,7 @@ void ModeSwitch::agentsInfoCB(const agent_path_prediction::msg::AgentsInfo::Shar
 
   // Set the agents_info on the blackboard
   bhv_tree_.rootBlackboard()->set("agents_info", agents_info_);
+  auto logger = node_->get_logger();
 }
 
 void ModeSwitch::goalNavigateToPoseCB(const geometry_msgs::msg::PoseStamped::SharedPtr goal_msg) {
@@ -141,12 +142,19 @@ void ModeSwitch::resultNavigateToPoseCB(const action_msgs::msg::GoalStatusArray:
 
 BT::NodeStatus ModeSwitch::tickBT() {
   // Tick the tree from the start
+  auto logger = node_->get_logger();
+  RCLCPP_INFO(logger, "ModeSwitch BT ticked with status top ");
+
   auto status = bhv_tree_.tickOnce();
+
+  RCLCPP_INFO(logger, "ModeSwitch BT ticked with status top : %d", static_cast<int>(status));
+
   updateMode();
   if (goal_update_) {
     bhv_tree_.rootBlackboard()->set("goal_update", false);
     goal_update_ = false;
   }
+  RCLCPP_INFO(logger, "ModeSwitch BT ticked with status bottom: %d", static_cast<int>(status));
   return status;
 }
 
@@ -180,6 +188,8 @@ void ModeSwitch::updateMode(int duration) {
 
 hateb_local_planner::msg::PlanningMode ModeSwitch::tickAndGetMode() {
   // Tick the tree once and return the updated planning mode
+  auto logger = node_->get_logger();
+  RCLCPP_INFO(logger, "ModeSwitch BT in tickAndGetMode");
   tickBT();
   return plan_mode_;
 }

@@ -88,7 +88,7 @@ class ModeSwitch {
    * @param agents_ptr Pointer to the agents management class
    * @param backoff_ptr Pointer to the backoff behavior handler
    */
-  void initialize(rclcpp::Node::SharedPtr node, std::string& xml_path, std::shared_ptr<hateb_local_planner::Agents>& agents_ptr, std::shared_ptr<Backoff>& backoff_ptr);
+  void initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node, std::string& xml_path, std::shared_ptr<hateb_local_planner::Agents>& agents_ptr, std::shared_ptr<Backoff>& backoff_ptr);
 
   /**
    * @brief Executes one tick of the behavior tree
@@ -166,7 +166,7 @@ class ModeSwitch {
   bool goal_update_;   //!< Flag indicating if goal was updated
 
   // ROS communication members
-  rclcpp::Node::SharedPtr node_;                                                             //!< ROS 2 node shared pointer
+  rclcpp_lifecycle::LifecycleNode::SharedPtr node_;                                          //!< ROS 2 node shared pointer
   rclcpp::Subscription<agent_path_prediction::msg::AgentsInfo>::SharedPtr agents_info_sub_;  //!< Subscriber for agent information
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_sub_;                //!< Subscriber for navigation goals
   rclcpp::Subscription<action_msgs::msg::GoalStatusArray>::SharedPtr result_sub_;            //!< Subscriber for navigation results
