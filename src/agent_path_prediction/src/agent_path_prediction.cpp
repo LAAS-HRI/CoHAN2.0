@@ -172,6 +172,8 @@ void AgentPathPrediction::predictAgents(const std::shared_ptr<agent_path_predict
 
 void AgentPathPrediction::predictAgentsVelObs(const std::shared_ptr<agent_path_prediction::srv::AgentPosePredict::Request> req,
                                               std::shared_ptr<agent_path_prediction::srv::AgentPosePredict::Response> res) const {
+  RCLCPP_INFO(this->get_logger(), "Predicting poses for agent using Velocity Obstacle method");
+
   // validate prediction time
   if (req->predict_times.empty()) {
     RCLCPP_ERROR(this->get_logger(), "prediction times cannot be empty");
@@ -193,6 +195,7 @@ void AgentPathPrediction::predictAgentsVelObs(const std::shared_ptr<agent_path_p
   }
 
   for (const auto& agent : agents) {
+    RCLCPP_INFO(this->get_logger(), "Predicting poses for agent %lu", agent.track_id);
     if (std::find(req->ids.begin(), req->ids.end(), agent.track_id) == req->ids.end()) {
       continue;
     }
@@ -251,7 +254,7 @@ void AgentPathPrediction::predictAgentsVelObs(const std::shared_ptr<agent_path_p
         current_twist.header.stamp = track_time;
         current_twist.twist = segment.twist.twist;
         predicted_poses.start_velocity = current_twist;
-
+        RCLCPP_INFO(this->get_logger(), "%s: predicted %lu poses for agent %lu", NODE_NAME, predicted_poses.poses.size(), agent.track_id);
         res->predicted_agents_poses.push_back(predicted_poses);
       }
     }

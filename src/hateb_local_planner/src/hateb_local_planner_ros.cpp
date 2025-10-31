@@ -51,8 +51,8 @@
 #include <string>
 #include <utility>
 
-#define PREDICT_SERVICE_NAME "/agent_path_predict/predict_agent_poses"
-#define RESET_PREDICTION_SERVICE_NAME "/agent_path_predict/reset_prediction_services"
+#define PREDICT_SERVICE_NAME "/agent_path_prediction/predict_agent_poses"
+#define RESET_PREDICTION_SERVICE_NAME "/agent_path_prediction/reset_prediction_services"
 #define OPTIMIZE_SRV_NAME "optimize"
 #define APPROACH_SRV_NAME "set_approach_id"
 #define PLANNING_SRV_NAME "set_planning_mode"
@@ -693,7 +693,9 @@ bool HATebLocalPlannerROS::tickTreeAndUpdatePlans(const geometry_msgs::msg::Pose
   // Call the predict agents service and update the agents plans
   if (predict_agents_client_) {
     auto future = predict_agents_client_->async_send_request(predict_srv);
-    if (future.wait_for(std::chrono::milliseconds(100)) != std::future_status::ready) {
+    RCLCPP_INFO(logger_, "Waiting for agent prediction service response...");
+    if (future.wait_for(std::chrono::milliseconds(100)) == std::future_status::ready) {
+      RCLCPP_WARN(logger_, "Agent prediction service call timed out");
       auto response = future.get();
       tf2::Stamped<tf2::Transform> tf_agent_plan_to_global;
 

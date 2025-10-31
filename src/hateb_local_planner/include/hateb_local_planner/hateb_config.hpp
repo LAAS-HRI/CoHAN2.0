@@ -326,6 +326,7 @@ class HATebConfig {
     agent.acc_lim_x = 0.6;
     agent.acc_lim_theta = 0.8;
     agent.num_moving_avg = 5;
+    agent.fov = 3.14;  // 180 degrees
 
     // GoalTolerance
 

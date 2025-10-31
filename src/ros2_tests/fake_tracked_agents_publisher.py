@@ -116,8 +116,8 @@ class FakeTrackedAgentsPublisher(Node):
         agent4.state = TrackedAgent.STATIC
         
         # Add agents to message
-        msg.agents = [agent1, agent2, agent3, agent4]
-        # msg.agents = [agent4]
+        # msg.agents = [agent1, agent2, agent3, agent4]
+        msg.agents = [agent1, agent4]
         
         # Publish
         self.publisher.publish(msg)
