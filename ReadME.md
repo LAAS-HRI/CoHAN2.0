@@ -1,3 +1,6 @@
+WIP: ROS2 Version
+
+
 CoHAN 2.0 is an enhanced version of the Cooperative Human-Aware Navigation framework, building on the foundations of the original [CoHAN](https://github.com/sphanit/cohan_planner_multi) system [Singamaneni et al., IROS 2021](https://ieeexplore.ieee.org/document/9636613). This new iteration significantly improves the stability and robustness of the navigation pipeline in dynamic human environments. A key advancement in CoHAN 2.0 is the integration of behavior trees for context-aware mode switching, enabling more structured and scalable decision-making during navigation.
 
 The system maintains tight integration with the ROS navigation stack and leverages the [Human-Aware Timed Elastic Band (HATEB)](https://hal.laas.fr/hal-02922029/file/Ro_Man_2020.pdf) planner for trajectory generation, while the newly introduced behavior-based layer allows the robot to seamlessly adapt between social contexts and allows easier integration of new behaviors.
@@ -13,62 +16,6 @@ If you are using this version of any of our previous versions, please cite these
 
 - Singamaneni, P. T., & Alami, R. (2020). HATEB-2: Reactive Planning and Decision Making in Human-Robot Co-navigation. In Proceedings of the International Conference on Robot & Human Interactive Communication (RO-MAN).
 
-The documentation for this repo can be found here: [CoHAN2.0_Docs](https://laas-hri.github.io/CoHAN2.0_docs)
-
-# Preparing things (Native)
-1. Install ROS [Melodic](https://wiki.ros.org/melodic/Installation/Ubuntu) on Ubuntu 18.04 or [Noetic](https://wiki.ros.org/noetic/Installation/Ubuntu) on Ubuntu 20.04. 
-2. This installation assumes that the [ROS](http://wiki.ros.org/ROS/Installation) is already installed along with the [2D navigation stack](http://wiki.ros.org/navigation). Otherwise please install them before continuing to next steps. For ROS noetic, follow these:
-3. Install the requirements
-	```
-	sudo apt install python-pip python-catkin-tools python-is-python3
-	pip install scipy
-	```
-4. Clone the git repository
-	```
-	git clone https://github.com/sphanit/cohan2.1.git -b main ~
-	cd ~/cohan2.1
-	```
-5. Install the dependencies using rosdep
-	```
-	rosdep install --from-paths src --ignore-src --rosdistro=noetic -y
-    ```
-
-6. Follow the build instructions below.
-
-
-
-# Using Docker
-1. Clone the git repository
-	```
-	git clone https://github.com/sphanit/cohan2.1.git -b main ~
-	cd ~/cohan2.1
-    ```
-2. Navigate to docker directory in the folder and build the image. For example:
-    ```
-    cd ~/cohan2.1/docker/noetic
-    ./build-docker.sh
-    ```
-3. Activate the image and do the steps for building. For example:
-    ```
-    source ~/cohan2.1/docker/noetic/run-docker.sh
-    ```
-
-
-# Building Cohan and Running Examples
-1. Everything will be taken care of by the script. Just run compile.sh script.
-    ```
-    ./compile.sh
-    ```
-2. Once it is built, you need to source setup.bash file to use these packages along with other ROS packages inside the system.
-    ```
-    source devel/setup.bash
-    ```
-3. Now you are set to run use it. You can run some examples as:
-
-    ```
-    roslaunch cohan_stage_navigation stage_pr2_only.launch
-    ``` 
-    If everything is installed correctly, you should see rviz opening and you can move the robot by giving it a goal (using 2D Nav Goal tool).
 
 # Bibtex
 ```
