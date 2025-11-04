@@ -3,9 +3,11 @@ CoHAN 2.0 is an enhanced version of the Cooperative Human-Aware Navigation frame
 The system maintains tight integration with the ROS navigation stack and leverages the [Human-Aware Timed Elastic Band (HATEB)](https://hal.laas.fr/hal-02922029/file/Ro_Man_2020.pdf) planner for trajectory generation, while the newly introduced behavior-based layer allows the robot to seamlessly adapt between social contexts and allows easier integration of new behaviors.
 
 In addition to behavior-based mode switching, CoHAN 2.0 incorporates reasoning about invisible humans in the environment, as introduced in [Singamaneni et al., IROS 2022](https://ieeexplore.ieee.org/document/9982186). By fusing observed human motion with static map information, the system infers the presence of humans who may be occluded or temporarily out of sensor range. This allows the planner to proactively account for hidden human activity—enhancing safety and social compliance in complex, cluttered spaces.
-![](https://laas-hri.github.io/CoHAN2.0_docs/_images/cohan2.png)
 
 ROS2 version and latest updates are here: https://github.com/sphanit/CoHAN2.0
+
+![](https://laas-hri.github.io/CoHAN2.0_docs/_images/cohan2.png)
+
 
 If you are using this version of any of our previous versions, please cite these papers (bibtex below):
 
