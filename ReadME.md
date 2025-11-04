@@ -5,6 +5,8 @@ The system maintains tight integration with the ROS navigation stack and leverag
 In addition to behavior-based mode switching, CoHAN 2.0 incorporates reasoning about invisible humans in the environment, as introduced in [Singamaneni et al., IROS 2022](https://ieeexplore.ieee.org/document/9982186). By fusing observed human motion with static map information, the system infers the presence of humans who may be occluded or temporarily out of sensor range. This allows the planner to proactively account for hidden human activity—enhancing safety and social compliance in complex, cluttered spaces.
 ![](https://laas-hri.github.io/CoHAN2.0_docs/_images/cohan2.png)
 
+ROS2 version and latest updates are here: https://github.com/sphanit/CoHAN2.0
+
 If you are using this version of any of our previous versions, please cite these papers (bibtex below):
 
 - Singamaneni, P.-T., Favier, A., & Alami, R. (2022). Watch out! There may be a Human. Addressing Invisible Humans in Social Navigation. In Proceedings of the 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS), pp. 11344–11351. IEEE.
