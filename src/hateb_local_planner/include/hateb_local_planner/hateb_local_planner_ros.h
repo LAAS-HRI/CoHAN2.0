@@ -110,6 +110,10 @@
 #include <string>
 #include <vector>
 
+#define OPTIMIZE_SRV_NAME "optimize"
+#define HATEB_LOG "hateb_log"
+#define THROTTLE_RATE 5.0  // seconds
+
 namespace hateb_local_planner {
 // enum class AgentState : std::uint8_t { NO_STATE, STATIC, MOVING, STOPPED, BLOCKED };
 
@@ -192,7 +196,7 @@ class HATebLocalPlannerROS : public nav2_core::Controller {
    * This method handles internal state management when goal is reached.
    * @return True if goal has been achieved, false otherwise
    */
-  bool isGoalReached();
+  bool onGoalReached();
 
   /** @name Public utility functions/methods */
   //@{

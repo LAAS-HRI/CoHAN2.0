@@ -62,15 +62,24 @@ namespace hateb_local_planner {
  */
 class HATebConfig {
  public:
-  std::string ns;           //!< Namespace of the planner, used for topic, service and parameter names
-  std::string odom_topic;   //!< Topic name of the odometry message, provided by the robot driver or simulator
-  std::string map_frame;    //!< Global planning frame
-  std::string bt_xml_path;  //!< Name of this planner plugin
+  std::string ns;               //!< Namespace of the planner, used for topic, service and parameter names
+  std::string odom_topic;       //!< Topic name of the odometry message, provided by the robot driver or simulator
+  std::string global_frame;     //!< Global frame
+  std::string map_frame;        //!< map frame for local planning
+  std::string base_frame;       //!< Robot base frame
+  std::string footprint_frame;  //!< Robot footprint frame
+  std::string bt_xml_path;      //!< Name of this planner plugin
 
   FootprintModelPtr robot_model;     //!< model of the robot's footprint
   CircularFootprintPtr human_model;  //!< model of the agent's footprint
 
-  int planning_mode;  //!< Planning mode (autonomous vs human-aware)
+  //! Topics and Services
+  std::string invisible_humans_sub_topic;  //!< Topic name for invisible humans subscription
+  std::string predict_srv_name;            //!< Service name for agent pose prediction
+  std::string reset_prediction_srv_name;   //!< Service name for resetting agent pose prediction
+
+  int planning_mode;       //!< Planning mode (autonomous vs human-aware)
+  double planning_radius;  //!< Planning radius for planning
 
   //! Trajectory related parameters
   struct Trajectory {
@@ -102,7 +111,7 @@ class HATebConfig {
 
   //! Robot related parameters
   struct Robot {
-    int type;
+    double radius;               //!< Radius of the robot
     double max_vel_x;            //!< Maximum translational velocity of the robot
     double max_vel_x_backwards;  //!< Maximum translational velocity of the robot for driving backwards
     double max_vel_y;            //!< Maximum strafing velocity of the robot (should be zero for non-holonomic robots!)
@@ -115,12 +124,13 @@ class HATebConfig {
                        //!< back-wheeled robots!
     bool cmd_angle_instead_rotvel;  //!< Substitute the rotational velocity in the commanded velocity message by the corresponding steering angle (check 'axles_distance')
     bool is_footprint_dynamic;      //<! If true, updated the footprint before checking trajectory feasibility
-    bool is_real;                   //<! Check if the robot is real (or from gazebo) and uncheck if any other simulator
+    bool use_simulated_fov;         //!< Whether to use the simulated field of view for human-aware planning
+
   } robot;
 
   //! Agent related parameters
   struct Agent {
-    double radius;               //!< Radius of the agent for collision checking
+    double radius;               //!< Radius of the agent
     double max_vel_x;            //!< Maximum translational velocity of the agent
     double max_vel_y;            //!< Maximum strafing velocity of the agent
     double max_vel_x_backwards;  //!< Maximum backwards velocity of the agent
@@ -218,7 +228,6 @@ class HATebConfig {
   } optim;                                 //!< Optimization related parameters
 
   struct Hateb {
-    int planning_mode;                  //!< Mode of planning (autonomous vs human-aware)
     bool use_agent_robot_safety_c;      //!< Enable agent-robot safety constraints
     bool use_agent_agent_safety_c;      //!< Enable agent-agent safety constraints
     bool use_agent_robot_rel_vel_c;     //!< Enable relative velocity constraints
@@ -272,10 +281,17 @@ class HATebConfig {
    */
   HATebConfig() {
     odom_topic = "odom";
+    global_frame = "map";
     map_frame = "odom";
-    bt_xml_path = "/home/phani/ros_ws/CoHAN2.0/src/hateb_local_planner/behavior_trees/all_modes.xml";
+    base_frame = "base_link";
+    footprint_frame = "base_footprint";
+    bt_xml_path = "behavior_trees/all_modes.xml";
+    predict_srv_name = "/agent_path_prediction/predict_agent_poses";
+    reset_prediction_srv_name = "/agent_path_prediction/reset_prediction_services";
+    invisible_humans_sub_topic = "/map_scanner/invisible_humans_obs";
 
-    planning_mode = 1;  // Agent-Aware planning by default
+    planning_mode = 1;       // Agent-Aware planning by default
+    planning_radius = 10.0;  // meters
 
     // Trajectory
 
@@ -302,8 +318,7 @@ class HATebConfig {
     trajectory.visualize_with_time_as_z_axis_scale = 0.0;
 
     // Robot
-
-    robot.type = 0;
+    robot.radius = 0.47;  // Default footprint radius for PR2
     robot.max_vel_x = 0.4;
     robot.max_vel_x_backwards = 0.2;
     robot.max_vel_y = 0.0;
@@ -315,10 +330,10 @@ class HATebConfig {
     robot.wheelbase = 1.0;
     robot.cmd_angle_instead_rotvel = false;
     robot.is_footprint_dynamic = false;
-    robot.is_real = false;
+    robot.use_simulated_fov = false;
 
     // Agent
-    agent.radius = 0.35;
+    agent.radius = 0.3;
     agent.max_vel_x = 1.3;
     agent.max_vel_y = 0.4;
     agent.max_vel_x_backwards = 0.0;
@@ -354,7 +369,6 @@ class HATebConfig {
     obstacles.costmap_converter_rate = 5;
 
     // Optimization
-
     optim.no_inner_iterations = 8;
     optim.no_outer_iterations = 4;
     optim.optimization_activate = true;

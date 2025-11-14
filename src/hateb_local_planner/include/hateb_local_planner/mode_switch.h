@@ -40,6 +40,7 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <hateb_local_planner/msg/planning_mode.hpp>
 #include <nav2_msgs/action/navigate_to_pose.hpp>
+#include <nav_msgs/msg/path.hpp>
 #include <std_srvs/srv/trigger.hpp>
 
 // BT Nodes
@@ -57,6 +58,12 @@
 
 // Stdlib
 #include <mutex>
+
+// All topics are good here
+#define AGENTS_INFO_SUB "/agents_info"
+#define PLAN_SUB "/plan"
+#define RESULT_SUB "/navigate_to_pose/_action/status"
+#define PASSAGE_SUB "/map_scanner/passage"
 
 namespace hateb_local_planner {
 
@@ -113,6 +120,12 @@ class ModeSwitch {
    */
   hateb_local_planner::msg::PlanningMode tickAndGetMode();
 
+  /**
+   * @brief Sets the behavior tree debug logging flag
+   * @param enabled True to enable debug logging, false to disable
+   */
+  static void setBTDebugEnabled(bool enabled);
+
  private:
   /**
    * @brief Registers custom nodes with the behavior tree factory
@@ -129,7 +142,7 @@ class ModeSwitch {
    * @brief Callback for processing new navigation goals
    * @param goal_msg Message containing the new goal
    */
-  void goalNavigateToPoseCB(const geometry_msgs::msg::PoseStamped::SharedPtr goal_msg);
+  void planCB(const nav_msgs::msg::Path::SharedPtr plan_msg);
 
   /**
    * @brief Callback for processing navigation results
@@ -168,7 +181,7 @@ class ModeSwitch {
   // ROS communication members
   rclcpp_lifecycle::LifecycleNode::SharedPtr node_;                                          //!< ROS 2 node shared pointer
   rclcpp::Subscription<agent_path_prediction::msg::AgentsInfo>::SharedPtr agents_info_sub_;  //!< Subscriber for agent information
-  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_sub_;                //!< Subscriber for navigation goals
+  rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr plan_sub_;                            //!< Subscriber for navigation goals
   rclcpp::Subscription<action_msgs::msg::GoalStatusArray>::SharedPtr result_sub_;            //!< Subscriber for navigation results
   rclcpp::Subscription<cohan_msgs::msg::PassageType>::SharedPtr passage_detect_sub_;         //!< Subscriber for passage detection
   rclcpp::Publisher<hateb_local_planner::msg::PlanningMode>::SharedPtr planning_mode_pub_;   //!< Publisher for current planning mode
@@ -194,7 +207,7 @@ class ModeSwitch {
   // Params for namespace and subscription topics
   std::string ns_;                     //!< Namespace of the node
   std::string agents_info_sub_topic_;  //!< Topic for agents information
-  std::string goal_sub_topic_;         //!< Topic for robot goal
+  std::string plan_sub_topic_;         //!< Topic for robot plan
   std::string result_sub_topic_;       //!< Topic for robot goal result
   std::string passage_sub_topic_;      //!< Topic for passage detection (from invisible humans)
 };

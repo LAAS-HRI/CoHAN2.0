@@ -51,17 +51,6 @@
 #include <string>
 #include <utility>
 
-#define PREDICT_SERVICE_NAME "/agent_path_prediction/predict_agent_poses"
-#define RESET_PREDICTION_SERVICE_NAME "/agent_path_prediction/reset_prediction_services"
-#define OPTIMIZE_SRV_NAME "optimize"
-#define APPROACH_SRV_NAME "set_approach_id"
-#define PLANNING_SRV_NAME "set_planning_mode"
-#define GET_PLANNING_SRV_NAME "get_planning_mode"
-#define HATEB_LOG "hateb_log"
-#define INVISIBLE_HUMANS_TOPIC "/map_scanner/invisible_humans_obs"
-#define DEFAULT_AGENT_SEGMENT cohan_msgs::TrackedSegmentType::TORSO
-#define THROTTLE_RATE 5.0  // seconds
-
 // register this planner both as a Nav2 Controller
 PLUGINLIB_EXPORT_CLASS(hateb_local_planner::HATebLocalPlannerROS, nav2_core::Controller)
 
@@ -185,14 +174,14 @@ void HATebLocalPlannerROS::configure(const rclcpp_lifecycle::LifecycleNode::Weak
   via_points_sub_ = node->create_subscription<nav_msgs::msg::Path>("via_points", 1, std::bind(&HATebLocalPlannerROS::customViaPointsCB, this, std::placeholders::_1));
 
   // Fix the namespace for some topics and services
-  invisible_humans_sub_topic_ = std::string(INVISIBLE_HUMANS_TOPIC);
-  predict_srv_name_ = std::string(PREDICT_SERVICE_NAME);
-  reset_prediction_srv_name_ = std::string(RESET_PREDICTION_SERVICE_NAME);
+  invisible_humans_sub_topic_ = std::string(cfg_->invisible_humans_sub_topic);
+  predict_srv_name_ = std::string(cfg_->predict_srv_name);
+  reset_prediction_srv_name_ = std::string(cfg_->reset_prediction_srv_name);
 
   if (!cfg_->ns.empty()) {
-    invisible_humans_sub_topic_ = "/" + cfg_->ns + std::string(INVISIBLE_HUMANS_TOPIC);
-    predict_srv_name_ = "/" + cfg_->ns + std::string(PREDICT_SERVICE_NAME);
-    reset_prediction_srv_name_ = "/" + cfg_->ns + std::string(RESET_PREDICTION_SERVICE_NAME);
+    invisible_humans_sub_topic_ = "/" + cfg_->ns + std::string(cfg_->invisible_humans_sub_topic);
+    predict_srv_name_ = "/" + cfg_->ns + std::string(cfg_->predict_srv_name);
+    reset_prediction_srv_name_ = "/" + cfg_->ns + std::string(cfg_->reset_prediction_srv_name);
   }
 
   // Setup callback for invisible humans
@@ -208,7 +197,7 @@ void HATebLocalPlannerROS::configure(const rclcpp_lifecycle::LifecycleNode::Weak
   log_pub_ = node->create_publisher<std_msgs::msg::String>(HATEB_LOG, 1);
 
   // Initialize the pointer to agents, backoff and mode switch
-  agents_ptr_ = std::make_shared<hateb_local_planner::Agents>(node, tf_, costmap_ros);
+  agents_ptr_ = std::make_shared<hateb_local_planner::Agents>(node, tf_, costmap_ros, cfg_);
   backoff_ptr_ = std::make_shared<Backoff>(node, costmap_ros);
   backoff_ptr_->initializeOffsets(robot_circumscribed_radius_);
 
@@ -307,7 +296,7 @@ void HATebLocalPlannerROS::setPlan(const nav_msgs::msg::Path& path) {
 }
 
 geometry_msgs::msg::TwistStamped HATebLocalPlannerROS::computeVelocityCommands(const geometry_msgs::msg::PoseStamped& pose, const geometry_msgs::msg::Twist& velocity,
-                                                                               nav2_core::GoalChecker* /*goal_checker*/) {
+                                                                               nav2_core::GoalChecker* goal_checker) {
   auto node = node_.lock();
   geometry_msgs::msg::TwistStamped cmd_vel;
   auto start_time = node->now();
@@ -358,16 +347,12 @@ geometry_msgs::msg::TwistStamped HATebLocalPlannerROS::computeVelocityCommands(c
   // check if we should enter any backup mode and apply settings
   configureBackupModes(transformed_plan, goal_idx);
 
-  // check if global goal is reached (could be updated -- please use goal_checker)
+  // Check if we have reached the goal
   geometry_msgs::msg::PoseStamped global_goal;
   tf2::doTransform(global_plan_.poses.back(), global_goal, tf_plan_to_global);
-  double dx = global_goal.pose.position.x - robot_pose_.x();
-  double dy = global_goal.pose.position.y - robot_pose_.y();
-  double delta_orient = g2o::normalize_theta(tf2::getYaw(global_goal.pose.orientation) - robot_pose_.theta());
-  if (fabs(std::sqrt((dx * dx) + (dy * dy))) < cfg_->goal_tolerance.xy_goal_tolerance && fabs(delta_orient) < cfg_->goal_tolerance.yaw_goal_tolerance &&
-      (!cfg_->goal_tolerance.complete_global_plan || via_points_.size() == 0) && goal_ctrl_) {
-    goal_reached_ = true;
-    isGoalReached();
+  if (!goal_reached_ && goal_checker->isGoalReached(pose.pose, global_goal.pose, velocity)) {
+    goal_reached_ = true;  // prevent multiple calls
+    onGoalReached();
     return cmd_vel;
   }
 
@@ -571,9 +556,8 @@ geometry_msgs::msg::TwistStamped HATebLocalPlannerROS::computeVelocityCommands(c
   return cmd_vel;
 }
 
-bool HATebLocalPlannerROS::isGoalReached() {
+bool HATebLocalPlannerROS::onGoalReached() {
   if (goal_reached_) {
-    RCLCPP_INFO(logger_, "GOAL Reached!");
     bt_mode_switch_.resetBT();
     planner_->clearPlanner();
     resetAgentsPrediction();
@@ -595,18 +579,14 @@ bool HATebLocalPlannerROS::tickTreeAndUpdatePlans(const geometry_msgs::msg::Pose
   // TODO(sphanit): Update this globally across the package
   isMode_ = static_cast<int>(mode_info.plan_mode) - 1;
 
-  RCLCPP_INFO(logger_, "Current Planning Mode: %d", static_cast<int>(mode_info.plan_mode));
-
   if (mode_info.plan_mode == PLAN::BACKOFF) {
     // Stopping the planner from the setting the goal to complete to do the Backoff Recovery
     goal_ctrl_ = false;
-    RCLCPP_INFO(logger_, "Current Planning Mode is BACKOFF: %d", static_cast<int>(PLAN::BACKOFF));
     return true;
   }
 
   goal_ctrl_ = true;
 
-  RCLCPP_INFO(logger_, "Number of moving humans: %d", static_cast<int>(mode_info.moving_humans.size()));
   // Return if there are no moving visible humans
   if (mode_info.moving_humans.empty()) {
     // Check and add static humans

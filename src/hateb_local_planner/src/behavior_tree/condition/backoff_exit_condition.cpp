@@ -87,7 +87,7 @@ bool BackoffExitCondition::isRecoveryComplete() {
     getInput("agents_ptr", agents_ptr_);
     setOutput("recovery", true);
     getInput("nav_goal", current_goal_);
-    BT_INFO(name_, current_goal_);
+    BT_INFO(name_, "Received navigation goal for recovery")
     started_ = backoff_ptr_->startRecovery();
     BT_INFO(name_, "Starting recovery!")
     return false;

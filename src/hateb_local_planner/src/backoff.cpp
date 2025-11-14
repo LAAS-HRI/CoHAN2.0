@@ -27,10 +27,12 @@
 #include <hateb_local_planner/backoff.h>
 
 #define NODE_NAME "BackoffRecovery"
-// Configuarable parameters
+// Configuarable
 #define MAP_FRAME "map"
 #define FOOTPRINT_FRAME "base_footprint"
-#define PUBLISH_GOAL_TOPIC "/move_base_simple/goal"
+
+// Topcis does not exist. Find alternative ways
+#define PUBLISH_GOAL_TOPIC "/goal_pose"
 #define GET_PLAN_SRV_NAME "/move_base/GlobalPlanner/make_plan"
 #define CURRENT_GOAL_TOPIC_NAME "/move_base/current_goal"
 

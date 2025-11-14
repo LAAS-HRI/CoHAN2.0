@@ -28,7 +28,8 @@
 #define AGENTS_HH_
 
 // ROS2 core
-#include <hateb_local_planner/agents_config.hpp>
+// #include <hateb_local_planner/agents_config.hpp>
+#include <hateb_local_planner/hateb_config.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <ros2_helpers/parameters.hpp>
 
@@ -89,7 +90,7 @@ class Agents {
    * @param tf Pointer to tf buffer
    * @param costmap_ros Pointer to costmap
    */
-  Agents(rclcpp_lifecycle::LifecycleNode::SharedPtr node, std::shared_ptr<tf2_ros::Buffer> tf, std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros);
+  Agents(rclcpp_lifecycle::LifecycleNode::SharedPtr node, std::shared_ptr<tf2_ros::Buffer> tf, std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros, std::shared_ptr<HATebConfig> cfg);
 
   /**
    * @brief Destructor of the class
@@ -149,10 +150,6 @@ class Agents {
    */
   std::map<int, double> getNominalVels() { return agent_nominal_vels_; }
 
-  void start_spinning() {}
-
-  std::shared_ptr<AgentsConfig> cfg_;  //!< Configuration parameters for agent path prediction
-
  private:
   // Callbacks
   /**
@@ -199,8 +196,7 @@ class Agents {
   std::string ns_;                                                                        //!< Namespace for multiple agents
   std::string map_frame_;                                                                 //!< Frame ID for map
   int planning_mode_;                                                                     //!< Planning mode for agents
-
-  // std::thread spin_thread_;
+  std::shared_ptr<HATebConfig> cfg_;                                                      //!< Config class that stores and manages all related parameters
 };
 }  // namespace hateb_local_planner
 #endif

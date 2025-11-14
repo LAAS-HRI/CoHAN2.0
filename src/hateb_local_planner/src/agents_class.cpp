@@ -33,25 +33,21 @@
 
 namespace hateb_local_planner {
 
-Agents::Agents(rclcpp_lifecycle::LifecycleNode::SharedPtr node, std::shared_ptr<tf2_ros::Buffer> tf, std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros) : node_(node), initialized_(false) {
+Agents::Agents(rclcpp_lifecycle::LifecycleNode::SharedPtr node, std::shared_ptr<tf2_ros::Buffer> tf, std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros, std::shared_ptr<HATebConfig> cfg)
+    : node_(node), initialized_(false), cfg_(cfg) {
   // call the initialize class to start things
   if (!initialized_) {
-    // Initialize parameters
-    cfg_ = std::make_shared<AgentsConfig>();
-    cfg_->initialize(node_->shared_from_this());
-    cfg_->setupParameterCallback();
-
-    node->get_parameter_or("ns", ns_, std::string(""));
-    node->get_parameter_or("map_frame", map_frame_, std::string("map"));
-    node->get_parameter_or("planning_mode", planning_mode_, 0);
+    // node->get_parameter_or("ns", ns_, std::string(""));
+    // node->get_parameter_or("map_frame", map_frame_, std::string("map"));
+    // node->get_parameter_or("planning_mode", planning_mode_, 0);
 
     // Initialize the publisher
     agents_info_pub_ = node_->create_publisher<agent_path_prediction::msg::AgentsInfo>("agents_info", 10);
 
     tracked_agents_sub_topic_ = AGENTS_SUB_TOPIC;
     // Need to remap subscriber properly
-    if (!ns_.empty()) {
-      tracked_agents_sub_topic_ = "/" + ns_ + tracked_agents_sub_topic_;
+    if (!cfg_->ns.empty()) {
+      tracked_agents_sub_topic_ = "/" + cfg_->ns + tracked_agents_sub_topic_;
     }
 
     // Subscribers
@@ -77,14 +73,14 @@ void Agents::trackedAgentsCB(const cohan_msgs::msg::TrackedAgents::SharedPtr tra
   agent_path_prediction::msg::AgentsInfo agents_info;
 
   geometry_msgs::msg::TransformStamped transform_stamped;
-  auto base_link = cfg_->base_link_frame;
-  if (!ns_.empty()) {
-    base_link = ns_ + "/" + base_link;
+  auto base_link = cfg_->base_frame;
+  if (!cfg_->ns.empty()) {
+    base_link = cfg_->ns + "/" + base_link;
   }
 
   // Get the robot pose
   try {
-    transform_stamped = tf_->lookupTransform(map_frame_, base_link, tf2::TimePointZero, tf2::durationFromSec(0.5));
+    transform_stamped = tf_->lookupTransform(cfg_->global_frame, base_link, tf2::TimePointZero, tf2::durationFromSec(0.5));
     auto xpos = transform_stamped.transform.translation.x;
     auto ypos = transform_stamped.transform.translation.y;
     auto ryaw = tf2::getYaw(transform_stamped.transform.rotation);
@@ -111,9 +107,9 @@ void Agents::trackedAgentsCB(const cohan_msgs::msg::TrackedAgents::SharedPtr tra
       human_info.id = h_id;
       human_info.name = agent.name;
       if (agent.type == 1) {
-        agents_radii[h_id] = cfg_->human_radius;
+        agents_radii[h_id] = cfg_->agent.radius;
       } else {
-        agents_radii[h_id] = cfg_->robot_radius;
+        agents_radii[h_id] = cfg_->robot.radius;
       }
 
       if (agents_states_.size() < tracked_agents_->agents.size()) {
@@ -165,7 +161,7 @@ void Agents::trackedAgentsCB(const cohan_msgs::msg::TrackedAgents::SharedPtr tra
           }
           agent_nominal_vels_[h_id] = average_vel;
 
-          if (n == cfg_->window_moving_avg) {
+          if (n == cfg_->agent.num_moving_avg) {
             agent_vels_[h_id].erase(agent_vels_[h_id].begin());
           }
 
@@ -208,7 +204,7 @@ void Agents::trackedAgentsCB(const cohan_msgs::msg::TrackedAgents::SharedPtr tra
     }
 
     std::vector<int> sorted_ids;
-    if (cfg_->use_simulated_fov) {
+    if (cfg_->robot.use_simulated_fov) {
       /**************** for a centralised perception ***************/
       sorted_ids = filterVisibleAgents(agents_, visible_agent_ids_, agents_radii, robot_pose);
     } else {
@@ -244,7 +240,7 @@ void Agents::trackedAgentsCB(const cohan_msgs::msg::TrackedAgents::SharedPtr tra
     // Adds a temporary costmap around the agents to let planner plan safe
     // trajectories
 
-    if (planning_mode_ > 0) {
+    if (cfg_->planning_mode > 0) {
       for (int i = 0; i < sorted_ids.size() && i < agents_.size(); i++) {
         geometry_msgs::msg::Point v1;
         geometry_msgs::msg::Point v2;
@@ -259,7 +255,7 @@ void Agents::trackedAgentsCB(const cohan_msgs::msg::TrackedAgents::SharedPtr tra
 
         std::vector<geometry_msgs::msg::Point> agent_pos_costmap;
 
-        transform_stamped = tf_->lookupTransform(cfg_->odom_frame, map_frame_, tf2::TimePointZero, tf2::durationFromSec(0.5));
+        transform_stamped = tf_->lookupTransform(cfg_->map_frame, cfg_->global_frame, tf2::TimePointZero, tf2::durationFromSec(0.5));
         tf2::doTransform(v1, v1, transform_stamped);
         tf2::doTransform(v2, v2, transform_stamped);
         tf2::doTransform(v3, v3, transform_stamped);
@@ -277,7 +273,7 @@ void Agents::trackedAgentsCB(const cohan_msgs::msg::TrackedAgents::SharedPtr tra
 
     agents_info_pub_->publish(agents_info);
   } catch (tf2::TransformException& ex) {
-    RCLCPP_WARN(node_->get_logger(), "Could not transform %s to %s: %s", map_frame_.c_str(), base_link.c_str(), ex.what());
+    RCLCPP_WARN(node_->get_logger(), "Could not transform %s to %s: %s", cfg_->global_frame.c_str(), base_link.c_str(), ex.what());
   }
 }
 

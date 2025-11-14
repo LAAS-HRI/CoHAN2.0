@@ -48,12 +48,17 @@
 
 /**
  * @brief Debug printing configuration and macros
- * When PRINT is enabled, provides colored console output for different message types:
+ * When BTPRINT is enabled (via CMake option ENABLE_BT_DEBUG), provides colored console output for different message types:
  * - BT_INFO: Regular informational messages
  * - BT_WARN: Warning messages (yellow)
  * - BT_ERROR: Error messages (red)
+ *
+ * Note: BTPRINT is defined by CMake during compilation. To enable, build with:
+ * colcon build --cmake-args -DENABLE_BT_DEBUG=ON
  */
-#define BTPRINT 0
+#ifndef BTPRINT
+#define BTPRINT 0  // Default to disabled if not set by CMake
+#endif
 
 #if BTPRINT
 #define BT_INFO(x, y) std::cout << "BT_INFO: " << x << " -> " << y << std::endl;

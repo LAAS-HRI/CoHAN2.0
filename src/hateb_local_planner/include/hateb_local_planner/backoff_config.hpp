@@ -36,7 +36,7 @@
 #define FOOTPRINT_FRAME "base_footprint"
 #define PUBLISH_GOAL_TOPIC "/move_base_simple/goal"
 #define GET_PLAN_SRV_NAME "/move_base/GlobalPlanner/make_plan"
-#define CURRENT_GOAL_TOPIC_NAME "/move_base/current_goal"
+#define CURRENT_GOAL_TOPIC_NAME "/move_base/current_goal"  //---> Impossible in ROS2 , how do we get current goal?
 
 namespace hateb_local_planner {
 

@@ -15,8 +15,20 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 # Set to Release in order to speed up the program significantly
 set(CMAKE_BUILD_TYPE Release) # None, Debug, Release, RelWithDebInfo, MinSizeRel
 
+# Option to enable/disable Behavior Tree debug logging
+option(ENABLE_BT_DEBUG "Enable Behavior Tree debug logging" OFF)
+
+if(ENABLE_BT_DEBUG)
+  add_compile_definitions(BTPRINT=1)
+  message(STATUS "Behavior Tree debug logging is ENABLED")
+else()
+  add_compile_definitions(BTPRINT=0)
+  message(STATUS "Behavior Tree debug logging is DISABLED")
+endif()
+
 # Find ament packages
 find_package(ament_cmake REQUIRED)
+find_package(ament_index_cpp REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(nav2_core REQUIRED)
 find_package(nav2_costmap_2d REQUIRED)
@@ -84,6 +96,7 @@ include_directories(
 
 # Set dependencies for ament_target_dependencies
 set(dependencies
+  ament_index_cpp
   rclcpp
   nav2_core
   nav2_costmap_2d

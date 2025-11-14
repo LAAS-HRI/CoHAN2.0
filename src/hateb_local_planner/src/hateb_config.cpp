@@ -66,9 +66,15 @@ void HATebConfig::bindParameters() {
   // General parameters
   param_helper_.bindStringParam(param_name("ns"), ns, "Namespace of the planner");
   param_helper_.bindStringParam(param_name("odom_topic"), odom_topic, "Odometry topic");
+  param_helper_.bindStringParam(param_name("global_frame"), global_frame, "Global frame ID");
   param_helper_.bindStringParam(param_name("map_frame"), map_frame, "Map frame ID");
+  param_helper_.bindStringParam(param_name("base_frame"), base_frame, "Base frame ID");
+  param_helper_.bindStringParam(param_name("footprint_frame"), footprint_frame, "Footprint frame ID");
   param_helper_.bindIntParam(param_name("planning_mode"), planning_mode, 0, 10, "Planning mode");
   param_helper_.bindStringParam(param_name("bt_xml_path"), bt_xml_path, "Behavior tree XML file path");
+  param_helper_.bindStringParam(param_name("predict_srv_name"), predict_srv_name, "Agent prediction service name");
+  param_helper_.bindStringParam(param_name("reset_prediction_srv_name"), reset_prediction_srv_name, "Agent Prediction reset service name");
+  param_helper_.bindStringParam(param_name("invisible_humans_sub_topic"), invisible_humans_sub_topic, "Invisible humans subscription topic name");
 
   // Trajectory parameters
   param_helper_.bindBoolParam(param_name("teb_autosize"), trajectory.teb_autosize, "Enable TEB autosize");
@@ -94,7 +100,6 @@ void HATebConfig::bindParameters() {
   param_helper_.bindFloatParam(param_name("visualize_with_time_as_z_axis_scale"), trajectory.visualize_with_time_as_z_axis_scale, 0.0, 100.0, "Visualization time as z-axis scale");
 
   // Robot parameters
-  param_helper_.bindIntParam(param_name("type"), robot.type, 0, 10, "Robot type");
   param_helper_.bindFloatParam(param_name("max_vel_x"), robot.max_vel_x, 0.0, 10.0, "Max forward velocity");
   param_helper_.bindFloatParam(param_name("max_vel_x_backwards"), robot.max_vel_x_backwards, 0.0, 10.0, "Max backward velocity");
   param_helper_.bindFloatParam(param_name("max_vel_y"), robot.max_vel_y, 0.0, 10.0, "Max strafing velocity");
@@ -106,7 +111,7 @@ void HATebConfig::bindParameters() {
   param_helper_.bindFloatParam(param_name("wheelbase"), robot.wheelbase, 0.0, 10.0, "Wheelbase length");
   param_helper_.bindBoolParam(param_name("cmd_angle_instead_rotvel"), robot.cmd_angle_instead_rotvel, "Command angle instead of rotational velocity");
   param_helper_.bindBoolParam(param_name("is_footprint_dynamic"), robot.is_footprint_dynamic, "Is footprint dynamic");
-  param_helper_.bindBoolParam(param_name("is_real"), robot.is_real, "Is real robot");
+  param_helper_.bindBoolParam(param_name("use_simulated_fov"), robot.use_simulated_fov, "Use simulated field of view for human-aware planning");
 
   // Agent parameters
   param_helper_.bindFloatParam(param_name("agent_radius"), agent.radius, 0.0, 10.0, "Agent radius");

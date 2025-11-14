@@ -26,12 +26,9 @@
 
 #include <hateb_local_planner/mode_switch.h>
 
+#include <ament_index_cpp/get_package_share_directory.hpp>
+#include <filesystem>
 #include <string>
-
-#define AGENTS_INFO_SUB "/agents_info"
-#define GOAL_SUB "/goal_pose"
-#define RESULT_SUB "/navigate_to_pose/_action/status"
-#define PASSAGE_SUB "/map_scanner/passage"
 
 namespace hateb_local_planner {
 ModeSwitch::ModeSwitch() {
@@ -50,18 +47,18 @@ void ModeSwitch::initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node, std
 
     // Map the subscriptions properly
     agents_info_sub_topic_ = std::string(AGENTS_INFO_SUB);
-    goal_sub_topic_ = std::string(GOAL_SUB);
+    plan_sub_topic_ = std::string(PLAN_SUB);
     result_sub_topic_ = std::string(RESULT_SUB);
     passage_sub_topic_ = std::string(PASSAGE_SUB);
     if (!ns_.empty()) {
       agents_info_sub_topic_ = "/" + ns_ + agents_info_sub_topic_;
-      goal_sub_topic_ = "/" + ns_ + goal_sub_topic_;
+      plan_sub_topic_ = "/" + ns_ + plan_sub_topic_;
       result_sub_topic_ = "/" + ns_ + result_sub_topic_;
       passage_sub_topic_ = "/" + ns_ + passage_sub_topic_;
     }
 
     agents_info_sub_ = node_->create_subscription<agent_path_prediction::msg::AgentsInfo>(agents_info_sub_topic_, 1, std::bind(&ModeSwitch::agentsInfoCB, this, std::placeholders::_1));
-    goal_sub_ = node_->create_subscription<geometry_msgs::msg::PoseStamped>(goal_sub_topic_, 1, std::bind(&ModeSwitch::goalNavigateToPoseCB, this, std::placeholders::_1));
+    plan_sub_ = node_->create_subscription<nav_msgs::msg::Path>(plan_sub_topic_, 1, std::bind(&ModeSwitch::planCB, this, std::placeholders::_1));
     result_sub_ = node_->create_subscription<action_msgs::msg::GoalStatusArray>(result_sub_topic_, 1, std::bind(&ModeSwitch::resultNavigateToPoseCB, this, std::placeholders::_1));
     passage_detect_sub_ = node_->create_subscription<cohan_msgs::msg::PassageType>(passage_sub_topic_, 1, std::bind(&ModeSwitch::passageCB, this, std::placeholders::_1));
     planning_mode_pub_ = node_->create_publisher<hateb_local_planner::msg::PlanningMode>("planning_mode", 10);
@@ -79,7 +76,31 @@ void ModeSwitch::initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node, std
       BT_ERROR("ModeSwitch", "Please provide the correct xml to create the tree!")
       exit(0);
     }
-    bhv_tree_ = bhv_factory_.createTreeFromFile(xml_path);
+
+    // Resolve the XML path - check if it's an absolute path or a package-relative path
+    std::string resolved_xml_path = xml_path;
+    if (!std::filesystem::path(xml_path).is_absolute()) {
+      // Assume it's a package-relative path like "hateb_local_planner/behavior_trees/all_modes.xml"
+      try {
+        std::string package_name = "hateb_local_planner";
+        std::string package_share_dir = ament_index_cpp::get_package_share_directory(package_name);
+
+        // Remove package name from the path if it starts with it
+        std::string relative_path = xml_path;
+        if (xml_path.find(package_name + "/") == 0) {
+          relative_path = xml_path.substr(package_name.length() + 1);
+        }
+
+        resolved_xml_path = package_share_dir + "/" + relative_path;
+        RCLCPP_INFO(node_->get_logger(), "Resolved XML path: %s", resolved_xml_path.c_str());
+      } catch (const std::exception& e) {
+        RCLCPP_ERROR(node_->get_logger(), "Failed to resolve XML path: %s", e.what());
+        BT_ERROR("ModeSwitch", "Failed to resolve behavior tree XML path!")
+        exit(0);
+      }
+    }
+
+    bhv_tree_ = bhv_factory_.createTreeFromFile(resolved_xml_path);
     int8_t psg_type = cohan_msgs::msg::PassageType::OPEN;
 
     // Set the initial Blackboard entries
@@ -112,18 +133,25 @@ void ModeSwitch::agentsInfoCB(const agent_path_prediction::msg::AgentsInfo::Shar
 
   // Set the agents_info on the blackboard
   bhv_tree_.rootBlackboard()->set("agents_info", agents_info_);
-  auto logger = node_->get_logger();
 }
 
-void ModeSwitch::goalNavigateToPoseCB(const geometry_msgs::msg::PoseStamped::SharedPtr goal_msg) {
+void ModeSwitch::planCB(const nav_msgs::msg::Path::SharedPtr plan_msg) {
   // Set the goal status
-  BT_INFO(name_, "Goal is set!")
-  if (!goal_reached_) {
+  BT_INFO(name_, "New path is set!")
+  auto goal = plan_msg->poses.back();
+
+  auto logger = node_->get_logger();
+  double goal_dist_change = std::hypot(goal.pose.position.x - goal_.pose.position.x, goal.pose.position.y - goal_.pose.position.y);
+
+  if (!goal_reached_ && goal_dist_change > 0.2) {
     bhv_tree_.rootBlackboard()->set("goal_update", true);
     goal_update_ = true;
+    BT_INFO(name_, "Goal updated in blackboard.");
+  } else if (goal_dist_change > 0.2) {
+    bhv_tree_.rootBlackboard()->set("nav_goal", goal_);
+    BT_INFO(name_, "Got a new goal!");
   }
-  goal_ = *goal_msg;
-  bhv_tree_.rootBlackboard()->set("nav_goal", goal_);
+  goal_ = goal;
   goal_reached_ = false;
 }
 
@@ -131,30 +159,22 @@ void ModeSwitch::resultNavigateToPoseCB(const action_msgs::msg::GoalStatusArray:
   // Set the goal status based on the status array
   if (!result_msg->status_list.empty()) {
     // Check if any goal has succeeded (status 4 = SUCCEEDED in action_msgs)
-    for (const auto& status : result_msg->status_list) {
-      if (status.status == action_msgs::msg::GoalStatus::STATUS_SUCCEEDED) {
-        goal_reached_ = true;
-        break;
-      }
+    auto status = result_msg->status_list.back().status;
+    if (status == action_msgs::msg::GoalStatus::STATUS_SUCCEEDED) {
+      goal_reached_ = true;
     }
   }
 }
 
 BT::NodeStatus ModeSwitch::tickBT() {
   // Tick the tree from the start
-  auto logger = node_->get_logger();
-  RCLCPP_INFO(logger, "ModeSwitch BT ticked with status top ");
-
   auto status = bhv_tree_.tickOnce();
-
-  RCLCPP_INFO(logger, "ModeSwitch BT ticked with status top : %d", static_cast<int>(status));
 
   updateMode();
   if (goal_update_) {
     bhv_tree_.rootBlackboard()->set("goal_update", false);
     goal_update_ = false;
   }
-  RCLCPP_INFO(logger, "ModeSwitch BT ticked with status bottom: %d", static_cast<int>(status));
   return status;
 }
 
@@ -164,8 +184,8 @@ void ModeSwitch::updateMode(int duration) {
   // Get the PlanningMode msg from the blackboard
   mode_info_ = bhv_tree_.rootBlackboard()->get<ModeInfo>("planning_mode");
 
-  BT_INFO(name_, (int)mode_info_.plan);
-  BT_INFO(name_, (int)mode_info_.predict);
+  BT_INFO(name_, "Planning Mode: " << (int)mode_info_.plan);
+  BT_INFO(name_, "Prediction Mode: " << (int)mode_info_.predict);
 
   plan_mode_.plan_mode = mode_info_.plan;
   plan_mode_.predict_mode = mode_info_.predict;
@@ -188,14 +208,13 @@ void ModeSwitch::updateMode(int duration) {
 
 hateb_local_planner::msg::PlanningMode ModeSwitch::tickAndGetMode() {
   // Tick the tree once and return the updated planning mode
-  auto logger = node_->get_logger();
-  RCLCPP_INFO(logger, "ModeSwitch BT in tickAndGetMode");
   tickBT();
   return plan_mode_;
 }
 
 void ModeSwitch::resetBT() {
   // Halt the tree and set goal reached to true
+  auto logger = node_->get_logger();
   goal_reached_ = true;
   bhv_tree_.haltTree();
   // printTreeStatus(bhv_tree_.rootNode()); //<! Use this for debugging Tree status

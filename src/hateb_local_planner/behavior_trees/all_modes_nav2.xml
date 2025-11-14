@@ -1,0 +1,38 @@
+ <root BTCPP_format="4" >
+	<BehaviorTree ID="MainTree">
+      <IncludePlugin path="libnav2_behavior_tree.so"/>
+		<ReactiveFallback>
+            <GoalUpdated/>
+			<!-- Condition -->
+			<isGoalUpdated name="goal_update_check" goal_update="{goal_update}" recovery="{recovery}" nav_goal="{goal}"/>
+			<ReactiveFallback name="goal_tree">
+				<!-- First Control -->
+				<Sequence>
+					<passThroughCond name="is_passage_detected" passage_type="{passage_type}"/>
+					<Timeout msec="5000">
+						<setMode plan_type="passthrough" predict_type="const_vel" mode="{planning_mode}"/>
+					</Timeout>
+				</Sequence>
+				<!-- Second Control -->
+				<Sequence>
+					<ReactiveFallback>
+						<singleBandExitCond name="single band mode" agents_info="{agents_info}" dist_max="10"/>
+						<setMode plan_type="single" predict_type="const_vel" mode="{planning_mode}"/>
+					</ReactiveFallback>
+					<ReactiveFallback>
+						<dualBandExitCond name="dual band mode" agents_info="{agents_info}" dist_threshold="2.5" nav_goal="{nav_goal}"/>
+						<setMode name="dual_band" plan_type="dual" predict_type="const_vel" mode="{planning_mode}"/>
+					</ReactiveFallback>
+					<ReactiveFallback>
+						<velobsExitCond name="velobs mode" agents_info="{agents_info}" agents_ptr="{agents_ptr}" stuck_agent="{stuck_agent}"/>
+						<setMode name="vel_obs_" plan_type="velobs" predict_type="const_vel" mode="{planning_mode}"/>
+					</ReactiveFallback>
+					<ReactiveFallback>
+						<backoffExitCond name="backoff" agents_info="{agents_info}" backoff_ptr="{backoff_ptr}" recovery="{recovery}" nav_goal="{nav_goal}" agents_ptr="{agents_ptr}"/>
+						<setMode name="backoff_" plan_type="backoff" predict_type="predict" mode="{planning_mode}"/>
+					</ReactiveFallback>
+				</Sequence>
+			</ReactiveFallback>
+		</ReactiveFallback>
+	</BehaviorTree>
+</root>
