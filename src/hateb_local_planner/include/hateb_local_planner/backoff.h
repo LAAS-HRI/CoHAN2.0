@@ -33,7 +33,7 @@
 
 #include <geometry_msgs/msg/pose2_d.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
-#include <hateb_local_planner/backoff_config.hpp>
+#include <hateb_local_planner/hateb_config.hpp>
 #include <nav2_costmap_2d/costmap_2d_ros.hpp>
 #include <nav2_costmap_2d/footprint_collision_checker.hpp>
 #include <nav_msgs/srv/get_plan.hpp>
@@ -41,6 +41,10 @@
 #include <rclcpp_action/rclcpp_action.hpp>
 #include <std_srvs/srv/set_bool.hpp>
 #include <std_srvs/srv/trigger.hpp>
+
+// Actions
+#include <nav2_msgs/action/compute_path_to_pose.hpp>
+#include <rclcpp_action/rclcpp_action.hpp>
 
 namespace hateb_local_planner {
 
@@ -57,7 +61,7 @@ class Backoff {
   /**
    * @brief Constructor
    */
-  Backoff(rclcpp_lifecycle::LifecycleNode::SharedPtr node, std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros);
+  Backoff(rclcpp_lifecycle::LifecycleNode::SharedPtr node, std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros, std::shared_ptr<HATebConfig> cfg);
 
   /**
    * @brief Destructor
@@ -90,10 +94,16 @@ class Backoff {
   bool startRecovery();
 
   /**
-   * @brief Checks if a new goal has been received
-   * @return True if there is a new goal
+   * @brief Checks if the current goal is a recovery goal
+   * @return True if the goal was published by this node
    */
-  bool checkNewGoal() const { return new_goal_; }
+  bool isRecoveryGoal() {
+    if (self_published_) {
+      self_published_ = false;
+      return true;
+    }
+    return false;
+  }
 
   /**
    * @brief Checks if the backoff goal position has been reached
@@ -150,8 +160,7 @@ class Backoff {
   }
 
   rclcpp_lifecycle::LifecycleNode::SharedPtr node_;  //!< ROS2 node pointer
-  std::shared_ptr<BackoffConfig> cfg_;               //!< Configuration parameters for backoff behavior
-  std::string ns_;                                   //!< Namespace for the node
+  std::shared_ptr<HATebConfig> cfg_;                 //!< Config class that stores and manages all related parameters
 
   geometry_msgs::msg::PoseStamped goal_;      //!< Current navigation goal
   geometry_msgs::msg::PoseStamped old_goal_;  //!< Previous navigation goal
@@ -169,7 +178,10 @@ class Backoff {
   rclcpp::Publisher<geometry_msgs::msg::PolygonStamped>::SharedPtr poly_pub_l_;  //!< Publisher for visualizing left grid points
   rclcpp::Publisher<geometry_msgs::msg::PolygonStamped>::SharedPtr poly_pub_r_;  //!< Publisher for visualizing right grid points
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_sub_;    //!< Subscriber for receiving navigation goals
-  rclcpp::Client<nav_msgs::srv::GetPlan>::SharedPtr get_plan_client_;            //!< Service client for requesting path plans
+
+  // ROS2 Action Clients
+  using ComputePathToPose = nav2_msgs::action::ComputePathToPose;
+  rclcpp_action::Client<ComputePathToPose>::SharedPtr get_plan_client_;  //!< Action client for computing navigation paths
 
   geometry_msgs::msg::Transform start_pose_;  //!< Initial robot pose when backoff maneuver starts
   bool self_published_;                       //!< Whether the goal was published by this node

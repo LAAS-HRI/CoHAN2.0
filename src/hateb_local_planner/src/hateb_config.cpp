@@ -217,6 +217,12 @@ void HATebConfig::bindParameters() {
   param_helper_.bindFloatParam(param_name("oscillation_recovery_min_duration"), recovery.oscillation_recovery_min_duration, 0.0, 100.0, "Oscillation recovery min duration");
   param_helper_.bindFloatParam(param_name("oscillation_filter_duration"), recovery.oscillation_filter_duration, 0.0, 100.0, "Oscillation filter duration");
 
+  // Backoff Recovery parameters
+  param_helper_.bindStringParam(param_name("publish_goal_topic"), backoff.publish_goal_topic, "Backoff publish goal topic");
+  param_helper_.bindStringParam(param_name("get_plan_srv_name"), backoff.get_plan_srv_name, "Backoff get plan service name");
+  param_helper_.bindBoolParam(param_name("visualize"), backoff.visualize, "Visualize backoff poses");
+  param_helper_.bindFloatParam(param_name("timeout"), backoff.timeout, 0.0, 1800.0, "Backoff timeout");
+
   // Visualization parameters
   param_helper_.bindBoolParam(param_name("publish_robot_global_plan"), visualization.publish_robot_global_plan, "Publish robot global plan");
   param_helper_.bindBoolParam(param_name("publish_robot_local_plan"), visualization.publish_robot_local_plan, "Publish robot local plan");

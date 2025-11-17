@@ -34,7 +34,7 @@
 #define EXTERNAL_PATHS_SUB_TOPIC "~/external_agent_paths"
 #define PREDICTED_GOAL_SUB_TOPIC "~/predicted_goal"
 #define AGENTS_SUB_TOPIC "/tracked_agents"
-#define GET_PLAN_SRV_NAME "/move_base/GlobalPlanner/make_plan"
+#define GET_PLAN_SRV_NAME "/agent_planner/compute_path_to_pose"
 #define ROBOT_FRAME_ID "base_footprint"
 #define MAP_FRAME_ID "map"
 #define AGENT_DIST_BEHIND_ROBOT 0.5

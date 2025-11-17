@@ -253,6 +253,13 @@ class HATebConfig {
     double oscillation_filter_duration;        //!< Filter length/duration [sec] for the detection of oscillations
   } recovery;                                  //!< Parameters related to recovery and backup strategies
 
+  struct Backoff {
+    std::string publish_goal_topic;  //!< Topic name for publishing temporary goals during backoff recovery
+    std::string get_plan_srv_name;   //!< Service name for getting plan from global planner
+    double timeout;                  //!< Maximum allowed time for backoff maneuver
+    bool visualize;                  //!< If true, visualize the backoff grids
+  } backoff;
+
   //! Visualization
   struct Visualization {
     bool publish_robot_global_plan;           //!< If true, publish the global plan for the robot
@@ -432,6 +439,12 @@ class HATebConfig {
     recovery.oscillation_omega_eps = 0.1;
     recovery.oscillation_recovery_min_duration = 10;
     recovery.oscillation_filter_duration = 10;
+
+    // For Bacoff Recovery
+    backoff.publish_goal_topic = "/goal_pose";
+    backoff.get_plan_srv_name = "/backoff_planner/compute_path_to_pose";
+    backoff.timeout = 30.0;
+    backoff.visualize = false;
 
     // Visualization
     visualization.publish_robot_global_plan = true;

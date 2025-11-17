@@ -140,17 +140,15 @@ void ModeSwitch::planCB(const nav_msgs::msg::Path::SharedPtr plan_msg) {
   BT_INFO(name_, "New path is set!")
   auto goal = plan_msg->poses.back();
 
-  auto logger = node_->get_logger();
   double goal_dist_change = std::hypot(goal.pose.position.x - goal_.pose.position.x, goal.pose.position.y - goal_.pose.position.y);
 
-  if (!goal_reached_ && goal_dist_change > 0.2) {
+  if (goal_dist_change > 0.2) {
     bhv_tree_.rootBlackboard()->set("goal_update", true);
+    bhv_tree_.rootBlackboard()->set("nav_goal", goal_);
     goal_update_ = true;
     BT_INFO(name_, "Goal updated in blackboard.");
-  } else if (goal_dist_change > 0.2) {
-    bhv_tree_.rootBlackboard()->set("nav_goal", goal_);
-    BT_INFO(name_, "Got a new goal!");
   }
+
   goal_ = goal;
   goal_reached_ = false;
 }
@@ -214,7 +212,6 @@ hateb_local_planner::msg::PlanningMode ModeSwitch::tickAndGetMode() {
 
 void ModeSwitch::resetBT() {
   // Halt the tree and set goal reached to true
-  auto logger = node_->get_logger();
   goal_reached_ = true;
   bhv_tree_.haltTree();
   // printTreeStatus(bhv_tree_.rootNode()); //<! Use this for debugging Tree status

@@ -12,7 +12,7 @@
 					</Timeout>
 				</Sequence>
 				<!-- Second Control -->
-				<Sequence>
+				<SequenceWithMemory>
 					<ReactiveFallback>
 						<singleBandExitCond name="single band mode" agents_info="{agents_info}" dist_max="10"/>
 						<setMode plan_type="single" predict_type="const_vel" mode="{planning_mode}"/>
@@ -29,7 +29,7 @@
 						<backoffExitCond name="backoff" agents_info="{agents_info}" backoff_ptr="{backoff_ptr}" recovery="{recovery}" nav_goal="{nav_goal}" agents_ptr="{agents_ptr}"/>
 						<setMode name="backoff_" plan_type="backoff" predict_type="predict" mode="{planning_mode}"/>
 					</ReactiveFallback>
-				</Sequence>
+				</SequenceWithMemory>
 			</ReactiveFallback>
 		</ReactiveFallback>
 	</BehaviorTree>

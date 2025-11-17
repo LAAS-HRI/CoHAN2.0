@@ -198,7 +198,7 @@ void HATebLocalPlannerROS::configure(const rclcpp_lifecycle::LifecycleNode::Weak
 
   // Initialize the pointer to agents, backoff and mode switch
   agents_ptr_ = std::make_shared<hateb_local_planner::Agents>(node, tf_, costmap_ros, cfg_);
-  backoff_ptr_ = std::make_shared<Backoff>(node, costmap_ros);
+  backoff_ptr_ = std::make_shared<Backoff>(node, costmap_ros, cfg_);
   backoff_ptr_->initializeOffsets(robot_circumscribed_radius_);
 
   // Get behavior tree XML path

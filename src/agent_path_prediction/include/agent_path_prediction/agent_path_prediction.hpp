@@ -66,10 +66,13 @@
 // Services
 #include <agent_path_prediction/srv/agent_goal.hpp>
 #include <agent_path_prediction/srv/agent_pose_predict.hpp>
-#include <nav_msgs/srv/get_plan.hpp>
 #include <std_srvs/srv/empty.hpp>
 #include <std_srvs/srv/set_bool.hpp>
 #include <std_srvs/srv/trigger.hpp>
+
+// Actions
+#include <nav2_msgs/action/compute_path_to_pose.hpp>
+#include <rclcpp_action/rclcpp_action.hpp>
 
 // Internal Parameters
 #define ANG_VEL_EPS 0.001
@@ -243,7 +246,10 @@ class AgentPathPrediction : public rclcpp::Node {
   rclcpp::Service<agent_path_prediction::srv::AgentPosePredict>::SharedPtr predict_agents_server_;  //!< Server for agent prediction service
   rclcpp::Service<agent_path_prediction::srv::AgentGoal>::SharedPtr set_goal_srv_;                  //!< Server for setting agent goals
   rclcpp::Service<std_srvs::srv::Empty>::SharedPtr reset_prediction_services_server_;               //!< Server for resetting predictions
-  rclcpp::Client<nav_msgs::srv::GetPlan>::SharedPtr get_plan_client_;                               //!< Client for getting navigation plans
+
+  // ROS2 Action Clients
+  using ComputePathToPose = nav2_msgs::action::ComputePathToPose;
+  rclcpp_action::Client<ComputePathToPose>::SharedPtr get_plan_client_;  //!< Action client for computing navigation paths
 
   // Transform listener
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;      //!< TF2 buffer for coordinate transformations

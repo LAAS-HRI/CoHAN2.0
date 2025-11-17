@@ -78,15 +78,20 @@ BT::NodeStatus BackoffExitCondition::tick() {
 }
 
 bool BackoffExitCondition::isRecoveryComplete() {
-  new_goal_ = false;
   getInput("agents_info", agents_info_);
+  // New goal check
+  getInput("goal_update", new_goal_);
 
   // Get the data from blackboard and start the recovery
   if (!started_) {
+    // Get inputs from blackboard
     getInput("backoff_ptr", backoff_ptr_);
     getInput("agents_ptr", agents_ptr_);
-    setOutput("recovery", true);
     getInput("nav_goal", current_goal_);
+
+    // Set recovery true in the blackboard
+    setOutput("recovery", true);
+
     BT_INFO(name_, "Received navigation goal for recovery")
     started_ = backoff_ptr_->startRecovery();
     BT_INFO(name_, "Starting recovery!")
@@ -94,9 +99,8 @@ bool BackoffExitCondition::isRecoveryComplete() {
   }
 
   // If a new goal is given, stop recovery
-  if (started_ && backoff_ptr_->checkNewGoal()) {
-    new_goal_ = true;
-    getInput("nav_goal", current_goal_);
+  if (started_ && new_goal_ && !backoff_ptr_->isRecoveryGoal()) {
+    // getInput("nav_goal", current_goal_);
     BT_INFO(name_, "New goal!")
     return true;
   }
