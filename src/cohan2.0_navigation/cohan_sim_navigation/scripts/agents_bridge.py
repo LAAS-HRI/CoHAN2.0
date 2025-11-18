@@ -29,14 +29,15 @@ Author: Phani Teja Singamaneni
 # Author: Phani Teja Singamaneni
 
 import sys
-import rospy
+import rclpy
+from rclpy.node import Node
 import time
 from cohan_msgs.msg import TrackedAgents, TrackedAgent, TrackedSegment, TrackedSegmentType, AgentType
 from nav_msgs.msg import Odometry
-import message_filters
+from message_filters import Subscriber, TimeSynchronizer
 
 
-class SimAgents(object):
+class SimAgents(Node):
     """
     Bridge between CoHAN Sim agents and CoHAN tracked_agents message.
 
@@ -53,6 +54,7 @@ class SimAgents(object):
             num_hum (int): Number of human agents in the simulation.
             ns_ (str): Namespace for the current agent (empty string for robot).
         """
+        super().__init__('sim_agents')
         self.num_hum = num_hum
         self.ns = ns_
         self.tracked_agents_pub = []
@@ -61,35 +63,40 @@ class SimAgents(object):
         self.robot = TrackedAgent()
         self.sig_1 = False
         self.sig_2 = False
+        
+        self.setup_subscribers_and_publisher()
 
-    def AgentsPub(self):
+    def setup_subscribers_and_publisher(self):
         """
-        Set up ROS node, subscribers, and publisher for tracked agents.
+        Set up subscribers and publisher for tracked agents.
         Synchronizes human agent odometry and robot odometry, and starts publishing tracked_agents messages.
         """
-        rospy.init_node('Sim_Agents', anonymous=True)
         agent_sub = []
 
-        # Subscibe to human agents
-        if self.num_hum < 2:
-            self.sig_1 = True
+        # Subscribe to human agents
+        # if self.num_hum < 2:
+        #     self.sig_1 = True
 
-        for agent_id in range(1,self.num_hum+1):
-            name = 'human'+str(agent_id)
+        for agent_id in range(1, self.num_hum + 1):
+            name = 'human' + str(agent_id)
             if self.ns != name:
-                agent_sub.append(message_filters.Subscriber("/" + name + "/base_pose_ground_truth", Odometry))
-
+                agent_sub.append(Subscriber(self, Odometry, "/" + name + "/base_pose_ground_truth"))
+        
         # Subscribe to the robot
         if self.ns != "":
-            robot_sub = rospy.Subscriber("/base_pose_ground_truth", Odometry, self.RobotCB)
+            self.robot_sub = self.create_subscription(Odometry, "/base_pose_ground_truth", self.RobotCB, 10)
         else:
             self.sig_2 = True
 
-        self.tracked_agents_pub = rospy.Publisher("tracked_agents", TrackedAgents, queue_size=1)
-        pose_msg = message_filters.TimeSynchronizer(agent_sub, 10)
-        pose_msg.registerCallback(self.AgentsCB)
-        rospy.Timer(rospy.Duration(0.02), self.publishAgents)
-        rospy.spin()
+        self.tracked_agents_pub = self.create_publisher(TrackedAgents, "tracked_agents", 10)
+        
+        # Set up message filter synchronization
+        if agent_sub:
+            self.pose_msg = TimeSynchronizer(agent_sub, 10)
+            self.pose_msg.registerCallback(self.AgentsCB)
+        
+        # Create timer to publish at 50 Hz (0.02 seconds)
+        self.publish_timer = self.create_timer(0.02, self.publishAgents)
 
     def AgentsCB(self,*msg):
         """
@@ -99,23 +106,25 @@ class SimAgents(object):
         Args:
             *msg: Synchronized odometry messages for human agents.
         """
-        if len(msg) != self.num_hum:
-            return
+        # if len(msg) != self.num_hum:
+        #     return
     
         tracked_agents = TrackedAgents()
+        idx = 0
         for agent_id in range(1,self.num_hum+1):
             if self.ns == "human"+str(agent_id):
                 continue
             agent_segment = TrackedSegment()
             agent_segment.type = self.Segment_Type
             # print(agent_id-1)
-            agent_segment.pose.pose = msg[agent_id-1].pose.pose
-            agent_segment.twist.twist = msg[agent_id-1].twist.twist
+            agent_segment.pose.pose = msg[idx].pose.pose
+            agent_segment.twist.twist = msg[idx].twist.twist
             tracked_agent = TrackedAgent()
             tracked_agent.type = AgentType.HUMAN
             tracked_agent.name = "human"+str(agent_id)
             tracked_agent.segments.append(agent_segment)
             tracked_agents.agents.append(tracked_agent)
+            idx += 1
         if(tracked_agents.agents):
             self.agents = tracked_agents
             self.sig_1 = True
@@ -141,16 +150,13 @@ class SimAgents(object):
         self.robot = tracked_agent
         self.sig_2 = True
 
-    def publishAgents(self, event):
+    def publishAgents(self):
         """
         Publishes the current tracked_agents message if both human and robot data are available.
         Assigns track IDs and sets the header fields.
-
-        Args:
-            event (rospy.TimerEvent): The timer event.
         """
         if(self.sig_1 and self.sig_2):
-            self.agents.header.stamp = rospy.Time.now()
+            self.agents.header.stamp = self.get_clock().now().to_msg()
             self.agents.header.frame_id = "map"
             if(self.ns != ""):
                 self.agents.agents.append(self.robot)
@@ -163,11 +169,44 @@ class SimAgents(object):
                 self.sig_2 = False
 
 
-if __name__ == '__main__':
-    nh = sys.argv[1]
-    if(len(sys.argv)<5):
-        ns=""
+def main():
+    rclpy.init()
+    
+    # Filter out ROS2 arguments to get only our custom arguments
+    filtered_args = []
+    skip_next = False
+    for i, arg in enumerate(sys.argv[1:], 1):
+        if skip_next:
+            skip_next = False
+            continue
+        if arg.startswith('--ros-args'):
+            # Skip all remaining ROS args
+            break
+        if arg.startswith('-r') or arg.startswith('--remap'):
+            skip_next = True  # Skip the next argument too (remap value)
+            continue
+        filtered_args.append(arg)
+    
+    if len(filtered_args) < 1:
+        print("Usage: ros2 run cohan_sim_navigation agents_bridge.py <num_humans> [namespace]")
+        return
+    
+    nh = filtered_args[0]
+    if len(filtered_args) < 2:
+        ns = ""
     else:
-        ns = sys.argv[2]
-    agents = SimAgents(num_hum=int(nh), ns_= ns)
-    agents.AgentsPub()
+        ns = filtered_args[1]
+
+    agents = SimAgents(num_hum=int(nh), ns_=ns)
+    agents.get_logger().info("Starting agents_bridge with {} humans in namespace '{}'".format(nh, ns))
+    
+    try:
+        rclpy.spin(agents)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        agents.destroy_node()
+        rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()

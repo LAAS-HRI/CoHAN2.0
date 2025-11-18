@@ -1,8 +1,8 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.conditions import IfCondition, UnlessCondition
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch_ros.substitutions import FindPackageShare
+from launch.conditions import IfCondition, UnlessCondition, LaunchConfigurationEquals
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
+from launch_ros.substitutions import FindPackageShare,FindPackagePrefix
 from launch_ros.actions import Node
 
 def generate_launch_description():
@@ -20,7 +20,7 @@ def generate_launch_description():
             name='agents',
             output='screen',
             arguments=[num_agents],
-            condition=IfCondition(ns.perform(lambda x: x == ''))
+            condition=IfCondition(PythonExpression(["'", LaunchConfiguration('ns'), "' == ''"])),
         ),
         Node(
             package='agent_path_prediction',
@@ -34,7 +34,8 @@ def generate_launch_description():
                     'goals_adream.yaml'
                 ])
             }],
-            condition=IfCondition(ns.perform(lambda x: x == ''))
+            condition=IfCondition(PythonExpression(["'", LaunchConfiguration('ns'), "' == ''"])),
+
         ),
 
         # With namespace
@@ -44,7 +45,7 @@ def generate_launch_description():
             name='agents',
             output='screen',
             arguments=[num_agents, ns],
-            condition=UnlessCondition(ns.perform(lambda x: x == ''))
+            condition=UnlessCondition(PythonExpression(["'", LaunchConfiguration('ns'), "' == ''"]))
         ),
         Node(
             package='agent_path_prediction',
@@ -53,7 +54,10 @@ def generate_launch_description():
             output='screen',
             parameters=[{
                 'ns': ns,
-                '~robot_frame_id': PathJoinSubstitution([ns, 'base_footprint']),
+                '~robot_frame_id': PathJoinSubstitution([
+                    LaunchConfiguration('ns'),
+                    'base_footprint'
+                ]),
                 'goals_file': PathJoinSubstitution([
                     FindPackageShare('agent_path_prediction'),
                     'cfg',
@@ -61,6 +65,6 @@ def generate_launch_description():
                 ])
             }],
             remappings=[('map', '/map')],
-            condition=UnlessCondition(ns.perform(lambda x: x == ''))
+            condition=UnlessCondition(PythonExpression(["'", LaunchConfiguration('ns'), "' == ''"])),
         )
     ])

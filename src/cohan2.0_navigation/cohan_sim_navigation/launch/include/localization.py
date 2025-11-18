@@ -1,7 +1,7 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition, UnlessCondition
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 
 def generate_launch_description():
@@ -17,7 +17,7 @@ def generate_launch_description():
             name='map_to_odom',
             arguments=['0', '0', '0', '0', '0', '0', 'map', 'odom'],
             output='screen',
-            condition=IfCondition(ns.perform(None) == '')
+            condition=IfCondition(PythonExpression(["'", LaunchConfiguration('ns'), "' == ''"]))
         ),
 
         # Case when namespace is not empty
@@ -27,6 +27,6 @@ def generate_launch_description():
             name='map_to_ns_odom',
             arguments=['0', '0', '0', '0', '0', '0', 'map', [ns, '/odom']],
             output='screen',
-            condition=UnlessCondition(ns.perform(None) == '')
+            condition=UnlessCondition(PythonExpression(["'", LaunchConfiguration('ns'), "' == ''"]))
         ),
     ])

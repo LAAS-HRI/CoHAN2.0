@@ -216,6 +216,8 @@ class Entity {
     if (state[SDL_SCANCODE_A] && !(SDL_GetModState() & KMOD_SHIFT)) {
       omega_ = angular_speed;
     }
+    // Update global velocities (local to world frame transformation - used by Holonomic motion)
+    updateGlobalVelocities();
   }
 
   /**

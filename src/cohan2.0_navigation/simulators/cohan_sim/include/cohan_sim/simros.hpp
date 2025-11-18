@@ -27,6 +27,7 @@
 #ifndef SIMROS_HPP
 #define SIMROS_HPP
 
+#if ROS == 1
 #include <geometry_msgs/Quaternion.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <geometry_msgs/Twist.h>
@@ -36,6 +37,19 @@
 #include <rosgraph_msgs/Clock.h>
 #include <sensor_msgs/LaserScan.h>
 #include <tf2_ros/transform_broadcaster.h>
+
+#elif ROS == 2
+#include <tf2_ros/transform_broadcaster.h>
+
+#include <geometry_msgs/msg/quaternion.hpp>
+#include <geometry_msgs/msg/transform_stamped.hpp>
+#include <geometry_msgs/msg/twist.hpp>
+#include <geometry_msgs/msg/vector3.hpp>
+#include <nav_msgs/msg/odometry.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <rosgraph_msgs/msg/clock.hpp>
+#include <sensor_msgs/msg/laser_scan.hpp>
+#endif
 
 #include <cohan_sim/sim.hpp>
 #include <map>
@@ -101,6 +115,14 @@ class SimROS {
    */
   bool quitSim() const { return quit_sim_; }
 
+#if ROS == 2
+  /**
+   * @brief Get the ROS 2 node pointer
+   * @return Shared pointer to the ROS 2 node
+   */
+  rclcpp::Node::SharedPtr getNode() const { return node_; }
+#endif
+
  private:
   /**
    * @brief Converts Euler angles to quaternion for 3D orientation representation
@@ -109,24 +131,38 @@ class SimROS {
    * @param yaw Yaw angle in radians around Z-axis
    * @return geometry_msgs::Quaternion containing the converted orientation
    */
+#if ROS == 1
   geometry_msgs::Quaternion quaternionFromEuler(double roll, double pitch, double yaw);
+#elif ROS == 2
+  geometry_msgs::msg::Quaternion quaternionFromEuler(double roll, double pitch, double yaw);
+#endif
 
   /**
    * @brief Callback for velocity command messages
    * @param msg Twist message containing linear and angular velocity commands
    * @param robot_idx Index of the robot to control in the simulation
    */
+#if ROS == 1
   void cmdVelCallback(const geometry_msgs::TwistConstPtr& msg, int robot_idx);
+#elif ROS == 2
+  void cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg, int robot_idx);
+#endif
 
   /**
    * @brief Callback for head rotation messages
    * @param msg Vector3 message containing the roll, pitch and yaw
    * @param robot_idx Index of the robot to control in the simulation
    */
+#if ROS == 1
   void headRotationCallback(const geometry_msgs::Vector3ConstPtr& msg, int robot_idx);
+#elif ROS == 2
+  void headRotationCallback(const geometry_msgs::msg::Vector3::SharedPtr msg, int robot_idx);
+#endif
 
   std::unique_ptr<cohan_sim::Simulator2D> sim_;  //!< Core 2D simulator instance managing the world state
-  ros::Time sim_time_;                           //!< Current simulation time for synchronization
+
+#if ROS == 1
+  ros::Time sim_time_;  //!< Current simulation time for synchronization
 
   std::map<int, ros::Publisher> odom_pubs_;            //!< Publishers for odometry messages, keyed by robot index
   std::map<int, ros::Publisher> scan_pubs_;            //!< Publishers for laser scan messages, keyed by robot index
@@ -138,7 +174,23 @@ class SimROS {
 
   std::map<int, sensor_msgs::LaserScan> scan_msgs_;  //!< Cached laser scan messages for each robot
   std::map<int, nav_msgs::Odometry> odom_msgs_;      //!< Cached odometry messages for each robot
-  bool quit_sim_;                                    //!< Flag indicating if simulation should terminate
+#elif ROS == 2
+  rclcpp::Time sim_time_;  //!< Current simulation time for synchronization
+
+  std::map<int, rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr> odom_pubs_;                  //!< Publishers for odometry messages, keyed by robot index
+  std::map<int, rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr> scan_pubs_;              //!< Publishers for laser scan messages, keyed by robot index
+  std::map<int, rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr> ground_truth_pubs_;          //!< Publishers for ground truth poses, keyed by robot index
+  std::map<int, rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr> head_rotation_subs_;  //!< Subscribers for head rotation, keyed by robot index
+  std::map<int, rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr> cmd_vel_subs_;          //!< Subscribers for velocity commands, keyed by robot index
+  std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;                                   //!< Broadcaster for publishing coordinate transforms
+  rclcpp::Publisher<rosgraph_msgs::msg::Clock>::SharedPtr clock_pub_;                               //!< Publisher for simulation clock messages
+
+  std::map<int, sensor_msgs::msg::LaserScan> scan_msgs_;  //!< Cached laser scan messages for each robot
+  std::map<int, nav_msgs::msg::Odometry> odom_msgs_;      //!< Cached odometry messages for each robot
+  rclcpp::Node::SharedPtr node_;                          //!< ROS 2 node handle
+#endif
+
+  bool quit_sim_;  //!< Flag indicating if simulation should terminate
 };
 
 }  // namespace cohan_sim

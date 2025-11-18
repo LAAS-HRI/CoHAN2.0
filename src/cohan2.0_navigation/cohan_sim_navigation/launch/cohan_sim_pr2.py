@@ -1,7 +1,7 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, GroupAction
+from launch.actions import DeclareLaunchArgument, GroupAction, ExecuteProcess
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch_ros.substitutions import FindPackageShare
+from launch_ros.substitutions import FindPackageShare, FindPackagePrefix
 from launch.conditions import IfCondition, UnlessCondition
 from launch_ros.actions import Node
 from launch.actions import IncludeLaunchDescription
@@ -12,60 +12,56 @@ def generate_launch_description():
     node_start_delay = LaunchConfiguration('node_start_delay')
     num_agents = LaunchConfiguration('num_agents')
     map_name = LaunchConfiguration('map_name')
+    ns = LaunchConfiguration('ns')
 
     from launch.substitutions import TextSubstitution
     return LaunchDescription([
-        DeclareLaunchArgument('gui', default_value='false'),
+        DeclareLaunchArgument('gui', default_value='true'),
         DeclareLaunchArgument('node_start_delay', default_value='2.0'),
-        DeclareLaunchArgument('num_agents', default_value='1'),
+        DeclareLaunchArgument('num_agents', default_value='2'),
         DeclareLaunchArgument('map_name', default_value='laas'),
         DeclareLaunchArgument('use_sim_time', default_value='true'),
-
-        # Launch simulator with GUI
-        GroupAction(
-            condition=IfCondition(gui),
-            actions=[
-                Node(
-                    package='cohan_sim',
-                    executable='simros_node',
-                    name='libsim',
-                    arguments=[
-                        '-g',
-                        PathJoinSubstitution([
-                            FindPackageShare('cohan_sim_navigation'),
-                            'maps',
-                            TextSubstitution(text=''),
-                            map_name,
-                            TextSubstitution(text='.yaml')
-                        ])
-                    ],
-                    parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-                    output='screen'
-                )
-            ]
-        ),
+        DeclareLaunchArgument('ns', default_value=''),
 
         # Launch simulator without GUI
-        GroupAction(
+        ExecuteProcess(
             condition=UnlessCondition(gui),
-            actions=[
-                Node(
-                    package='cohan_sim',
-                    executable='simros_node',
-                    name='libsim',
-                    arguments=[
-                        PathJoinSubstitution([
-                            FindPackageShare('cohan_sim_navigation'),
-                            'maps',
-                            TextSubstitution(text=''),
-                            map_name,
-                            TextSubstitution(text='.yaml')
-                        ])
-                    ],
-                    parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-                    output='screen'
-                )
-            ]
+            cmd=[
+                PathJoinSubstitution([
+                    FindPackagePrefix('cohan_sim'),
+                    'lib',
+                    'cohan_sim',
+                    'simros_node'
+                ]),
+                PathJoinSubstitution([
+                    FindPackageShare('cohan_sim_navigation'),
+                    'maps',
+                    [map_name, '.yaml']
+                ])
+            ],
+            output='screen',
+            name='cohan_sim'
+        ),
+        
+        # Launch simulator with GUI
+        ExecuteProcess(
+            condition=IfCondition(gui),
+            cmd=[
+                PathJoinSubstitution([
+                    FindPackagePrefix('cohan_sim'),
+                    'lib',
+                    'cohan_sim',
+                    'simros_node'
+                ]),
+                '-g',
+                PathJoinSubstitution([
+                    FindPackageShare('cohan_sim_navigation'),
+                    'maps',
+                    [map_name, '.yaml']
+                ])
+            ],
+            output='screen',
+            name='cohan_sim'
         ),
 
         # Start map_server
@@ -73,16 +69,17 @@ def generate_launch_description():
             package='nav2_map_server',
             executable='map_server',
             name='map_server',
-            arguments=[
-                PathJoinSubstitution([
-                    FindPackageShare('cohan_sim_navigation'),
-                    'maps',
-                    TextSubstitution(text=''),
-                    map_name,
-                    TextSubstitution(text='.yaml')
-                ])
+            # Provide the map filename via the yaml_filename parameter (required by nav2 map_server)
+            parameters=[
+                {
+                    'yaml_filename': PathJoinSubstitution([
+                        FindPackageShare('cohan_sim_navigation'),
+                        'maps',
+                        [map_name, '.yaml']
+                    ]),
+                    'use_sim_time': LaunchConfiguration('use_sim_time')
+                }
             ],
-            parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
             output='screen'
         ),
 
@@ -93,7 +90,7 @@ def generate_launch_description():
                     FindPackageShare('cohan_sim_navigation'),
                     'launch',
                     'include',
-                    'robot_only.launch.py'
+                    'robot_only.py'
                 ])
             ]),
             launch_arguments={
@@ -102,19 +99,19 @@ def generate_launch_description():
             }.items()
         ),
 
-        # Start RViz
-        Node(
-            package='rviz2',  # ROS2 package
-            executable='rviz2',
-            name='rviz',
-            arguments=[
-                '-d',
-                PathJoinSubstitution([
-                    FindPackageShare('cohan_sim_navigation'),
-                    'rviz',
-                    'cohan_sim.rviz'
-                ])
-            ],
-            output='screen'
-        )
+        # # Start RViz
+        # Node(
+        #     package='rviz2',  # ROS2 package
+        #     executable='rviz2',
+        #     name='rviz',
+        #     arguments=[
+        #         '-d',
+        #         PathJoinSubstitution([
+        #             FindPackageShare('cohan_sim_navigation'),
+        #             'rviz',
+        #             'cohan_sim.rviz'
+        #         ])
+        #     ],
+        #     output='screen'
+        # )
     ])

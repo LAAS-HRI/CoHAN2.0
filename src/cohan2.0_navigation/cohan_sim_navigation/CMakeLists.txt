@@ -17,6 +17,24 @@ install(
   DESTINATION share/${PROJECT_NAME}/
 )
 
+# Install maps directory
+install(
+  DIRECTORY maps
+  DESTINATION share/${PROJECT_NAME}/
+)
+
+# Install config directory
+install(
+  DIRECTORY config
+  DESTINATION share/${PROJECT_NAME}/
+)
+
+# Install robots directory
+install(
+  DIRECTORY robots
+  DESTINATION share/${PROJECT_NAME}/
+)
+
 # Install scripts (Python executables)
 install(
   PROGRAMS

@@ -10,6 +10,7 @@ include(FindPkgConfig)
 if(DEFINED ENV{ROS_VERSION} AND "$ENV{ROS_VERSION}" STREQUAL "2")
 
   # ROS 2 setup
+  add_definitions(-DROS=2)
   find_package(ament_cmake REQUIRED)
   find_package(rclpy REQUIRED)
   find_package(nav_msgs REQUIRED)
@@ -34,6 +35,23 @@ if(DEFINED ENV{ROS_VERSION} AND "$ENV{ROS_VERSION}" STREQUAL "2")
   ament_target_dependencies(simros_node rclpy nav_msgs geometry_msgs sensor_msgs tf2_ros)
   target_link_libraries(simros_node libsim ${SDL2_LIBRARIES} yaml-cpp X11)
 
+  # Install executable
+  install(TARGETS simros_node
+    DESTINATION lib/${PROJECT_NAME}
+  )
+
+  # Install library
+  install(TARGETS libsim
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    RUNTIME DESTINATION bin
+  )
+
+  # Install include directory
+  install(DIRECTORY include/
+    DESTINATION include
+  )
+
   ament_package()
 
 else()
@@ -50,6 +68,7 @@ else()
   endif()
 
   # ROS 1 setup
+  add_definitions(-DROS=1)
   find_package(catkin REQUIRED COMPONENTS
     rospy
     nav_msgs

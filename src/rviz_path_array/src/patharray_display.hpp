@@ -24,8 +24,8 @@
  * Author: Phani Teja Singamaneni
  *********************************************************************************/
 
-#ifndef AGENT_PATHARRAY_DISPLAY_H
-#define AGENT_PATHARRAY_DISPLAY_H
+#ifndef AGENT_PATHARRAY_DISPLAY_HPP
+#define AGENT_PATHARRAY_DISPLAY_HPP
 
 #include <cohan_msgs/msg/agent_path.hpp>
 #include <cohan_msgs/msg/agent_path_array.hpp>
@@ -123,4 +123,4 @@ class AgentPathArrayDisplay : public rviz_common::MessageFilterDisplay<cohan_msg
 
 }  // namespace rviz_path_array
 
-#endif /* AGENT_PATHARRAY_DISPLAY_H */
+#endif /* AGENT_PATHARRAY_DISPLAY_HPP */

@@ -216,7 +216,7 @@ void Simulator2D::loadMapPGM(const std::string& filename) {
 void Simulator2D::add_entity(SimEntity sim_entity) {
   if (sim_entity.use_keyboard) {
     if (keyboard_in_use_) {
-      std::cout << "Warning: Only one entity can have use_keyboard=true. Entity '" << (!sim_entity.name.empty() ? sim_entity.name : "unknown") << "' will have keyboard disabled.\n";
+      std::cout << "Warning: Only one entity can have use_keyboard=true. Entity '" << (!sim_entity.name.empty() ? sim_entity.name : "unknown") << "' will have keyboard disabled." << std::endl;
       sim_entity.use_keyboard = false;
     } else {
       keyboard_in_use_ = true;
@@ -229,7 +229,7 @@ void Simulator2D::add_entity(SimEntity sim_entity) {
     sim_entity.laser_data.resize(sim_entity.laser_resolution, sim_entity.laser_range > 0.0 ? sim_entity.laser_range : LASER_DEFAULT_RANGE);
     if (sim_entity.laser_range <= 0.0) {
       sim_entity.laser_range = LASER_DEFAULT_RANGE;
-      std::cout << "Warning: Invalid laser range provided, defaulting to " << LASER_DEFAULT_RANGE << " meters\n";
+      std::cout << "Warning: Invalid laser range provided, defaulting to " << LASER_DEFAULT_RANGE << " meters" << std::endl;
     }
   }
   last_vel_command_ = SDL_GetTicks();  // Initialize last velocity command timestamp

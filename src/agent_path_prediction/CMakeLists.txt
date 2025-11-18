@@ -99,11 +99,16 @@ install(TARGETS
   agent_path_prediction_core
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
-  RUNTIME DESTINATION bin
+  # Install executables to the standard ament layout under lib/<package_name>
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 
 install(DIRECTORY include/
   DESTINATION include/${PROJECT_NAME}
+)
+
+install(DIRECTORY cfg/
+  DESTINATION share/${PROJECT_NAME}/cfg
 )
 
 # ==============================

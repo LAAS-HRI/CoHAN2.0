@@ -628,8 +628,8 @@ void AgentPathPrediction::predictAgentsBehind(const std::shared_ptr<agent_path_p
             RCLCPP_WARN(this->get_logger(), "Failed to send goal to %s action server", cfg_->get_plan_srv_name.c_str());
           }
         } else {
-          RCLCPP_WARN(this->get_logger(), "%s service does not exist, re-trying to subscribe", cfg_->get_plan_srv_name.c_str());
-          get_plan_client_ = this->create_client<nav_msgs::srv::GetPlan>(cfg_->get_plan_srv_name);
+          RCLCPP_WARN(this->get_logger(), "%s action server does not exist, re-trying to connect", cfg_->get_plan_srv_name.c_str());
+          get_plan_client_ = rclcpp_action::create_client<ComputePathToPose>(this, cfg_->get_plan_srv_name);
         }
       }
     }
@@ -792,8 +792,8 @@ void AgentPathPrediction::predictAgentsGoal(const std::shared_ptr<agent_path_pre
             RCLCPP_WARN(this->get_logger(), "Failed to send goal to %s action server", cfg_->get_plan_srv_name.c_str());
           }
         } else {
-          RCLCPP_WARN(this->get_logger(), "%s service does not exist, re-trying to subscribe", cfg_->get_plan_srv_name.c_str());
-          get_plan_client_ = this->create_client<nav_msgs::srv::GetPlan>(cfg_->get_plan_srv_name);
+          RCLCPP_WARN(this->get_logger(), "%s action server does not exist, re-trying to connect", cfg_->get_plan_srv_name.c_str());
+          get_plan_client_ = rclcpp_action::create_client<ComputePathToPose>(this, cfg_->get_plan_srv_name);
         }
       }
     }
