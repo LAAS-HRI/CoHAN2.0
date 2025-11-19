@@ -46,17 +46,17 @@ class SimAgents(Node):
     and assigns appropriate segment and agent types.
     """
 
-    def __init__(self, num_hum, ns_):
+    def __init__(self, num_hum):
         """
         Initialize the SimAgents bridge.
 
         Args:
             num_hum (int): Number of human agents in the simulation.
-            ns_ (str): Namespace for the current agent (empty string for robot).
         """
         super().__init__('sim_agents')
         self.num_hum = num_hum
-        self.ns = ns_
+        # self.ns = self.get_namespace().strip('/')
+        self.ns = self.get_namespace()
         self.tracked_agents_pub = []
         self.Segment_Type = TrackedSegmentType.TORSO
         self.agents = TrackedAgents()
@@ -72,10 +72,6 @@ class SimAgents(Node):
         Synchronizes human agent odometry and robot odometry, and starts publishing tracked_agents messages.
         """
         agent_sub = []
-
-        # Subscribe to human agents
-        # if self.num_hum < 2:
-        #     self.sig_1 = True
 
         for agent_id in range(1, self.num_hum + 1):
             name = 'human' + str(agent_id)
@@ -188,17 +184,13 @@ def main():
         filtered_args.append(arg)
     
     if len(filtered_args) < 1:
-        print("Usage: ros2 run cohan_sim_navigation agents_bridge.py <num_humans> [namespace]")
+        print("Usage: ros2 run cohan_sim_navigation agents_bridge.py <num_humans>")
         return
     
     nh = filtered_args[0]
-    if len(filtered_args) < 2:
-        ns = ""
-    else:
-        ns = filtered_args[1]
 
-    agents = SimAgents(num_hum=int(nh), ns_=ns)
-    agents.get_logger().info("Starting agents_bridge with {} humans in namespace '{}'".format(nh, ns))
+    agents = SimAgents(num_hum=int(nh))
+    agents.get_logger().info("Starting agents_bridge with {} humans".format(nh))
     
     try:
         rclpy.spin(agents)

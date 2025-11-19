@@ -32,13 +32,14 @@ void PredictGoalROS::initialize() {
   if (cfg_->goals_file.empty()) {
     RCLCPP_ERROR(node_->get_logger(), "Please provide a valid file path for goals files!");
   }
+  ns_ = node_->get_namespace();
 
   goal_pub_ = node_->create_publisher<agent_path_prediction::msg::PredictedGoals>("~/predicted_goal", 2);
 
   // Need to remap tracked agents subscriber properly
   tracked_agents_sub_topic_ = cfg_->tracked_agents_sub_topic;
-  if (!cfg_->ns.empty()) {
-    tracked_agents_sub_topic_ = "/" + cfg_->ns + cfg_->tracked_agents_sub_topic;
+  if (!ns_.empty()) {
+    tracked_agents_sub_topic_ = "/" + ns_ + cfg_->tracked_agents_sub_topic;
   }
 
   // Initialize Subscribers

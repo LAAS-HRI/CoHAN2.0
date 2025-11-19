@@ -98,5 +98,6 @@ class PredictGoalROS {
   std::shared_ptr<rclcpp::Node> node_;           //!< ROS2 node handle
   std::shared_ptr<AgentPathPredictConfig> cfg_;  //!< Configuration parameters for agent path prediction
   std::string tracked_agents_sub_topic_;         //!< Topic name for subscribing to tracked agents
+  std::string ns_;                               //!< Namespace for the node
 };
 }  // namespace agents

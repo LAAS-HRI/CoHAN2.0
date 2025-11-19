@@ -271,6 +271,7 @@ class AgentPathPrediction : public rclcpp::Node {
   geometry_msgs::msg::Transform behind_pose_;                                     //!< Transform for behind pose calculation
   std::string tracked_agents_sub_topic_;                                          //!< Topic name for tracked agents subscription
   std::string get_plan_srv_name_;                                                 //!< Service name for get plan service
+  std::string ns_;                                                                //!< Namespace for the node
 };
 }  // namespace agents
 

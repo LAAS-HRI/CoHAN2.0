@@ -33,6 +33,8 @@
 namespace agents {
 
 void AgentPathPrediction::initialize() {
+  ns_ = this->get_namespace();
+
   // Initialize TF2 buffer and transform listener
   tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
   tf_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
@@ -56,9 +58,9 @@ void AgentPathPrediction::initialize() {
   // Need to remap subscriber properly
   tracked_agents_sub_topic_ = cfg_->tracked_agents_sub_topic;
   get_plan_srv_name_ = cfg_->get_plan_srv_name;
-  if (!cfg_->ns.empty()) {
-    tracked_agents_sub_topic_ = "/" + cfg_->ns + tracked_agents_sub_topic_;
-    get_plan_srv_name_ = "/" + cfg_->ns + get_plan_srv_name_;
+  if (!ns_.empty()) {
+    tracked_agents_sub_topic_ = "/" + ns_ + tracked_agents_sub_topic_;
+    get_plan_srv_name_ = "/" + ns_ + get_plan_srv_name_;
   }
 
   // Initialize Subscribers

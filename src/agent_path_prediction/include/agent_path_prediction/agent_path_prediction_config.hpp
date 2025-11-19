@@ -98,7 +98,6 @@ class AgentPathPredictConfig {
 
   // Visualization and configuration
   bool publish_markers;  //!< Flag to enable marker visualization
-  std::string ns;        //!< Namespace for the node
 
  private:
   /**
@@ -106,7 +105,6 @@ class AgentPathPredictConfig {
    */
   void bindParameters() {
     // Set default values for parameters BEFORE binding
-    ns = "";
     tracked_agents_sub_topic = AGENTS_SUB_TOPIC;
     external_paths_sub_topic = EXTERNAL_PATHS_SUB_TOPIC;
     predicted_goal_topic = PREDICTED_GOAL_SUB_TOPIC;
@@ -125,7 +123,6 @@ class AgentPathPredictConfig {
     publish_markers = true;
 
     // ROS topic names and service names
-    param_helper_.bindStringParam("ns", ns, "Namespace for multiple agents");
     param_helper_.bindStringParam("tracked_agents_sub_topic", tracked_agents_sub_topic, "Topic name for subscribing to tracked agents");
     param_helper_.bindStringParam("external_paths_sub_topic", external_paths_sub_topic, "Topic name for subscribing to external agent paths");
     param_helper_.bindStringParam("predicted_goal_topic", predicted_goal_topic, "Topic name for subscribing to predicted goals");
