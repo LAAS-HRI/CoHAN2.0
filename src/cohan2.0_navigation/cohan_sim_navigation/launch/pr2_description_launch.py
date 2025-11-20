@@ -6,18 +6,25 @@ from launch.actions import DeclareLaunchArgument, GroupAction
 from launch_ros.actions import Node
 from launch.conditions import IfCondition, UnlessCondition
 from launch.substitutions import LaunchConfiguration
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import get_package_share_directory, PackageNotFoundError
 
 
 def generate_launch_description():
-    ## Get the navigation directory
-    nav_dir = get_package_share_directory('cohan_sim_navigation')
+    ## Get the navigation directory with error handling
+    try:
+        nav_dir = get_package_share_directory('cohan_sim_navigation')
+    except PackageNotFoundError:
+        print("[WARNING] Package 'cohan_sim_navigation' not found. Skipping robot description nodes.")
+        nav_dir = None
 
+    robot_description = None
     if nav_dir:
         urdf_path = os.path.join(nav_dir, 'robots', 'pr2.urdf')
         if os.path.exists(urdf_path):
             with open(urdf_path, 'r') as urdf_file:
                 robot_description = urdf_file.read()
+        else:
+            print(f"[WARNING] URDF file not found at {urdf_path}, skipping robot description nodes.")
 
     namespace = LaunchConfiguration('ns')
     use_namespace = LaunchConfiguration('use_namespace')
@@ -52,39 +59,34 @@ def generate_launch_description():
 
     pr2_description_launch = GroupAction(
         condition = UnlessCondition(use_namespace),
-        actions=[
+        actions=[] if robot_description is None else [
             Node(
                 package='robot_state_publisher',
                 executable='robot_state_publisher',
                 name='robot_state_publisher',
-                respawn=use_respawn,
-                respawn_delay=2.0,
                 output='screen',
                 parameters=[{'robot_description': robot_description, 'use_sim_time': use_sim_time}],
-                arguments=['--ros-args', '--log-level', log_level]),
+                ),
             Node(
                 package='cohan_sim_navigation',
                 executable='publish_joints.py',
                 name='sim_joints',
-                respawn=use_respawn,
-                respawn_delay=2.0,
                 output='screen',
-                parameters=[{'use_sim_time': use_sim_time}]),
+                parameters=[{'use_sim_time': use_sim_time}]
+                ),
             Node(
                 package='joint_state_publisher',
                 executable='joint_state_publisher',
                 name='joint_state_publisher',
-                respawn=use_respawn,
-                respawn_delay=2.0,
                 output='screen',
-                parameters=[{'source_list': ['/cohan_sim_joint_states'], 'rate': 50, 'use_sim_time': use_sim_time}]
+                parameters=[{'source_list': ['/cohan_sim_joint_states'], 'rate': 50}]
             )
         ]
     )
     
     namespaced_pr2_description_launch = GroupAction(
         condition = IfCondition(use_namespace),
-        actions=[
+        actions=[] if robot_description is None else [
             Node(
                 condition=IfCondition(use_namespace),
                 package='robot_state_publisher',
@@ -115,7 +117,7 @@ def generate_launch_description():
                 respawn=use_respawn,
                 respawn_delay=2.0,
                 output='screen',
-                parameters=[{'source_list': ['/cohan_sim_joint_states'], 'rate': 50, 'use_sim_time': use_sim_time}]
+                parameters=[{'source_list': ['/cohan_sim_joint_states'], 'rate': 50}]
             )
         ]
     )

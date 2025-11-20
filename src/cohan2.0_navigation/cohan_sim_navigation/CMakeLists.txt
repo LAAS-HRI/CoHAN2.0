@@ -35,6 +35,12 @@ install(
   DESTINATION share/${PROJECT_NAME}/
 )
 
+# Install rviz directory
+install(
+  DIRECTORY rviz
+  DESTINATION share/${PROJECT_NAME}/
+)
+
 # Install scripts (Python executables)
 install(
   PROGRAMS

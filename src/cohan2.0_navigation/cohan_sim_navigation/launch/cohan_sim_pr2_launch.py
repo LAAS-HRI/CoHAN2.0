@@ -106,6 +106,11 @@ def generate_launch_description():
         default_value='odom',
         description='odom frame id for fake_localization node')
 
+    num_agents_arg = DeclareLaunchArgument(
+        'num_agents',
+        default_value='1',
+        description='Number of agents for tracking')
+
     cohan_sim_node = ExecuteProcess(
         condition=UnlessCondition(use_gui),
         cmd=[
@@ -145,7 +150,8 @@ def generate_launch_description():
 
     pr2_description_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(nav_dir, 'launch', 'pr2_description_launch.py')),
+            os.path.join(nav_dir, 'launch', 
+            'pr2_description_launch.py')),
         launch_arguments={'ns': namespace,
                           'use_namespace': use_namespace,
                           'use_sim_time': use_sim_time,
@@ -212,6 +218,7 @@ def generate_launch_description():
     ld.add_action(use_rviz_arg)
     ld.add_action(use_amcl_arg)
     ld.add_action(odom_frame_arg)
+    ld.add_action(num_agents_arg)
 
     # Add any conditioned actions or included launch descriptions
     ld.add_action(cohan_sim_node)

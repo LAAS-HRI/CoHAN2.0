@@ -318,7 +318,7 @@ class HATebLocalPlannerROS : public nav2_core::Controller {
    * @return \c true if the plan is pruned, \c false in case of a transform
    * exception or if no pose cannot be found inside the threshold
    */
-  bool pruneGlobalPlan(const geometry_msgs::msg::PoseStamped& global_pose, std::vector<geometry_msgs::msg::PoseStamped>& global_plan, double dist_behind_robot = 1);
+  bool pruneGlobalPlan(const geometry_msgs::msg::PoseStamped& global_pose, nav_msgs::msg::Path& global_plan, double dist_behind_robot = 1);
 
   /**
    * @brief  Transforms the global plan of the robot from the planner frame to
@@ -344,9 +344,8 @@ class HATebLocalPlannerROS : public nav2_core::Controller {
    * the global planning frame
    * @return \c true if the global plan is transformed, \c false otherwise
    */
-  bool transformGlobalPlan(const std::vector<geometry_msgs::msg::PoseStamped>& global_plan, const geometry_msgs::msg::PoseStamped& global_pose, const nav2_costmap_2d::Costmap2D& costmap,
-                           const std::string& global_frame, double max_plan_length, PlanCombined& transformed_plan_combined, int* current_goal_idx = nullptr,
-                           geometry_msgs::msg::TransformStamped* tf_plan_to_global = nullptr) const;
+  bool transformGlobalPlan(const nav_msgs::msg::Path& global_plan, const geometry_msgs::msg::PoseStamped& global_pose, const nav2_costmap_2d::Costmap2D& costmap, const std::string& global_frame,
+                           double max_plan_length, PlanCombined& transformed_plan_combined, int* current_goal_idx = nullptr, geometry_msgs::msg::TransformStamped* tf_plan_to_global = nullptr) const;
 
   /**
    * @brief  Transforms the agent plan from the tracker frame to the local
