@@ -58,7 +58,7 @@ void AgentPathPrediction::initialize() {
   // Need to remap subscriber properly
   tracked_agents_sub_topic_ = cfg_->tracked_agents_sub_topic;
   get_plan_srv_name_ = cfg_->get_plan_srv_name;
-  if (!ns_.empty()) {
+  if (ns_ != "/") {
     tracked_agents_sub_topic_ = "/" + ns_ + tracked_agents_sub_topic_;
     get_plan_srv_name_ = "/" + ns_ + get_plan_srv_name_;
   }

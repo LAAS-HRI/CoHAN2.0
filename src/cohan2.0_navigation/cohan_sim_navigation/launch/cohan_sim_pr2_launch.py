@@ -6,7 +6,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription, RegisterEventHandler, EmitEvent
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription, RegisterEventHandler, EmitEvent, TimerAction
 from launch.conditions import IfCondition, UnlessCondition
 from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
@@ -88,7 +88,7 @@ def generate_launch_description():
 
     use_gui_arg = DeclareLaunchArgument(
         'use_gui',
-        default_value='true',
+        default_value='false',
         description='Whether to start the simulator')
 
     use_rviz_arg = DeclareLaunchArgument(
@@ -108,14 +108,14 @@ def generate_launch_description():
 
     num_agents_arg = DeclareLaunchArgument(
         'num_agents',
-        default_value='1',
+        default_value='2',
         description='Number of agents for tracking')
 
     cohan_sim_node = ExecuteProcess(
         condition=UnlessCondition(use_gui),
         cmd=[
                 PathJoinSubstitution([
-                    ('cohan_sim'),
+                    FindPackagePrefix('cohan_sim'),
                     'lib',
                     'cohan_sim',
                     'simros_node'
@@ -180,6 +180,16 @@ def generate_launch_description():
                           'use_composition': use_composition,
                           'use_respawn': use_respawn}.items())
     
+    ## Extra path planners for agent path planning and backoff recovery
+    helper_planners_launch = TimerAction(
+        period=2.0,
+        actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    os.path.join(launch_dir, 'planners_launch.py')),
+                launch_arguments={'use_sim_time': use_sim_time}.items())])
+    
+    ## Launch the agent tracking and planning
     agent_tracking_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(launch_dir, 'agent_tracking_launch.py')),
@@ -226,7 +236,8 @@ def generate_launch_description():
     ld.add_action(pr2_description_launch)
     ld.add_action(rviz_launch)
     ld.add_action(bringup_launch)
-    # ld.add_action(agent_tracking_launch)
+    ld.add_action(helper_planners_launch)
+    ld.add_action(agent_tracking_launch)
 
     # Add exit event handlers
     ld.add_action(exit_event_handler_sim)

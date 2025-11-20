@@ -38,7 +38,7 @@ void PredictGoalROS::initialize() {
 
   // Need to remap tracked agents subscriber properly
   tracked_agents_sub_topic_ = cfg_->tracked_agents_sub_topic;
-  if (!ns_.empty()) {
+  if (ns_ != "/") {
     tracked_agents_sub_topic_ = "/" + ns_ + cfg_->tracked_agents_sub_topic;
   }
 

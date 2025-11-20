@@ -46,6 +46,7 @@ install(
   PROGRAMS
     scripts/publish_joints.py
     scripts/agents_bridge.py
+    scripts/activate_lifecylenodes_with_delay.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

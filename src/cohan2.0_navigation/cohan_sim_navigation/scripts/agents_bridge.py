@@ -79,7 +79,7 @@ class SimAgents(Node):
                 agent_sub.append(Subscriber(self, Odometry, "/" + name + "/base_pose_ground_truth"))
         
         # Subscribe to the robot
-        if self.ns != "":
+        if self.ns != "/":
             self.robot_sub = self.create_subscription(Odometry, "/base_pose_ground_truth", self.RobotCB, 10)
         else:
             self.sig_2 = True
@@ -154,14 +154,14 @@ class SimAgents(Node):
         if(self.sig_1 and self.sig_2):
             self.agents.header.stamp = self.get_clock().now().to_msg()
             self.agents.header.frame_id = "map"
-            if(self.ns != ""):
+            if(self.ns != "/"):
                 self.agents.agents.append(self.robot)
             for agent_id in range(0, len(self.agents.agents)):
                 self.agents.agents[agent_id].track_id = agent_id+1
             self.tracked_agents_pub.publish(self.agents)
             if self.num_hum >= 2:
                 self.sig_1 = False
-            if self.ns != "":
+            if self.ns != "/":
                 self.sig_2 = False
 
 

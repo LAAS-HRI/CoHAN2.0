@@ -1,5 +1,5 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, GroupAction, RegisterEventHandler, EmitEvent
+from launch.actions import DeclareLaunchArgument, GroupAction
 from launch.conditions import IfCondition, UnlessCondition
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
@@ -94,19 +94,6 @@ def generate_launch_description():
         ]
     )
 
-    exit_event_handler = RegisterEventHandler(
-        condition=UnlessCondition(use_namespace),
-        event_handler=OnProcessExit(
-            target_action=agent_tracking_nodes,
-            on_exit=EmitEvent(event=Shutdown(reason='Robot Description exited'))))
-    
-
-    exit_event_handler_namespaced = RegisterEventHandler(
-        condition=IfCondition(use_namespace),
-        event_handler=OnProcessExit(
-            target_action=namespaced_agent_tracking_nodes,
-            on_exit=EmitEvent(event=Shutdown(reason='Robot Description exited')))) 
-
     ld = LaunchDescription()
     
     ## Add launch arguments
@@ -117,10 +104,6 @@ def generate_launch_description():
 
     ## Add agent tracking nodes
     ld.add_action(agent_tracking_nodes)
-    ld.add_action(namespaced_agent_tracking_nodes)     
-
-    ## Add exit event handlers
-    ld.add_action(exit_event_handler)
-    ld.add_action(exit_event_handler_namespaced)
+    ld.add_action(namespaced_agent_tracking_nodes)
 
     return ld
