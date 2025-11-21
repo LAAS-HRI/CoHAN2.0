@@ -128,6 +128,19 @@ class HATebConfig {
 
   } robot;
 
+  struct RobotFootprint {
+    std::string type;
+    double radius;
+    std::vector<double> line_start;
+    std::vector<double> line_end;
+    double front_offset;
+    double front_radius;
+    double rear_offset;
+    double rear_radius;
+    std::string vertices;
+
+  } robot_footprint;
+
   //! Agent related parameters
   struct Agent {
     double radius;               //!< Radius of the agent
@@ -338,6 +351,17 @@ class HATebConfig {
     robot.cmd_angle_instead_rotvel = false;
     robot.is_footprint_dynamic = false;
     robot.use_simulated_fov = false;
+
+    // Robot footprint model defaults
+    robot_footprint.type = "polygon";
+    robot_footprint.radius = 0.34;
+    robot_footprint.line_start = {-0.3, 0.0};
+    robot_footprint.line_end = {0.3, 0.0};
+    robot_footprint.front_offset = 0.2;
+    robot_footprint.front_radius = 0.2;
+    robot_footprint.rear_offset = 0.2;
+    robot_footprint.rear_radius = 0.2;
+    robot_footprint.vertices = "[[-0.325, -0.325], [-0.325, 0.325], [0.325, 0.325], [0.46, 0.0], [0.325, -0.325]]";
 
     // Agent
     agent.radius = 0.3;

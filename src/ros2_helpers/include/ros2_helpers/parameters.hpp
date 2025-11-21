@@ -239,6 +239,26 @@ class ParameterHelper {
   }
 
   /**
+   * @brief Bind a float vector parameter to a member variable (declare + auto-update on change)
+   * @param name Parameter name
+   * @param variable Reference to the variable to bind
+   * @param description Parameter description
+   */
+  void bindFloatVectorParam(const std::string& name, std::vector<double>& variable, const std::string& description) {
+    rcl_interfaces::msg::ParameterDescriptor descriptor;
+    descriptor.description = description;
+
+    if (is_lifecycle_) {
+      lifecycle_node_->declare_parameter(name, variable, descriptor);
+    } else {
+      node_->declare_parameter(name, variable, descriptor);
+    }
+
+    // Store the binding for automatic updates
+    param_bindings_[name] = [&variable](const rclcpp::Parameter& param) { variable = param.as_double_array(); };
+  }
+
+  /**
    * @brief Load all bound parameters from the parameter server (call after all bindings are set up)
    */
   void loadBoundParameters() {

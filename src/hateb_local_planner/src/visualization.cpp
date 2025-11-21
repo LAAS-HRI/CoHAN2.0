@@ -254,25 +254,23 @@ void TebVisualization::publishLocalPlanAndPoses(const TimedElasticBand& teb, con
     if (cfg_->visualization.publish_robot_local_plan_fp_poses) {
       visualization_msgs::msg::MarkerArray teb_fp_poses;
       int idx = 0;
-      // double fp_size = teb_poses.poses.size();
       for (auto& pose : teb_poses.poses) {
-        std::vector<visualization_msgs::msg::Marker> fp_markers;
-        robot_model.visualizeModel(PoseSE2(pose), fp_markers, color);
-        for (auto& marker : fp_markers) {
-          marker.header.frame_id = cfg_->map_frame;
-          marker.header.stamp = node_->now();
-          marker.action = visualization_msgs::msg::Marker::ADD;
-          marker.ns = ROBOT_FP_POSES_NS;
-          marker.pose.position.z = vel_robot_[idx] / 2;
-          marker.scale.z = std::max(vel_robot_[idx], 0.00001);
-          marker.id = idx++;
-          marker.color.a = 0.5;
-          setMarkerColour(marker, static_cast<double>(idx), fp_size);
-          marker.scale.x = 0.2;
-          marker.scale.y = 0.2;
-          marker.lifetime = rclcpp::Duration::from_seconds(2.0);
-          teb_fp_poses.markers.push_back(marker);
-        }
+        visualization_msgs::msg::Marker marker;
+        marker.type = visualization_msgs::msg::Marker::CYLINDER;
+        marker.header.frame_id = cfg_->map_frame;
+        marker.header.stamp = node_->now();
+        marker.action = visualization_msgs::msg::Marker::ADD;
+        marker.ns = ROBOT_FP_POSES_NS;
+        marker.pose = pose;
+        marker.pose.position.z = vel_robot_[idx] / 2;
+        marker.scale.z = std::max(vel_robot_[idx], 0.00001);
+        marker.id = idx++;
+        marker.color.a = 0.5;
+        setMarkerColour(marker, static_cast<double>(idx), fp_size);
+        marker.scale.x = 0.2;
+        marker.scale.y = 0.2;
+        marker.lifetime = rclcpp::Duration::from_seconds(2.0);
+        teb_fp_poses.markers.push_back(marker);
       }
       while (idx < last_robot_fp_poses_idx_) {
         visualization_msgs::msg::Marker clean_fp_marker;
@@ -438,23 +436,22 @@ void TebVisualization::publishAgentLocalPlansAndPoses(const std::map<uint64_t, T
       visualization_msgs::msg::MarkerArray agents_teb_fp_poses;
       int idx = 0;
       for (auto& pose : agents_teb_poses.poses) {
-        std::vector<visualization_msgs::msg::Marker> agent_fp_markers;
-        agent_model.visualizeModel(PoseSE2(pose), agent_fp_markers, color);
-        for (auto& agent_marker : agent_fp_markers) {
-          agent_marker.header.frame_id = cfg_->map_frame;
-          agent_marker.header.stamp = node_->now();
-          agent_marker.action = visualization_msgs::msg::Marker::ADD;
-          agent_marker.ns = AGENT_FP_POSES_NS;
-          agent_marker.pose.position.z = vel_agent_[idx] / 2;
-          agent_marker.scale.z = std::max(vel_agent_[idx], 0.00001);
-          agent_marker.id = idx++;
-          agent_marker.color.a = 0.5;
-          setMarkerColour(agent_marker, static_cast<double>(idx), fp_size);
-          agent_marker.scale.x = 0.2;
-          agent_marker.scale.y = 0.2;
-          agent_marker.lifetime = rclcpp::Duration::from_seconds(2.0);
-          agents_teb_fp_poses.markers.push_back(agent_marker);
-        }
+        visualization_msgs::msg::Marker agent_marker;
+        agent_marker.type = visualization_msgs::msg::Marker::CYLINDER;
+        agent_marker.header.frame_id = cfg_->map_frame;
+        agent_marker.header.stamp = node_->now();
+        agent_marker.action = visualization_msgs::msg::Marker::ADD;
+        agent_marker.ns = AGENT_FP_POSES_NS;
+        agent_marker.pose = pose;
+        agent_marker.pose.position.z = vel_agent_[idx] / 2;
+        agent_marker.scale.z = std::max(vel_agent_[idx], 0.00001);
+        agent_marker.id = idx++;
+        agent_marker.color.a = 0.5;
+        setMarkerColour(agent_marker, static_cast<double>(idx), fp_size);
+        agent_marker.scale.x = 0.2;
+        agent_marker.scale.y = 0.2;
+        agent_marker.lifetime = rclcpp::Duration::from_seconds(2.0);
+        agents_teb_fp_poses.markers.push_back(agent_marker);
       }
       while (idx < last_agent_fp_poses_idx_) {
         visualization_msgs::msg::Marker clean_fp_marker;

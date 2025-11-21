@@ -49,6 +49,7 @@
 #include <nav2_core/controller.hpp>
 #include <nav2_core/exceptions.hpp>
 #include <nav2_core/goal_checker.hpp>
+#include <nav2_costmap_2d/array_parser.hpp>
 #include <nav2_costmap_2d/costmap_2d_ros.hpp>
 #include <nav2_costmap_2d/footprint_collision_checker.hpp>
 #include <nav2_util/odometry_utils.hpp>
@@ -207,7 +208,7 @@ class HATebLocalPlannerROS : public nav2_core::Controller {
    * @param config Configuration parameters
    * @return Robot footprint model used for optimization
    */
-  FootprintModelPtr getRobotFootprintFromParamServer(const rclcpp_lifecycle::LifecycleNode::SharedPtr node, const std::shared_ptr<HATebConfig> config);
+  FootprintModelPtr getRobotFootprintFromParamServer(const rclcpp_lifecycle::LifecycleNode::SharedPtr node);
 
   /**
    * @brief Set the footprint from the given parameter value

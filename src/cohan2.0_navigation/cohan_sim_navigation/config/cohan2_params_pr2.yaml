@@ -145,7 +145,7 @@ controller_server:
       map_frame: odom
       global_frame: map
       base_frame: base_link
-      base_footprint_frame: base_footprint
+      footprint_frame: base_footprint
       planning_mode: 1
       # Trajectory
       teb_autosize: True
@@ -172,6 +172,17 @@ controller_server:
       acc_lim_x: 0.3
       acc_lim_theta: 0.4
       min_turning_radius: 0.0
+      footprint_model: # types: "point", "circular", "two_circles", "line", "polygon" --> for PR2
+        type: "polygon"
+        radius: 0.34 # for type "circular"
+        line_start: [-0.3, 0.0] # for type "line"
+        line_end: [0.3, 0.0] # for type "line"
+        front_offset: 0.2 # for type "two_circles"
+        front_radius: 0.2 # for type "two_circles"
+        rear_offset: 0.2 # for type "two_circles"
+        rear_radius: 0.2 # for type "two_circles"
+        vertices: "[[-0.325, -0.325], [-0.325, 0.325], [0.325, 0.325] [0.325, -0.325]]" # for type "polygon"
+
       # Agents
       ## Agent Model Params
       agent_radius: 0.30
@@ -319,7 +330,7 @@ local_costmap:
       height: 15
       resolution: 0.05
       robot_radius: 0.47
-      footprint: "[[-0.47, -0.47], [0.47, -0.47], [0.47, 0.47], [-0.47, 0.47]]"
+      footprint: "[[-0.325, -0.325], [-0.325, 0.325], [0.325, 0.325], [0.46, 0.0], [0.325, -0.325]]"
       plugins: ["voxel_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
@@ -359,7 +370,7 @@ global_costmap:
       robot_base_frame: base_link
       use_sim_time: True
       robot_radius: 0.47
-      footprint: "[[-0.47, -0.47], [0.47, -0.47], [0.47, 0.47], [-0.47, 0.47]]"
+      footprint: "[[-0.325, -0.325], [-0.325, 0.325], [0.325, 0.325], [0.46, 0.0], [0.325, -0.325]]"
       resolution: 0.05
       track_unknown_space: true
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]

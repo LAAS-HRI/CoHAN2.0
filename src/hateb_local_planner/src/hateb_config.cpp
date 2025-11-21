@@ -113,6 +113,17 @@ void HATebConfig::bindParameters() {
   param_helper_.bindBoolParam(param_name("is_footprint_dynamic"), robot.is_footprint_dynamic, "Is footprint dynamic");
   param_helper_.bindBoolParam(param_name("use_simulated_fov"), robot.use_simulated_fov, "Use simulated field of view for human-aware planning");
 
+  // Robot footprint model parameters
+  param_helper_.bindStringParam(param_name("footprint_model.type"), robot_footprint.type, "Footprint model type (point, circular, two_circles, line, polygon)");
+  param_helper_.bindFloatParam(param_name("footprint_model.radius"), robot_footprint.radius, 0.0, 10.0, "Footprint radius for circular type");
+  param_helper_.bindFloatVectorParam(param_name("footprint_model.line_start"), robot_footprint.line_start, "Line start coordinates for line type");
+  param_helper_.bindFloatVectorParam(param_name("footprint_model.line_end"), robot_footprint.line_end, "Line end coordinates for line type");
+  param_helper_.bindFloatParam(param_name("footprint_model.front_offset"), robot_footprint.front_offset, -10.0, 10.0, "Front offset for two_circles type");
+  param_helper_.bindFloatParam(param_name("footprint_model.front_radius"), robot_footprint.front_radius, 0.0, 10.0, "Front radius for two_circles type");
+  param_helper_.bindFloatParam(param_name("footprint_model.rear_offset"), robot_footprint.rear_offset, -10.0, 10.0, "Rear offset for two_circles type");
+  param_helper_.bindFloatParam(param_name("footprint_model.rear_radius"), robot_footprint.rear_radius, 0.0, 10.0, "Rear radius for two_circles type");
+  param_helper_.bindStringParam(param_name("footprint_model.vertices"), robot_footprint.vertices, "Vertices for polygon type footprint");
+
   // Agent parameters
   param_helper_.bindFloatParam(param_name("agent_radius"), agent.radius, 0.0, 10.0, "Agent radius");
   param_helper_.bindFloatParam(param_name("max_agent_vel_x"), agent.max_vel_x, 0.0, 10.0, "Max agent forward velocity");

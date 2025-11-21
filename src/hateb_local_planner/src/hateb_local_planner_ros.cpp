@@ -101,7 +101,7 @@ void HATebLocalPlannerROS::configure(const rclcpp_lifecycle::LifecycleNode::Weak
   visualization_ = std::make_shared<TebVisualization>(node, cfg_);
 
   // Create robot footprint/contour model for optimization
-  cfg_->robot_model = getRobotFootprintFromParamServer(node, cfg_);
+  cfg_->robot_model = getRobotFootprintFromParamServer(node);
 
   // Create human footprint/contour model for optimization
   auto agent_radius = cfg_->agent.radius;
@@ -1212,9 +1212,10 @@ void HATebLocalPlannerROS::customViaPointsCB(const nav_msgs::msg::Path::SharedPt
   custom_via_points_active_ = !via_points_.empty();
 }
 
-FootprintModelPtr HATebLocalPlannerROS::getRobotFootprintFromParamServer(const rclcpp_lifecycle::LifecycleNode::SharedPtr node, const std::shared_ptr<HATebConfig> config) {
+FootprintModelPtr HATebLocalPlannerROS::getRobotFootprintFromParamServer(const rclcpp_lifecycle::LifecycleNode::SharedPtr node) {
   std::string model_name;
-  if (!node->get_parameter("footprint_model.type", model_name)) {
+  model_name = cfg_->robot_footprint.type;
+  if (model_name.empty()) {
     RCLCPP_INFO(logger_, "No robot footprint model specified for trajectory optimization. Using point-shaped model.");
     return std::make_shared<PointFootprint>();
   }
@@ -1222,17 +1223,18 @@ FootprintModelPtr HATebLocalPlannerROS::getRobotFootprintFromParamServer(const r
   // point
   if (model_name == "point") {
     RCLCPP_INFO(logger_, "Footprint model 'point' loaded for trajectory optimization.");
-    return std::make_shared<PointFootprint>(config->obstacles.min_obstacle_dist);
+    return std::make_shared<PointFootprint>(cfg_->obstacles.min_obstacle_dist);
   }
 
   // circular
   if (model_name == "circular") {
     // get radius
     double radius;
-    if (!node->get_parameter("footprint_model.radius", radius)) {
-      RCLCPP_ERROR_STREAM(logger_, "Footprint model 'circular' cannot be loaded for trajectory optimization, since param 'footprint_model.radius' does not exist. Using point-model instead.");
+    if (cfg_->robot_footprint.radius <= 0) {
+      RCLCPP_ERROR_STREAM(logger_, "Footprint model 'circular' cannot be loaded for trajectory optimization, since param 'footprint_model.radius' is not valid. Using point-model instead.");
       return std::make_shared<PointFootprint>();
     }
+    radius = cfg_->robot_footprint.radius;
     RCLCPP_INFO_STREAM(logger_, "Footprint model 'circular' (radius: " << radius << "m) loaded for trajectory optimization.");
     return std::make_shared<CircularFootprint>(radius);
   }
@@ -1240,17 +1242,16 @@ FootprintModelPtr HATebLocalPlannerROS::getRobotFootprintFromParamServer(const r
   // line
   if (model_name == "line") {
     // check parameters
-    if (!node->has_parameter("footprint_model.line_start") || !node->has_parameter("footprint_model.line_end")) {
+    if (cfg_->robot_footprint.line_start.empty() || !cfg_->robot_footprint.line_end.empty()) {
       RCLCPP_ERROR_STREAM(
           logger_,
           "Footprint model 'line' cannot be loaded for trajectory optimization, since param 'footprint_model.line_start' and/or 'footprint_model.line_end' do not exist. Using point-model instead.");
       return std::make_shared<PointFootprint>();
     }
     // get line coordinates
-    std::vector<double> line_start;
-    std::vector<double> line_end;
-    node->get_parameter("footprint_model.line_start", line_start);
-    node->get_parameter("footprint_model.line_end", line_end);
+    std::vector<double> line_start = cfg_->robot_footprint.line_start;
+    std::vector<double> line_end = cfg_->robot_footprint.line_end;
+
     if (line_start.size() != 2 || line_end.size() != 2) {
       RCLCPP_ERROR_STREAM(logger_,
                           "Footprint model 'line' cannot be loaded for trajectory optimization, since param 'footprint_model.line_start' and/or 'footprint_model.line_end' do not contain x and y "
@@ -1260,27 +1261,23 @@ FootprintModelPtr HATebLocalPlannerROS::getRobotFootprintFromParamServer(const r
 
     RCLCPP_INFO_STREAM(logger_, "Footprint model 'line' (line_start: [" << line_start[0] << "," << line_start[1] << "]m, line_end: [" << line_end[0] << "," << line_end[1]
                                                                         << "]m) loaded for trajectory optimization.");
-    return std::make_shared<LineFootprint>(Eigen::Map<const Eigen::Vector2d>(line_start.data()), Eigen::Map<const Eigen::Vector2d>(line_end.data()), config->obstacles.min_obstacle_dist);
+    return std::make_shared<LineFootprint>(Eigen::Map<const Eigen::Vector2d>(line_start.data()), Eigen::Map<const Eigen::Vector2d>(line_end.data()), cfg_->obstacles.min_obstacle_dist);
   }
 
   // two circles
   if (model_name == "two_circles") {
     // check parameters
-    if (!node->has_parameter("footprint_model.front_offset") || !node->has_parameter("footprint_model.front_radius") || !node->has_parameter("footprint_model.rear_offset") ||
-        !node->has_parameter("footprint_model.rear_radius")) {
+    if (cfg_->robot_footprint.front_offset <= 0 || cfg_->robot_footprint.front_radius <= 0 || cfg_->robot_footprint.rear_offset <= 0 || cfg_->robot_footprint.rear_radius <= 0) {
       RCLCPP_ERROR_STREAM(logger_,
                           "Footprint model 'two_circles' cannot be loaded for trajectory optimization, since params 'footprint_model.front_offset', 'footprint_model.front_radius', "
-                          "'footprint_model.rear_offset' and 'footprint_model.rear_radius' do not exist. Using point-model instead.");
+                          "'footprint_model.rear_offset' and '>footprint_model.rear_radius' do not exist. Using point-model instead.");
       return std::make_shared<PointFootprint>();
     }
-    double front_offset;
-    double front_radius;
-    double rear_offset;
-    double rear_radius;
-    node->get_parameter("footprint_model.front_offset", front_offset);
-    node->get_parameter("footprint_model.front_radius", front_radius);
-    node->get_parameter("footprint_model.rear_offset", rear_offset);
-    node->get_parameter("footprint_model.rear_radius", rear_radius);
+    double front_offset = cfg_->robot_footprint.front_offset;
+    double front_radius = cfg_->robot_footprint.front_radius;
+    double rear_offset = cfg_->robot_footprint.rear_offset;
+    double rear_radius = cfg_->robot_footprint.rear_radius;
+
     RCLCPP_INFO_STREAM(logger_, "Footprint model 'two_circles' (front_offset: " << front_offset << "m, front_radius: " << front_radius << "m, rear_offset: " << rear_offset
                                                                                 << "m, rear_radius: " << rear_radius << "m) loaded for trajectory optimization.");
     return std::make_shared<TwoCirclesFootprint>(front_offset, front_radius, rear_offset, rear_radius);
@@ -1289,17 +1286,27 @@ FootprintModelPtr HATebLocalPlannerROS::getRobotFootprintFromParamServer(const r
   // polygon
   if (model_name == "polygon") {
     // check parameters
-    std::vector<double> footprint_vertices;
-    if (!node->get_parameter("footprint_model.vertices", footprint_vertices)) {
+    std::string footprint_string = cfg_->robot_footprint.vertices;
+    if (footprint_string.empty()) {
       RCLCPP_ERROR_STREAM(logger_, "Footprint model 'polygon' cannot be loaded for trajectory optimization, since param 'footprint_model.vertices' does not exist. Using point-model instead.");
       return std::make_shared<PointFootprint>();
     }
+
+    std::string error;
+    std::vector<std::vector<float>> footprint_vertices = nav2_costmap_2d::parseVVF(footprint_string, error);
+
+    if (error != "") {
+      RCLCPP_ERROR(logger_, "Error parsing footprint parameter: '%s'. Using point-model instead.", error.c_str());
+      RCLCPP_ERROR(logger_, "  Footprint string was '%s'.", footprint_string.c_str());
+      return std::make_shared<PointFootprint>();
+    }
+
     // get vertices - expect flat array of [x1, y1, x2, y2, ...]
-    if (footprint_vertices.size() >= 6 && footprint_vertices.size() % 2 == 0) {
+    if (footprint_vertices.size() >= 3) {
       try {
         Point2dContainer polygon;
-        for (size_t i = 0; i < footprint_vertices.size(); i += 2) {
-          polygon.emplace_back(footprint_vertices[i], footprint_vertices[i + 1]);
+        for (auto& vertex : footprint_vertices) {
+          polygon.emplace_back(vertex[0], vertex[1]);
         }
         RCLCPP_INFO_STREAM(logger_, "Footprint model 'polygon' loaded for trajectory optimization.");
         return std::make_shared<PolygonFootprint>(polygon);
